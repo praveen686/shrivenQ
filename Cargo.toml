@@ -5,6 +5,7 @@ members = [
     "cli",
     "storage",
     "sim",
+    "perf",
 ]
 resolver = "2"
 
