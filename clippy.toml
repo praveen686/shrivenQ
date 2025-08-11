@@ -1,0 +1,13 @@
+# Ultra-strict clippy configuration for ShrivenQ
+# Zero tolerance for code quality issues
+
+cognitive-complexity-threshold = 20
+max-fn-params-bools = 2
+type-complexity-threshold = 250
+single-char-binding-names-threshold = 3
+too-many-arguments-threshold = 5
+array-size-threshold = 512_000
+vec-box-size-threshold = 4096
+enum-variant-size-threshold = 200
+future-size-threshold = 16_384
+unnecessary-box-size = 128

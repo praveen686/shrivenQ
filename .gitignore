@@ -1,0 +1,50 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo
+# Keep Cargo.lock since we have binary crates
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debug
+*.dSYM/
+
+# Profiling
+perf.data
+perf.data.old
+flamegraph.svg
+
+# Documentation build
+/target/doc/
+
+# Benchmark results
+/target/criterion/
+
+# Test coverage
+*.profraw
+*.profdata
+/coverage/
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+
+# OS specific
+Thumbs.db
+desktop.ini

@@ -1,0 +1,36 @@
+[build]
+rustflags = [
+    "-D", "warnings",
+    "-D", "dead_code",
+    "-D", "unused",
+    "-D", "unused_imports",
+    "-D", "unused_variables",
+    "-D", "unused_mut",
+    "-D", "unreachable_code",
+    "-D", "rust-2018-idioms",
+    "-D", "rust-2021-compatibility",
+    "-D", "missing-debug-implementations",
+    "-D", "unreachable-pub",
+    "-D", "missing-docs",
+]
+
+[target.'cfg(all())']
+rustflags = [
+    "-W", "clippy::all",
+    "-W", "clippy::pedantic",
+    "-W", "clippy::nursery",
+    "-W", "clippy::cargo",
+    "-D", "clippy::unwrap_used",
+    "-D", "clippy::expect_used",
+    "-D", "clippy::panic",
+    "-D", "clippy::unimplemented",
+    "-D", "clippy::todo",
+    "-D", "clippy::dbg_macro",
+    "-D", "clippy::print_stdout",
+    "-D", "clippy::print_stderr",
+]
+
+[alias]
+strict-check = "run --manifest-path tools/strict-check/Cargo.toml --"
+strict-build = "build --all-targets --all-features"
+strict-test = "test --all-targets --all-features"
