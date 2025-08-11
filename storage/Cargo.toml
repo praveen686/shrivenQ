@@ -1,0 +1,28 @@
+[package]
+name = "storage"
+version.workspace = true
+edition = "2024"
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+common = { path = "../common" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+bincode = { workspace = true }
+tracing = { workspace = true }
+crc32fast = { workspace = true }
+memmap2 = { workspace = true }
+byteorder = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util"] }
+
+[dev-dependencies]
+criterion = { workspace = true }
+tempfile = "3.8"
+
+[[bench]]
+name = "wal_benchmark"
+harness = false

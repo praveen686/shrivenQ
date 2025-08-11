@@ -1,0 +1,20 @@
+[package]
+name = "sim"
+version.workspace = true
+edition = "2024"
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+common = { path = "../common" }
+bus = { path = "../bus" }
+storage = { path = "../storage" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time", "sync"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.8"

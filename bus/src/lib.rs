@@ -69,21 +69,23 @@ impl<T: Message + Clone> Bus<T> {
     }
 
     /// Get a publisher for this bus
-    pub fn publisher(&self) -> impl Publisher<T> {
+    pub fn publisher(&self) -> BusPublisher<T> {
         BusPublisher {
             tx: self.tx.clone(),
         }
     }
 
     /// Get a subscriber for this bus
-    pub fn subscriber(&self) -> impl Subscriber<T> {
+    pub fn subscriber(&self) -> BusSubscriber<T> {
         BusSubscriber {
             rx: self.rx.clone(),
         }
     }
 }
 
-struct BusPublisher<T> {
+/// Publisher for the bus
+#[derive(Clone)]
+pub struct BusPublisher<T> {
     tx: channel::Sender<T>,
 }
 
@@ -94,7 +96,9 @@ impl<T: Message> Publisher<T> for BusPublisher<T> {
     }
 }
 
-struct BusSubscriber<T> {
+/// Subscriber for the bus
+#[derive(Clone)]
+pub struct BusSubscriber<T> {
     rx: channel::Receiver<T>,
 }
 

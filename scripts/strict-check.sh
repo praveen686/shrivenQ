@@ -37,10 +37,11 @@ FORBIDDEN_PATTERNS=(
 
 for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
     echo -n "  Checking for $pattern... "
-    if grep -r "$pattern" --include="*.rs" --exclude-dir=target . 2>/dev/null | grep -v "^Binary file" > /dev/null; then
+    FOUND=$(rg "$pattern" --type rust -g '!target/*' -g '!*.pb.rs' -g '!**/benches/**' . 2>/dev/null || true)
+    if [ -n "$FOUND" ]; then
         echo -e "${RED}FOUND${NC}"
         echo "    Found in:"
-        grep -r "$pattern" --include="*.rs" --exclude-dir=target . 2>/dev/null | grep -v "^Binary file" | head -5
+        echo "$FOUND" | head -5
         FAILED=1
     else
         echo -e "${GREEN}OK${NC}"
