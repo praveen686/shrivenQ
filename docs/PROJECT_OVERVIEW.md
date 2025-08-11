@@ -191,7 +191,9 @@ cargo test test_spsc_channel
 
 ## 📄 License
 
-MIT OR Apache-2.0
+**PROPRIETARY SOFTWARE**
+
+Copyright © 2025 Praveen Ayyasola. All rights reserved.
 
 ---
 

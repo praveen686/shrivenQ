@@ -9,9 +9,10 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 authors = ["Praveen Ayyasola <praveenkumar.avln@gmail.com>"]
 repository = "https://github.com/praveen686/shrivenQ"
-license = "MIT OR Apache-2.0"
+license = "Proprietary"
 
 [workspace.dependencies]
 tokio = { version = "1.41", features = ["full"] }
