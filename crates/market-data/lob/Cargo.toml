@@ -1,0 +1,36 @@
+[package]
+name = "lob"
+version = "0.1.0"
+edition = "2024"
+authors = ["Praveen Ayyasola <praveenkumar.avln@gmail.com>"]
+license = "Proprietary"
+repository = "https://github.com/praveen686/shrivenQ"
+description = "Limit Order Book implementation for ShrivenQ"
+readme = "../README.md"
+keywords = ["trading", "orderbook", "lob"]
+categories = ["finance"]
+
+[dependencies]
+common = { path = "../../core/common" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+tokio-tungstenite = { version = "0.21", features = ["native-tls", "connect"] }
+futures-util = "0.3"
+serde_json = { workspace = true }
+tracing-subscriber = { workspace = true }
+flate2 = "1.0"
+serde = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+rand = { workspace = true }
+
+[[bench]]
+name = "apply_update"
+harness = false
+
+[[bench]]
+name = "v2_comparison"
+harness = false

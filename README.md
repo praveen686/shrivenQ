@@ -39,15 +39,15 @@ cargo run -p cli -- dev ping
 | Sprint | Description | Status | Progress |
 |--------|------------|--------|----------|
 | **Sprint 1** | Workspace & CLI | ✅ **COMPLETE** | 100% |
-| Sprint 2 | WAL & Replay | ⏳ Planned | 0% |
-| Sprint 3 | Feed Adapters & LOB | ⏳ Planned | 0% |
+| **Sprint 2** | WAL & Replay | ✅ **COMPLETE** | 100% |
+| **Sprint 3** | Feed Adapters & LOB | ✅ **COMPLETE** | 100% |
 | Sprint 4 | Strategy Runtime | ⏳ Planned | 0% |
 | Sprint 5 | Live Integration | ⏳ Planned | 0% |
 | Sprint 6 | Backtester | ⏳ Planned | 0% |
 
-**Overall Progress:** ~17% Complete
+**Overall Progress:** ~50% Complete
 
-[📄 Detailed Sprint Status](docs/SPRINT_STATUS.md)
+**[📄 Detailed Sprint Progress & Architecture](docs/architecture/README.md#sprint-progress--development-roadmap)**
 
 ## 🏗️ Architecture
 
@@ -63,12 +63,16 @@ cargo run -p cli -- dev ping
 ```
 
 **Core Components:**
-- `common/` - Core types (Symbol, Price, Quantity, Timestamp)
-- `bus/` - Lock-free event bus with crossbeam channels
-- `cli/` - Command-line interface
-- `storage/` - Write-ahead log (coming in Sprint 2)
-- `feed/` - Market data adapters (coming in Sprint 3)
-- `lob/` - Order book engine (coming in Sprint 3)
+- `crates/core/common/` - Core types (Symbol, Price, Quantity, Timestamp)
+- `crates/infra/bus/` - Lock-free event bus with crossbeam channels
+- `crates/infra/storage/` - Write-ahead log with deterministic replay
+- `crates/infra/auth/` - Multi-venue authentication (Zerodha, Binance)
+- `crates/market-data/lob/` - Ultra-fast order book engine
+- `crates/market-data/feeds/` - Market data adapters and WebSocket feeds
+- `crates/trading/engine/` - Zero-allocation trading engine
+- `crates/trading/sim/` - Simulation and backtesting framework
+- `crates/tools/cli/` - Command-line interface
+- `crates/tools/perf/` - Performance monitoring tools
 
 ## 🎯 Performance Targets
 
@@ -122,28 +126,40 @@ cargo clippy --all-targets --all-features -- -D warnings
 shrivenq/
 ├── Cargo.toml           # Workspace configuration
 ├── README.md            # This file
-├── LICENSE-MIT          # MIT license
-├── LICENSE-APACHE       # Apache 2.0 license
+├── LICENSE              # Proprietary license
 ├── rust-toolchain.toml  # Pinned Rust version
 ├── clippy.toml          # Strict clippy settings
 ├── .cargo/
 │   └── config.toml      # Build flags
 ├── .github/
 │   └── workflows/       # CI/CD pipelines
+├── .pre-commit-config.yaml # Pre-commit hooks
 ├── docs/                # Documentation
-├── scripts/
-│   └── strict-check.sh  # Quality enforcement
-├── common/              # Core types
-├── bus/                 # Event bus
-└── cli/                 # CLI interface
+├── scripts/             # Build and test scripts
+└── crates/              # All source code
+    ├── core/            # Core functionality
+    │   └── common/      # Shared types and utilities
+    ├── infra/           # Infrastructure
+    │   ├── auth/        # Authentication
+    │   ├── bus/         # Event bus
+    │   └── storage/     # WAL persistence
+    ├── market-data/     # Market data processing
+    │   ├── feeds/       # Feed adapters
+    │   └── lob/         # Order book
+    ├── trading/         # Trading logic
+    │   ├── engine/      # Execution engine
+    │   └── sim/         # Simulation
+    └── tools/           # Development tools
+        ├── cli/         # CLI interface
+        └── perf/        # Performance tools
 ```
 
 ## 📈 Roadmap
 
-### ✅ Phase 1: Foundation (Current)
+### ✅ Phase 1: Foundation (Complete)
 - [x] Sprint 1: Workspace setup
-- [ ] Sprint 2: WAL & persistence
-- [ ] Sprint 3: Market data feeds
+- [x] Sprint 2: WAL & persistence
+- [x] Sprint 3: Market data feeds
 
 ### 🔄 Phase 2: Trading Core
 - [ ] Sprint 4: Strategy runtime
@@ -165,9 +181,12 @@ shrivenq/
 
 ## 📚 Documentation
 
-- [Project Overview](docs/PROJECT_OVERVIEW.md)
-- [Sprint Status](docs/SPRINT_STATUS.md)
-- [Architecture Decisions](docs/ARCHITECTURE_DECISIONS.md)
+- **[Complete Documentation](docs/README.md)** - Main documentation entry point
+- **[Architecture Overview](docs/architecture/README.md)** - System design and components
+- **[Developer Guide](docs/developer-guide/README.md)** - Development setup and workflow
+- **[Trader Guide](docs/trader-guide/README.md)** - Usage guide for traders
+- **[API Reference](docs/api-reference/README.md)** - Detailed API documentation
+- **[Deployment Guide](docs/deployment/README.md)** - Production deployment
 
 ## 📄 License
 

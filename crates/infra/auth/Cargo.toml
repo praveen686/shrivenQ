@@ -1,0 +1,52 @@
+[package]
+name = "auth"
+version = "0.1.0"
+edition = "2024"
+authors = ["Praveen Ayyasola <praveenkumar.avln@gmail.com>"]
+license = "Proprietary"
+repository = "https://github.com/praveen686/shrivenQ"
+description = "Authentication module for trading platforms"
+readme = "../README.md"
+keywords = ["trading", "auth", "authentication"]
+categories = ["finance"]
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = "0.8"
+dirs = "5"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+tracing = { workspace = true }
+totp-rs = "5.4"
+base32 = "0.5"
+reqwest = { version = "0.12", features = ["json", "cookies"] }
+chrono = { workspace = true }
+tokio = { workspace = true }
+dotenv = "0.15"
+tracing-subscriber = { workspace = true }
+# Force version alignment
+base64 = { workspace = true }
+regex = { workspace = true }
+
+# Optional for enhanced security
+keyring = { version = "3", optional = true }
+age = { version = "0.10", optional = true }
+
+[features]
+default = []
+secure-storage = ["keyring", "age"]
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[[bin]]
+name = "test_zerodha"
+path = "src/bin/test_zerodha.rs"
+
+[[bin]]
+name = "test_binance"
+path = "src/bin/test_binance.rs"

@@ -1,0 +1,32 @@
+[package]
+name = "storage"
+version.workspace = true
+edition = "2024"
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "ShrivenQ storage module"
+readme = "../README.md"
+keywords = ["trading", "storage"]
+categories = ["finance"]
+
+[dependencies]
+common = { path = "../../core/common" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+bincode = { workspace = true }
+tracing = { workspace = true }
+crc32fast = { workspace = true }
+memmap2 = { workspace = true }
+byteorder = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util"] }
+
+[dev-dependencies]
+criterion = { workspace = true }
+tempfile = { workspace = true }
+
+[[bench]]
+name = "wal_benchmark"
+harness = false

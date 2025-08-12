@@ -16,13 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install Rust toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         toolchain: stable
         components: rustfmt, clippy
-    
+
     - name: Cache cargo registry
       uses: actions/cache@v3
       with:
@@ -31,21 +31,21 @@ jobs:
           ~/.cargo/git
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-    
+
     - name: Check for forbidden patterns
       run: |
         echo "Checking for TODO, FIXME, HACK, XXX, STUB..."
         ! grep -r "TODO\|FIXME\|HACK\|XXX\|STUB" --include="*.rs" --exclude-dir=target .
-        
+
         echo "Checking for unwrap(), expect(), panic!..."
         ! grep -r "unwrap()\|expect(\|panic!\|unimplemented!\|unreachable!" --include="*.rs" --exclude-dir=target .
-        
+
         echo "Checking for println!, dbg!..."
         ! grep -r "println!\|print!\|eprintln!\|eprint!\|dbg!" --include="*.rs" --exclude-dir=target .
-    
+
     - name: Check formatting
       run: cargo fmt --all -- --check
-    
+
     - name: Run strict clippy
       run: |
         cargo clippy --all-targets --all-features -- \
@@ -64,20 +64,20 @@ jobs:
           -D clippy::print_stderr \
           -D dead_code \
           -D unused
-    
+
     - name: Build with strict flags
       run: cargo build --all-targets --all-features
       env:
         RUSTFLAGS: "-D warnings -D dead_code -D unused"
-    
+
     - name: Run tests
       run: cargo test --all-targets --all-features
-    
+
     - name: Check documentation
       run: cargo doc --no-deps --all-features
       env:
         RUSTDOCFLAGS: "-D warnings"
-    
+
     - name: Security audit
       run: |
         cargo install cargo-audit
@@ -88,15 +88,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install Rust toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         toolchain: stable
-    
+
     - name: Build release mode
       run: cargo build --release --all-targets
-    
+
     - name: Check binary size
       run: |
         ls -lh target/release/shrivenq
