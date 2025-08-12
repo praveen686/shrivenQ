@@ -25,10 +25,10 @@ pub struct FeatureCalculatorV2 {
     trade_flow_buffer: VecDeque<(Ts, f64, bool)>, // (timestamp, size, is_buy)
     flow_window_ns: u64,
 
-    // Microstructure state
-    last_microprice: f64,
-    last_spread: f64,
-    spread_ema: f64,
+    // Microstructure state (stored as fixed-point i64, scale 10000)
+    last_microprice: i64, // Fixed-point: actual * 10000
+    last_spread: i64,     // Fixed-point: actual * 10000
+    spread_ema: i64,      // Fixed-point: actual * 10000
 
     // Regime detection
     volatility_window: VecDeque<f64>,
@@ -122,9 +122,9 @@ impl FeatureCalculatorV2 {
             vwap_buffer: VecDeque::with_capacity(1000),
             trade_flow_buffer: VecDeque::with_capacity(1000),
             flow_window_ns: 10_000_000_000, // 10 seconds
-            last_microprice: 0.0,
-            last_spread: 0.0,
-            spread_ema: 0.0,
+            last_microprice: 0,
+            last_spread: 0,
+            spread_ema: 0,
             volatility_window: VecDeque::with_capacity(100),
             regime: MarketRegime::Normal,
             update_count: 0,
@@ -174,10 +174,11 @@ impl FeatureCalculatorV2 {
         self.update_vwap(book.ts, mid_price, bid_qty.as_f64() + ask_qty.as_f64());
         let vwap_dev = self.calculate_vwap_deviation(mid_price);
 
-        // Update state
-        self.last_microprice = microprice;
-        self.last_spread = (ask_px.as_f64() - bid_px.as_f64()) / mid_price * 10000.0;
-        self.spread_ema = self.spread_ema.mul_add(0.95, self.last_spread * 0.05);
+        // Update state (convert to fixed-point)
+        self.last_microprice = (microprice * 10000.0) as i64;
+        self.last_spread =
+            ((ask_px.as_f64() - bid_px.as_f64()) / mid_price * 10000.0 * 10000.0) as i64;
+        self.spread_ema = (self.spread_ema as f64 * 0.95 + self.last_spread as f64 * 0.05) as i64;
         self.update_count += 1;
         self.last_update_ts = book.ts;
 
@@ -228,7 +229,7 @@ impl FeatureCalculatorV2 {
         if total_weight > 0.0 {
             weighted_spread / total_weight
         } else {
-            self.last_spread
+            self.last_spread as f64 / 10000.0
         }
     }
 
@@ -240,7 +241,7 @@ impl FeatureCalculatorV2 {
             / (book.bids.total_volume() + book.asks.total_volume()) as f64;
 
         // Effective spread is typically 50-80% of quoted spread
-        quoted_spread * (0.5 + 0.3 * volume_factor)
+        quoted_spread as f64 * (0.5 + 0.3 * volume_factor)
     }
 
     /// Estimate temporary price impact
@@ -257,8 +258,9 @@ impl FeatureCalculatorV2 {
 
     /// Calculate resilience (speed of recovery after trades)
     fn calculate_resilience(&self, current_microprice: f64) -> f64 {
-        if self.last_microprice != 0.0 {
-            let price_change = (current_microprice - self.last_microprice).abs();
+        if self.last_microprice != 0 {
+            let last_price_f64 = self.last_microprice as f64 / 10000.0;
+            let price_change = (current_microprice - last_price_f64).abs();
             let mean_reversion_speed = 1.0 / (1.0 + price_change * 100.0);
             mean_reversion_speed
         } else {
@@ -269,7 +271,7 @@ impl FeatureCalculatorV2 {
     /// Calculate flow toxicity (VPIN-inspired)
     fn calculate_flow_toxicity(&self, book: &OrderBookV2) -> f64 {
         let imbalance = book.imbalance(5);
-        let spread_normalized = self.last_spread / 100.0;
+        let spread_normalized = self.last_spread as f64 / 1000000.0; // Convert fixed-point to normalized
         let volume_ratio =
             book.asks.total_volume() as f64 / (book.bids.total_volume() as f64 + 1.0);
 
@@ -316,8 +318,9 @@ impl FeatureCalculatorV2 {
 
     /// Calculate price momentum
     fn calculate_momentum(&self, current_price: f64) -> f64 {
-        if self.last_microprice != 0.0 {
-            let return_bps = (current_price / self.last_microprice - 1.0) * 10000.0;
+        if self.last_microprice != 0 {
+            let last_price_f64 = self.last_microprice as f64 / 10000.0;
+            let return_bps = (current_price / last_price_f64 - 1.0) * 10000.0;
             return_bps / 100.0 // Normalize to [-1, 1] range
         } else {
             0.0
@@ -327,7 +330,7 @@ impl FeatureCalculatorV2 {
     /// Calculate overall liquidity score
     fn calculate_liquidity_score(&self, book: &OrderBookV2) -> f64 {
         let depth_score = (book.bids.total_qty_up_to(5) + book.asks.total_qty_up_to(5)) / 1000.0;
-        let spread_score = 1.0 / (1.0 + self.last_spread / 10.0);
+        let spread_score = 1.0 / (1.0 + self.last_spread as f64 / 100000.0);
         let balance_score = 1.0 - book.imbalance(5).abs();
 
         (depth_score * spread_score * balance_score).sqrt()
@@ -336,7 +339,8 @@ impl FeatureCalculatorV2 {
     /// Calculate price stability index
     fn calculate_stability(&self, book: &OrderBookV2) -> f64 {
         let volatility = self.estimate_current_volatility();
-        let spread_stability = 1.0 / (1.0 + (self.last_spread - self.spread_ema).abs());
+        let spread_stability =
+            1.0 / (1.0 + ((self.last_spread - self.spread_ema) as f64 / 10000.0).abs());
         let depth_stability = book.bids.total_volume().min(book.asks.total_volume()) as f64
             / book.bids.total_volume().max(book.asks.total_volume()) as f64;
 
@@ -420,8 +424,9 @@ impl FeatureCalculatorV2 {
     /// Update market regime detection
     fn update_regime(&mut self, spread: f64, price: f64) {
         // Update volatility window
-        if self.last_microprice != 0.0 {
-            let return_val = ((price / self.last_microprice).ln()).abs();
+        if self.last_microprice != 0 {
+            let last_price_f64 = self.last_microprice as f64 / 10000.0;
+            let return_val = ((price / last_price_f64).ln()).abs();
             self.volatility_window.push_back(return_val);
             if self.volatility_window.len() > 100 {
                 self.volatility_window.pop_front();
@@ -470,7 +475,7 @@ impl FeatureCalculatorV2 {
         if volume_sum > 0.0 {
             value_sum / volume_sum
         } else {
-            self.last_microprice
+            self.last_microprice as f64 / 10000.0
         }
     }
 

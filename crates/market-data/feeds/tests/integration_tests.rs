@@ -16,12 +16,14 @@ use std::env;
 
 #[tokio::test]
 #[ignore] // Run only when explicitly requested
-async fn test_zerodha_real_auth() {
+async fn test_zerodha_real_auth() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables
     dotenv().ok();
 
-    let api_key = env::var("ZERODHA_API_KEY").expect("ZERODHA_API_KEY not found in .env");
-    let api_secret = env::var("ZERODHA_API_SECRET").expect("ZERODHA_API_SECRET not found in .env");
+    let api_key = env::var("ZERODHA_API_KEY")
+        .map_err(|_| "ZERODHA_API_KEY not found in .env - please set this environment variable")?;
+    let api_secret = env::var("ZERODHA_API_SECRET")
+        .map_err(|_| "ZERODHA_API_SECRET not found in .env - please set this environment variable")?;
     let user_id = env::var("ZERODHA_USER_ID").unwrap_or_else(|_| "test_user".to_string());
     let password = env::var("ZERODHA_PASSWORD").unwrap_or_else(|_| "test_pass".to_string());
     let totp_secret = env::var("ZERODHA_TOTP_SECRET").unwrap_or_else(|_| "test_totp".to_string());
@@ -33,15 +35,18 @@ async fn test_zerodha_real_auth() {
     // Auth handles everything automatically - no manual login flow needed
     // Auth config is private - just verify auth was created successfully
     // The actual authentication happens internally
+    Ok(())
 }
 
 #[tokio::test]
 #[ignore]
-async fn test_binance_real_auth() {
+async fn test_binance_real_auth() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
-    let api_key = env::var("BINANCE_API_KEY").expect("BINANCE_API_KEY not found in .env");
-    let api_secret = env::var("BINANCE_API_SECRET").expect("BINANCE_API_SECRET not found in .env");
+    let api_key = env::var("BINANCE_API_KEY")
+        .map_err(|_| "BINANCE_API_KEY not found in .env - please set this environment variable")?;
+    let api_secret = env::var("BINANCE_API_SECRET")
+        .map_err(|_| "BINANCE_API_SECRET not found in .env - please set this environment variable")?;
 
     println!("Testing Binance auth with API key: {}...", &api_key[..8]);
 
@@ -54,15 +59,18 @@ async fn test_binance_real_auth() {
 
     // The auth module handles signing and API calls internally
     // Actual API calls would be made through the auth module's methods
+    Ok(())
 }
 
 #[tokio::test]
 #[ignore]
-async fn test_zerodha_websocket_connection() {
+async fn test_zerodha_websocket_connection() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
-    let api_key = env::var("ZERODHA_API_KEY").expect("ZERODHA_API_KEY not found in .env");
-    let api_secret = env::var("ZERODHA_API_SECRET").expect("ZERODHA_API_SECRET not found in .env");
+    let api_key = env::var("ZERODHA_API_KEY")
+        .map_err(|_| "ZERODHA_API_KEY not found in .env - please set this environment variable")?;
+    let api_secret = env::var("ZERODHA_API_SECRET")
+        .map_err(|_| "ZERODHA_API_SECRET not found in .env - please set this environment variable")?;
     let user_id = env::var("ZERODHA_USER_ID").unwrap_or_else(|_| "test_user".to_string());
     let password = env::var("ZERODHA_PASSWORD").unwrap_or_else(|_| "test_pass".to_string());
     let totp_secret = env::var("ZERODHA_TOTP_SECRET").unwrap_or_else(|_| "test_totp".to_string());
@@ -99,11 +107,12 @@ async fn test_zerodha_websocket_connection() {
             // Connection timed out
         }
     }
+    Ok(())
 }
 
 #[tokio::test]
 #[ignore]
-async fn test_binance_websocket_connection() {
+async fn test_binance_websocket_connection() -> Result<(), Box<dyn std::error::Error>> {
     // Test Binance public WebSocket (no auth required)
     let ws_url = "wss://stream.binance.com:9443/ws/btcusdt@depth5@100ms";
 
@@ -125,6 +134,7 @@ async fn test_binance_websocket_connection() {
             // Connection timed out
         }
     }
+    Ok(())
 }
 
 #[test]

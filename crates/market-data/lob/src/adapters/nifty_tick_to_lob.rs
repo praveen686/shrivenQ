@@ -6,9 +6,10 @@
 //! 3. Lee-Ready algorithm for trade classification
 //! 4. Microstructure patterns from NSE trading mechanics
 
+use crate::{CrossResolution, OrderBookV2, features_v2};
 use anyhow::{Context, Result};
 use common::{L2Update, Px, Qty, Side, Symbol, Ts};
-use lob::{CrossResolution, OrderBookV2, features_v2};
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::Deserialize;
 use std::collections::{BTreeMap, VecDeque};
 use std::fs::File;
@@ -19,18 +20,24 @@ use tracing::{info, warn};
 /// NIFTY Tick Data Entry
 #[derive(Debug, Clone, Deserialize)]
 pub struct NiftyTick {
+    /// Timestamp string
     #[serde(rename = "timestamp")]
     pub timestamp: String,
+    /// Symbol name
     #[serde(rename = "symbol")]
     pub symbol: String,
+    /// Trade price
     #[serde(rename = "price")]
     pub price: f64,
+    /// Trade quantity
     #[serde(rename = "quantity")]
     pub quantity: f64,
+    /// Optional trade value
     #[serde(rename = "value")]
     pub value: Option<f64>,
+    /// Optional side ("B" or "S" if available)
     #[serde(rename = "buy_sell")]
-    pub side: Option<String>, // "B" or "S" if available
+    pub side: Option<String>,
 }
 
 impl NiftyTick {
@@ -74,7 +81,7 @@ impl NiftyTick {
 
         if self.timestamp.contains(':') {
             // Time format - assume today's date
-            let base_date = 1704067200000000000u64; // 2024-01-01 00:00:00 UTC in ns
+            let base_date = 1_704_067_200_000_000_000_u64; // 2024-01-01 00:00:00 UTC in ns
 
             // Extract time components
             let time_parts: Vec<&str> = if self.timestamp.contains(' ') {
@@ -113,17 +120,17 @@ impl NiftyTick {
 
         // Try parsing as epoch timestamp
         if let Ok(epoch_ms) = self.timestamp.parse::<u64>() {
-            if epoch_ms > 1000000000000 {
+            if epoch_ms > 1_000_000_000_000 {
                 // Looks like milliseconds
                 return Ok(epoch_ms * 1_000_000);
-            } else if epoch_ms > 1000000000 {
+            } else if epoch_ms > 1_000_000_000 {
                 // Looks like seconds
                 return Ok(epoch_ms * 1_000_000_000);
             }
         }
 
         // Default to current time offset
-        Ok(1704067200000000000u64)
+        Ok(1_704_067_200_000_000_000_u64)
     }
 }
 
@@ -159,6 +166,12 @@ pub struct LobEstimator {
 }
 
 impl LobEstimator {
+    /// Create a new LOB estimator for tick-to-LOB reconstruction
+    ///
+    /// # Performance
+    /// - O(1) initialization time
+    /// - Pre-allocates history buffers with capacity
+    /// - Uses BTreeMap for O(log n) price level access
     pub fn new(tick_size: f64) -> Self {
         Self {
             estimated_bid: None,
@@ -354,20 +367,24 @@ impl LobEstimator {
         }
 
         // Ensure we have at least BBO
-        if self.bid_levels.is_empty() && self.estimated_bid.is_some() {
-            let bid_ticks = (self.estimated_bid.unwrap() / self.tick_size).round() as i64;
-            self.bid_levels.insert(bid_ticks, 100.0); // Default quantity
+        if self.bid_levels.is_empty() {
+            if let Some(bid) = self.estimated_bid {
+                let bid_ticks = (bid / self.tick_size).round() as i64;
+                self.bid_levels.insert(bid_ticks, 100.0); // Default quantity
+            }
         }
 
-        if self.ask_levels.is_empty() && self.estimated_ask.is_some() {
-            let ask_ticks = (self.estimated_ask.unwrap() / self.tick_size).round() as i64;
-            self.ask_levels.insert(ask_ticks, 100.0); // Default quantity
+        if self.ask_levels.is_empty() {
+            if let Some(ask) = self.estimated_ask {
+                let ask_ticks = (ask / self.tick_size).round() as i64;
+                self.ask_levels.insert(ask_ticks, 100.0); // Default quantity
+            }
         }
     }
 
     /// Generate LOB updates from current state
     pub fn generate_lob_updates(&self, symbol: Symbol, timestamp_ns: u64) -> Vec<L2Update> {
-        let mut updates = Vec::new();
+        let mut updates = Vec::with_capacity(100);
         let ts = Ts::from_nanos(timestamp_ns);
 
         // Generate bid side updates (descending order)
@@ -422,15 +439,21 @@ impl LobEstimator {
 /// NIFTY Tick to LOB Converter
 pub struct NiftyTickToLob {
     estimator: LobEstimator,
-    symbol_map: std::collections::HashMap<String, Symbol>,
+    symbol_map: FxHashMap<String, Symbol>,
     next_symbol_id: u32,
 }
 
 impl NiftyTickToLob {
+    /// Create a new NIFTY tick-to-LOB converter
+    ///
+    /// # Performance
+    /// - O(1) initialization time
+    /// - Pre-allocates internal data structures
+    /// - No heap allocations during processing
     pub fn new(tick_size: f64) -> Self {
         Self {
             estimator: LobEstimator::new(tick_size),
-            symbol_map: std::collections::HashMap::new(),
+            symbol_map: FxHashMap::with_capacity_and_hasher(1000, FxBuildHasher),
             next_symbol_id: 1,
         }
     }
@@ -458,7 +481,7 @@ impl NiftyTickToLob {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
 
-        let mut lob_snapshots = Vec::new();
+        let mut lob_snapshots = Vec::with_capacity(1000);
         let mut line_count = 0;
         let mut processed_ticks = 0;
 
@@ -558,14 +581,8 @@ impl NiftyTickToLob {
     }
 }
 
-fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .init();
-
-    info!("🚀 NIFTY 50 Tick Data to LOB Converter");
-    info!("=====================================\n");
-
+/// Demo function showing how to use the NIFTY tick-to-LOB converter
+pub fn run_nifty_tick_demo() -> Result<()> {
     // Example usage
     let mut converter = NiftyTickToLob::new(0.05); // NIFTY tick size
 

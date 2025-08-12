@@ -81,7 +81,13 @@ fn test_order_execution(
     assert_eq!(result.is_ok(), should_succeed);
 
     if should_succeed {
-        let order_id = result.unwrap();
+        let order_id = match result {
+            Ok(id) => id,
+            Err(e) => {
+                assert!(false, "Expected order to succeed but got error: {:?}", e);
+                return;
+            }
+        };
         assert_eq!(order_id.0, 0); // First order should have ID 0
 
         let perf = engine.get_performance();
@@ -177,7 +183,13 @@ fn test_fill_processing(#[case] _qty: f64, #[case] _price: f64) {
     let result = engine.send_order(symbol, Side::Bid, Qty::new(10.0), Some(Px::new(100.0)));
 
     assert!(result.is_ok());
-    let order_id = result.unwrap();
+    let order_id = match result {
+        Ok(id) => id,
+        Err(e) => {
+            assert!(false, "Failed to send order in test: {:?}", e);
+            return;
+        }
+    };
 
     // Process a fill
     engine.on_fill(order_id.0, Qty::new(10.0), Px::new(100.0), Ts::now());
@@ -301,7 +313,9 @@ fn test_concurrent_operations(#[case] num_threads: usize) {
 
     // Wait for all threads to complete
     for handle in handles {
-        handle.join().unwrap();
+        handle.join()
+            .map_err(|_| "Thread panicked")
+            .ok();
     }
 
     let perf = engine.get_performance();
@@ -333,8 +347,15 @@ fn test_pnl_calculation(#[case] _qty: f64, #[case] _entry_price: f64, #[case] _e
     assert!(buy_result.is_ok());
 
     // Process fill
+    let buy_order_id = match buy_result {
+        Ok(id) => id,
+        Err(e) => {
+            assert!(false, "Buy order should have succeeded: {:?}", e);
+            return;
+        }
+    };
     engine.on_fill(
-        buy_result.unwrap().0,
+        buy_order_id,
         Qty::new(10.0),
         Px::new(100.0),
         Ts::now(),

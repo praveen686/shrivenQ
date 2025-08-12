@@ -149,7 +149,7 @@ impl RiskEngine {
         // Check circuit breaker
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_millis() as u64;
 
         let breaker_time = symbol_risk.breaker_triggered.load(Ordering::Acquire);

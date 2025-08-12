@@ -165,7 +165,13 @@ async fn main() -> Result<()> {
             }
 
             let store = fetcher.store();
-            store.load_from_cache(cache_file.to_str().unwrap()).await?;
+            store
+                .load_from_cache(
+                    cache_file
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("Invalid cache file path"))?,
+                )
+                .await?;
 
             info!("Loaded {} instruments from cache", store.count().await);
 
@@ -245,7 +251,13 @@ async fn main() -> Result<()> {
 
             // Load and validate instruments
             let store = fetcher.store();
-            store.load_from_cache(cache_file.to_str().unwrap()).await?;
+            store
+                .load_from_cache(
+                    cache_file
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("Invalid cache file path"))?,
+                )
+                .await?;
             info!(
                 "✅ Instruments file valid: {} instruments",
                 store.count().await

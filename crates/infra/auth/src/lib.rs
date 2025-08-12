@@ -4,6 +4,7 @@
 
 #![deny(warnings)]
 #![deny(clippy::all)]
+#![allow(clippy::multiple_crate_versions)]
 
 // Platform-specific authentication modules
 pub mod binance;

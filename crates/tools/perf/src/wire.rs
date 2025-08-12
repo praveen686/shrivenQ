@@ -75,7 +75,8 @@ impl Reader {
 
     pub fn seek_to(&self, ts_ns: u64) -> Result<()> {
         // Our WAL supports streaming from a timestamp
-        let _iter = self.inner.stream::<WalEvent>(Some(Ts::from_nanos(ts_ns)))?;
+        // This validates that we can create a stream from the given timestamp
+        self.inner.stream::<WalEvent>(Some(Ts::from_nanos(ts_ns)))?;
         Ok(())
     }
 }

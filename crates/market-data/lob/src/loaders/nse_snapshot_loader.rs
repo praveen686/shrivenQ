@@ -3,10 +3,11 @@
 //! Loads NSE order book snapshots (compressed .gz files) and reconstructs
 //! the full limit order book for testing ShrivenQuant's LOB implementation
 
+use crate::{CrossResolution, OrderBookV2};
 use anyhow::{Context, Result};
 use common::{L2Update, Px, Qty, Side, Symbol, Ts};
 use flate2::read::GzDecoder;
-use lob::{CrossResolution, OrderBookV2};
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -16,23 +17,41 @@ use tracing::{debug, info, warn};
 /// NSE Order Book Snapshot Entry
 #[derive(Debug, Clone)]
 pub struct NseOrderEntry {
+    /// Unique order identifier
     pub order_number: u64,
+    /// Trading symbol
     pub symbol: String,
+    /// Type of instrument (EQ, FUT, OPT, etc.)
     pub instrument_type: String,
+    /// Expiry date for derivatives
     pub expiry_date: String,
+    /// Strike price for options
     pub strike_price: f64,
+    /// Option type (CE/PE)
     pub option_type: String,
+    /// Corporate action level
     pub corp_action_level: String,
+    /// Order quantity
     pub quantity: f64,
+    /// Order price
     pub price: f64,
+    /// Timestamp of order
     pub timestamp: String,
+    /// Buy/Sell side
     pub side: Side,
+    /// Day-specific flags
     pub day_flags: String,
+    /// Quantity-related flags
     pub quantity_flags: String,
+    /// Price-related flags
     pub price_flags: String,
+    /// Book type identifier
     pub book_type: String,
+    /// Minimum fill quantity
     pub min_fill_qty: f64,
+    /// Disclosed quantity
     pub disclosed_qty: f64,
+    /// Good-till-date
     pub gtd_date: String,
 }
 
@@ -78,23 +97,33 @@ impl NseOrderEntry {
 /// Aggregated price level for LOB
 #[derive(Debug, Clone)]
 pub struct PriceLevel {
+    /// Price level value
     pub price: f64,
+    /// Total quantity at this price level
     pub total_qty: f64,
+    /// Number of orders at this level
     pub order_count: usize,
+    /// Individual orders at this level
     pub orders: Vec<NseOrderEntry>,
 }
 
 /// NSE Snapshot Loader
 pub struct NseSnapshotLoader {
     /// Symbol mapping
-    symbol_map: std::collections::HashMap<String, Symbol>,
+    symbol_map: FxHashMap<String, Symbol>,
     next_symbol_id: u32,
 }
 
 impl NseSnapshotLoader {
+    /// Create a new NSE snapshot loader
+    ///
+    /// # Performance
+    /// - O(1) initialization time
+    /// - Pre-allocates symbol map with capacity for 10,000 symbols
+    /// - Uses FxHashMap for O(1) average case symbol lookup
     pub fn new() -> Self {
         Self {
-            symbol_map: std::collections::HashMap::new(),
+            symbol_map: FxHashMap::with_capacity_and_hasher(10000, FxBuildHasher),
             next_symbol_id: 1,
         }
     }
@@ -120,7 +149,7 @@ impl NseSnapshotLoader {
         let decoder = GzDecoder::new(file);
         let reader = BufReader::new(decoder);
 
-        let mut entries = Vec::new();
+        let mut entries = Vec::with_capacity(1000);
         let mut line_num = 0;
 
         for line in reader.lines() {
@@ -193,22 +222,18 @@ impl NseSnapshotLoader {
                 &mut ask_levels
             };
 
-            levels
+            let level = levels
                 .entry(price_ticks)
                 .or_insert_with(|| PriceLevel {
                     price: entry.price,
                     total_qty: 0.0,
                     order_count: 0,
-                    orders: Vec::new(),
-                })
-                .total_qty += entry.quantity;
+                    orders: Vec::with_capacity(20),
+                });
 
-            levels.get_mut(&price_ticks).unwrap().order_count += 1;
-            levels
-                .get_mut(&price_ticks)
-                .unwrap()
-                .orders
-                .push(entry.clone());
+            level.total_qty += entry.quantity;
+            level.order_count += 1;
+            level.orders.push(entry.clone());
         }
 
         // Create LOB v2 with ROI optimization
@@ -311,13 +336,13 @@ impl NseSnapshotLoader {
             .iter()
             .filter(|e| e.side == Side::Bid)
             .map(|e| e.price)
-            .max_by(|a, b| a.partial_cmp(b).unwrap());
+            .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let best_ask = filtered
             .iter()
             .filter(|e| e.side == Side::Ask)
             .map(|e| e.price)
-            .min_by(|a, b| a.partial_cmp(b).unwrap());
+            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         println!("\n📊 Market Microstructure Analysis");
         println!("=====================================");
@@ -370,7 +395,7 @@ impl NseSnapshotLoader {
         );
 
         // Analyze book types
-        let mut book_types = std::collections::HashMap::new();
+        let mut book_types = FxHashMap::with_capacity_and_hasher(10, FxBuildHasher);
         for entry in &filtered {
             *book_types.entry(entry.book_type.as_str()).or_insert(0) += 1;
         }
@@ -394,7 +419,13 @@ mod tests {
     #[test]
     fn test_parse_nse_entry() {
         let line = "12345,NIFTY,FUTIDX,20030130,0,XX,0,100,5000.50,10:30:45,B,nnnn,nnn,nnn,RL,0,0,";
-        let entry = NseOrderEntry::from_csv_line(line).unwrap();
+        let entry = match NseOrderEntry::from_csv_line(line) {
+            Ok(e) => e,
+            Err(err) => {
+                assert!(false, "Should parse valid NSE CSV line in test: {}", err);
+                return;
+            }
+        };
 
         assert_eq!(entry.order_number, 12345);
         assert_eq!(entry.symbol, "NIFTY");
@@ -404,12 +435,8 @@ mod tests {
     }
 }
 
-fn main() -> Result<()> {
-    // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .init();
-
+/// Demo function showing how to use the NSE snapshot loader
+pub fn run_nse_loader_demo() -> Result<()> {
     info!("🚀 NSE Order Book Snapshot Loader Demo");
     info!("======================================\n");
 

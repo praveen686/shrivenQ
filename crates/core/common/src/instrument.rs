@@ -4,16 +4,17 @@
 //! caching, persistence, and efficient lookups.
 
 #[allow(unused_imports)]
-use crate::Symbol;
+use crate::{Px, Symbol};
 use anyhow::Result;
 use chrono::{DateTime, Local, Timelike, Utc};
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Type alias for option chain mapping: (underlying, expiry) -> token list
-type OptionChainMap = Arc<RwLock<HashMap<(String, DateTime<Utc>), Vec<u32>>>>;
+type OptionChainMap = Arc<RwLock<FxHashMap<(String, DateTime<Utc>), Vec<u32>>>>;
 
 /// Instrument type classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -90,7 +91,7 @@ pub struct Instrument {
     pub tradable: bool,
 
     /// Additional metadata
-    pub metadata: HashMap<String, String>,
+    pub metadata: FxHashMap<String, String>,
 }
 
 /// Zerodha-specific instrument format
@@ -105,11 +106,11 @@ pub struct ZerodhaInstrument {
     /// Name
     pub name: String,
     /// Last price
-    pub last_price: f64,
+    pub last_price: Px,
     /// Expiry date
     pub expiry: String,
     /// Strike price
-    pub strike: f64,
+    pub strike: Px,
     /// Tick size
     pub tick_size: f64,
     /// Lot size
@@ -126,16 +127,16 @@ pub struct ZerodhaInstrument {
 #[derive(Debug, Clone)]
 pub struct InstrumentStore {
     /// All instruments by token
-    by_token: Arc<RwLock<HashMap<u32, Instrument>>>,
+    by_token: Arc<RwLock<FxHashMap<u32, Instrument>>>,
 
     /// Instruments by trading symbol
-    by_symbol: Arc<RwLock<HashMap<String, Vec<u32>>>>,
+    by_symbol: Arc<RwLock<FxHashMap<String, Vec<u32>>>>,
 
     /// Instruments by exchange symbol
-    by_exchange_symbol: Arc<RwLock<HashMap<String, Vec<u32>>>>,
+    by_exchange_symbol: Arc<RwLock<FxHashMap<String, Vec<u32>>>>,
 
     /// Active futures by underlying
-    active_futures: Arc<RwLock<HashMap<String, Vec<u32>>>>,
+    active_futures: Arc<RwLock<FxHashMap<String, Vec<u32>>>>,
 
     /// Option chains by underlying and expiry
     option_chains: OptionChainMap,
@@ -147,7 +148,7 @@ pub struct InstrumentStore {
     _last_fetch: Arc<RwLock<Option<DateTime<Utc>>>>,
 
     /// `ETags` for caching
-    _etags: Arc<RwLock<HashMap<String, String>>>,
+    _etags: Arc<RwLock<FxHashMap<String, String>>>,
 }
 
 impl Default for InstrumentStore {
@@ -161,14 +162,32 @@ impl InstrumentStore {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            by_token: Arc::new(RwLock::new(HashMap::new())),
-            by_symbol: Arc::new(RwLock::new(HashMap::new())),
-            by_exchange_symbol: Arc::new(RwLock::new(HashMap::new())),
-            active_futures: Arc::new(RwLock::new(HashMap::new())),
-            option_chains: Arc::new(RwLock::new(HashMap::new())),
-            indices: Arc::new(RwLock::new(HashSet::new())),
+            by_token: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
+                10_000,
+                FxBuildHasher,
+            ))),
+            by_symbol: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
+                5_000,
+                FxBuildHasher,
+            ))),
+            by_exchange_symbol: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
+                1_000,
+                FxBuildHasher,
+            ))),
+            active_futures: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
+                500,
+                FxBuildHasher,
+            ))),
+            option_chains: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
+                200,
+                FxBuildHasher,
+            ))),
+            indices: Arc::new(RwLock::new(HashSet::with_capacity(50))),
             _last_fetch: Arc::new(RwLock::new(None)),
-            _etags: Arc::new(RwLock::new(HashMap::new())),
+            _etags: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
+                10,
+                FxBuildHasher,
+            ))),
         }
     }
 
@@ -389,7 +408,11 @@ impl From<ZerodhaInstrument> for Instrument {
                 .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
         };
 
-        let strike = if z.strike > 0.0 { Some(z.strike) } else { None };
+        let strike = if z.strike.as_f64() > 0.0 {
+            Some(z.strike.as_f64())
+        } else {
+            None
+        };
 
         Self {
             instrument_token: z.instrument_token,
@@ -404,14 +427,14 @@ impl From<ZerodhaInstrument> for Instrument {
             option_type,
             tick_size: z.tick_size,
             lot_size: z.lot_size,
-            last_price: if z.last_price > 0.0 {
-                Some(z.last_price)
+            last_price: if z.last_price.as_f64() > 0.0 {
+                Some(z.last_price.as_f64())
             } else {
                 None
             },
             last_update: Utc::now(),
             tradable: true,
-            metadata: HashMap::new(),
+            metadata: FxHashMap::with_capacity_and_hasher(4, FxBuildHasher),
         }
     }
 }
@@ -440,7 +463,7 @@ mod tests {
             last_price: Some(25000.0),
             last_update: Utc::now(),
             tradable: false,
-            metadata: HashMap::new(),
+            metadata: FxHashMap::with_capacity_and_hasher(4, FxBuildHasher),
         };
 
         assert!(store.add_instrument(instrument.clone()).await.is_ok());

@@ -213,7 +213,7 @@ fn test_concurrent_write_and_read() -> Result<()> {
     });
 
     // Wait for writer to finish
-    writer.join().expect("Writer thread panicked")?;
+    writer.join().map_err(|_| anyhow::anyhow!("Writer thread panicked"))??;
 
     // Verify all events are readable
     let wal = Wal::new(&wal_path, Some(128 * 1024 * 1024))?;

@@ -15,6 +15,9 @@ pub mod zerodha;
 // Common components
 pub mod common;
 
+// Integration modules
+pub mod integration;
+
 // Re-exports for backward compatibility
 pub use common::adapter::{FeedAdapter, FeedConfig};
 pub use common::event::MarketEvent;

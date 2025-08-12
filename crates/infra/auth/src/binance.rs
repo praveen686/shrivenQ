@@ -3,9 +3,9 @@
 use anyhow::{Result, anyhow};
 use hmac::{Hmac, Mac};
 use reqwest::Client;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use std::collections::HashMap;
 use tracing::{info, warn};
 
 type HmacSha256 = Hmac<Sha256>;
@@ -114,7 +114,7 @@ impl BinanceConfig {
 /// Binance authentication handler supporting multiple markets
 pub struct BinanceAuth {
     /// Configurations for each market
-    configs: HashMap<BinanceMarket, BinanceConfig>,
+    configs: FxHashMap<BinanceMarket, BinanceConfig>,
     /// HTTP client
     client: Client,
 }
@@ -124,7 +124,7 @@ impl BinanceAuth {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            configs: HashMap::new(),
+            configs: FxHashMap::with_capacity_and_hasher(3, FxBuildHasher), // Spot, UsdFutures, CoinFutures
             client: Client::new(),
         }
     }

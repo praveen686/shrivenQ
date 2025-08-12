@@ -332,7 +332,11 @@ impl InstrumentFetcher {
         }
 
         self.store
-            .load_from_cache(cache_file.to_str().unwrap())
+            .load_from_cache(
+                cache_file
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid cache file path"))?,
+            )
             .await?;
 
         info!("Loaded {} instruments from cache", self.store.count().await);
@@ -343,7 +347,11 @@ impl InstrumentFetcher {
     async fn save_cache(&self) -> Result<()> {
         let cache_file = self.config.cache_dir.join("instruments.json");
         self.store
-            .save_to_cache(cache_file.to_str().unwrap())
+            .save_to_cache(
+                cache_file
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid cache file path"))?,
+            )
             .await?;
 
         // Also save metadata
@@ -423,7 +431,7 @@ impl From<ZerodhaInstrumentCsv> for Instrument {
             .expiry
             .as_ref()
             .and_then(|e| chrono::NaiveDate::parse_from_str(e, "%Y-%m-%d").ok())
-            .map(|d| d.and_hms_opt(15, 30, 0).unwrap())
+            .and_then(|d| d.and_hms_opt(15, 30, 0))
             .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc));
 
         Instrument {

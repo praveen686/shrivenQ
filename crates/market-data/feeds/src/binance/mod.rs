@@ -9,8 +9,8 @@ use crate::common::adapter::{FeedAdapter, FeedConfig};
 use auth::{BinanceAuth, BinanceMarket};
 use common::{L2Update, Px, Qty, Side, Symbol, Ts};
 use futures_util::{SinkExt, StreamExt};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info, warn};
@@ -21,7 +21,7 @@ pub struct BinanceFeed {
     auth: BinanceAuth,
     market: BinanceMarket,
     symbols: Vec<Symbol>,
-    symbol_map: HashMap<String, Symbol>,
+    symbol_map: FxHashMap<String, Symbol>,
     stream_id: Option<String>,
 }
 
@@ -38,7 +38,7 @@ impl BinanceFeed {
             config,
             auth,
             market,
-            symbols: Vec::new(),
+            symbols: Vec::with_capacity(1000),
             symbol_map,
             stream_id: None,
         }
@@ -50,12 +50,12 @@ impl BinanceFeed {
             Some(s) => *s,
             None => {
                 warn!("Unknown symbol: {}", msg.s);
-                return Vec::new();
+                return Vec::with_capacity(0);
             }
         };
 
         let ts = Ts::from_nanos(msg.event_time * 1_000_000);
-        let mut updates = Vec::new();
+        let mut updates = Vec::with_capacity(20);
 
         // Process bid updates
         for (i, bid) in msg.b.iter().enumerate() {

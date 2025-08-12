@@ -1,7 +1,7 @@
 //! WAL Inspector - Analyze and categorize market data from WAL files
 
 use clap::{Parser, Subcommand};
-use std::collections::HashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::fs::File;
 use std::io::Read;
 
@@ -59,13 +59,13 @@ fn read_wal_file(path: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     }
 
     let mut file = File::open(path)?;
-    let mut buffer = Vec::new();
+    let mut buffer = Vec::with_capacity(1024 * 1024); // 1MB initial capacity
     file.read_to_end(&mut buffer)?;
     Ok(buffer)
 }
 
-fn extract_tokens(buffer: &[u8]) -> HashMap<u32, usize> {
-    let mut tokens = HashMap::new();
+fn extract_tokens(buffer: &[u8]) -> FxHashMap<u32, usize> {
+    let mut tokens = FxHashMap::with_capacity_and_hasher(1000, FxBuildHasher);
 
     // Known instrument token ranges
     let token_ranges = vec![
@@ -212,9 +212,9 @@ fn show_details(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let tokens = extract_tokens(&buffer);
 
     // Group by category
-    let mut spot_tokens = Vec::new();
-    let mut future_tokens = Vec::new();
-    let mut option_tokens = Vec::new();
+    let mut spot_tokens = Vec::with_capacity(10);
+    let mut future_tokens = Vec::with_capacity(50);
+    let mut option_tokens = Vec::with_capacity(1000);
 
     for (token, count) in &tokens {
         let (category, desc) = categorize_token(*token);
@@ -254,8 +254,8 @@ fn show_details(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         println!("📈 OPTIONS");
         println!("----------");
         // Group options by strike
-        let mut calls = Vec::new();
-        let mut puts = Vec::new();
+        let mut calls = Vec::with_capacity(500);
+        let mut puts = Vec::with_capacity(500);
 
         for (token, desc, count) in &option_tokens {
             if desc.contains("CE") {
@@ -287,8 +287,9 @@ fn show_details(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("Total tick count: {}", tokens.values().sum::<usize>());
 
     if !tokens.is_empty() {
-        let max_token = tokens.iter().max_by_key(|(_, v)| *v).unwrap();
-        println!("Most active: Token {} ({} ticks)", max_token.0, max_token.1);
+        if let Some(max_token) = tokens.iter().max_by_key(|(_, v)| *v) {
+            println!("Most active: Token {} ({} ticks)", max_token.0, max_token.1);
+        }
     }
 
     Ok(())

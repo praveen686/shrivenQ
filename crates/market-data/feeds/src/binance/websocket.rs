@@ -4,8 +4,8 @@ use crate::common::adapter::{FeedAdapter, FeedConfig};
 use auth::{BinanceAuth, BinanceMarket};
 use common::{L2Update, Px, Qty, Side, Symbol, Ts};
 use futures_util::{SinkExt, StreamExt};
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::Deserialize;
-use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info, warn};
@@ -96,8 +96,8 @@ impl OrderBookManager {
     fn new(symbol: Symbol) -> Self {
         Self {
             symbol,
-            bids: Vec::new(),
-            asks: Vec::new(),
+            bids: Vec::with_capacity(20), // Typical depth
+            asks: Vec::with_capacity(20),
             last_update_id: 0,
             snapshot_received: false,
         }
@@ -127,8 +127,10 @@ impl OrderBookManager {
         }
 
         // Sort books
-        self.bids.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap()); // Descending
-        self.asks.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap()); // Ascending
+        self.bids
+            .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal)); // Descending
+        self.asks
+            .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)); // Ascending
 
         self.last_update_id = snapshot.last_update_id;
         self.snapshot_received = true;
@@ -143,7 +145,7 @@ impl OrderBookManager {
     /// Apply depth update
     fn apply_update(&mut self, update: &DepthUpdate) -> Vec<L2Update> {
         if !self.snapshot_received {
-            return Vec::new();
+            return Vec::with_capacity(0);
         }
 
         // Check if update is in sequence
@@ -153,11 +155,11 @@ impl OrderBookManager {
                 self.last_update_id, update.first_update_id
             );
             self.snapshot_received = false;
-            return Vec::new();
+            return Vec::with_capacity(0);
         }
 
         let ts = Ts::from_nanos(update.event_time * 1_000_000);
-        let mut updates = Vec::new();
+        let mut updates = Vec::with_capacity(20);
 
         // Update bids
         for [price_str, qty_str] in &update.bids {
@@ -210,9 +212,9 @@ impl OrderBookManager {
             levels.push((price, qty));
             // Re-sort
             if ascending {
-                levels.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+                levels.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
             } else {
-                levels.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+                levels.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
             }
             // Keep only top 20 levels
             levels.truncate(20);
@@ -227,9 +229,9 @@ pub struct BinanceWebSocketFeed {
     market: BinanceMarket,
     testnet: bool,
     symbols: Vec<Symbol>,
-    symbol_map: HashMap<String, Symbol>,
-    symbol_names: HashMap<Symbol, String>,
-    order_books: HashMap<Symbol, OrderBookManager>,
+    symbol_map: FxHashMap<String, Symbol>,
+    symbol_names: FxHashMap<Symbol, String>,
+    order_books: FxHashMap<Symbol, OrderBookManager>,
 }
 
 impl BinanceWebSocketFeed {
@@ -240,8 +242,8 @@ impl BinanceWebSocketFeed {
         market: BinanceMarket,
         testnet: bool,
     ) -> Self {
-        let mut symbol_map = HashMap::new();
-        let mut symbol_names = HashMap::new();
+        let mut symbol_map = FxHashMap::with_capacity_and_hasher(1000, FxBuildHasher);
+        let mut symbol_names = FxHashMap::with_capacity_and_hasher(1000, FxBuildHasher);
 
         for (symbol, name) in &config.symbol_map {
             symbol_map.insert(name.to_lowercase(), *symbol);
@@ -253,10 +255,10 @@ impl BinanceWebSocketFeed {
             auth,
             market,
             testnet,
-            symbols: Vec::new(),
+            symbols: Vec::with_capacity(1000),
             symbol_map,
             symbol_names,
-            order_books: HashMap::new(),
+            order_books: FxHashMap::with_capacity_and_hasher(1000, FxBuildHasher),
         }
     }
 
@@ -349,7 +351,7 @@ impl FeedAdapter for BinanceWebSocketFeed {
         let ws_url = self.get_ws_url();
 
         // Build combined stream URL
-        let mut streams = Vec::new();
+        let mut streams = Vec::with_capacity(self.symbols.len());
         for symbol in &self.symbols {
             if let Some(name) = self.symbol_names.get(symbol) {
                 // Subscribe to depth and trade streams

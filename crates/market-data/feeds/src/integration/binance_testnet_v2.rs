@@ -6,11 +6,11 @@
 //! - Real-time Binance testnet feed processing
 //! - Performance monitoring and validation
 
+use crate::{BinanceWebSocketFeed, FeedAdapter, FeedConfig};
 use auth::{BinanceAuth, BinanceConfig, BinanceMarket};
 use common::{L2Update, Symbol};
-use feeds::{BinanceWebSocketFeed, FeedAdapter, FeedConfig};
 use lob::{CrossResolution, OrderBookV2};
-use std::collections::HashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::env;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -100,8 +100,8 @@ impl Metrics {
     }
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+/// Integration test for Binance testnet with LOB v2
+pub async fn run_binance_testnet_v2_integration() -> anyhow::Result<()> {
     // Initialize logging
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
@@ -140,7 +140,7 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     // Create feed config
-    let mut symbol_map = HashMap::new();
+    let mut symbol_map = FxHashMap::with_capacity_and_hasher(10, FxBuildHasher);
     symbol_map.insert(btcusdt, "btcusdt".to_string());
     symbol_map.insert(ethusdt, "ethusdt".to_string());
 
@@ -213,11 +213,12 @@ async fn main() -> anyhow::Result<()> {
 
     // Ctrl+C handler
     tokio::spawn(async move {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Failed to listen for Ctrl+C");
-        info!("\n⚠️  Shutdown signal received");
-        shutdown_clone.store(true, Ordering::Relaxed);
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            error!("Failed to listen for Ctrl+C: {}", e);
+        } else {
+            info!("\n⚠️  Shutdown signal received");
+            shutdown_clone.store(true, Ordering::Relaxed);
+        }
     });
 
     while !shutdown.load(Ordering::Relaxed) {
@@ -306,8 +307,9 @@ async fn main() -> anyhow::Result<()> {
                 info!("Channel closed");
                 break;
             }
-            Err(_) => {
+            Err(e) => {
                 // Timeout, continue
+                debug!("Channel receive timeout: {}", e);
             }
         }
     }

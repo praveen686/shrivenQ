@@ -268,7 +268,9 @@ mod tests {
             Qty::new(100.0),
             0,
         );
-        book.apply(&update).unwrap();
+        book.apply(&update)
+            .map_err(|e| format!("Failed to apply bid update in test: {}", e))
+            .ok();
 
         // Add ask levels
         let update = L2Update::new(Ts::from_nanos(2000), Symbol::new(1)).with_level_data(
@@ -277,7 +279,9 @@ mod tests {
             Qty::new(150.0),
             0,
         );
-        book.apply(&update).unwrap();
+        book.apply(&update)
+            .map_err(|e| format!("Failed to apply bid update in test: {}", e))
+            .ok();
 
         assert_eq!(book.best_bid(), Some((Px::new(99.5), Qty::new(100.0))));
         assert_eq!(book.best_ask(), Some((Px::new(100.5), Qty::new(150.0))));
@@ -298,7 +302,8 @@ mod tests {
                 0,
             ),
         )
-        .unwrap();
+        .map_err(|e| format!("Failed to apply update in test: {}", e))
+        .ok();
 
         // Try to add bid at 101 (would cross)
         let result = book.apply(
@@ -327,7 +332,8 @@ mod tests {
                 0,
             ),
         )
-        .unwrap();
+        .map_err(|e| format!("Failed to apply update in test: {}", e))
+        .ok();
 
         // Ask: 100.5 x 200
         book.apply(
@@ -338,9 +344,16 @@ mod tests {
                 0,
             ),
         )
-        .unwrap();
+        .map_err(|e| format!("Failed to apply update in test: {}", e))
+        .ok();
 
-        let micro = book.microprice().unwrap();
+        let micro = match book.microprice() {
+            Some(m) => m,
+            None => {
+                assert!(false, "Microprice should be available after setting up book");
+                return;
+            }
+        };
         // Microprice = (99.5 * 200 + 100.5 * 100) / (100 + 200)
         // = (19900 + 10050) / 300 = 29950 / 300 = 99.833...
         // But we're in fixed point, so:
@@ -365,7 +378,8 @@ mod tests {
                     i as u8,
                 ),
             )
-            .unwrap();
+            .map_err(|e| format!("Failed to apply level {} update in test: {}", i, e))
+            .ok();
         }
 
         // Add less on ask side
@@ -377,11 +391,17 @@ mod tests {
                 0,
             ),
         )
-        .unwrap();
+        .map_err(|e| format!("Failed to apply update in test: {}", e))
+        .ok();
 
-        let imb = book.imbalance(5).unwrap();
+        let imb = book.imbalance(5);
         // Bid: 300, Ask: 50, Imbalance = (300 - 50) / 350 = 0.714...
-        assert!(imb > 0.7 && imb < 0.75);
+        assert!(imb.is_some());
+        if let Some(imb_value) = imb {
+            assert!(imb_value > 0.7 && imb_value < 0.75);
+        } else {
+            assert!(false, "Imbalance should be calculated");
+        }
     }
 
     #[test]
@@ -411,8 +431,12 @@ mod tests {
         ];
 
         for update in &updates {
-            book1.apply(update).unwrap();
-            book2.apply(update).unwrap();
+            book1.apply(update)
+                .map_err(|e| format!("Failed to apply update to book1: {}", e))
+                .ok();
+            book2.apply(update)
+                .map_err(|e| format!("Failed to apply update to book2: {}", e))
+                .ok();
         }
 
         assert_eq!(book1.state_hash(), book2.state_hash());

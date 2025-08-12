@@ -4,8 +4,8 @@ use crate::common::adapter::{FeedAdapter, FeedConfig};
 use auth::ZerodhaAuth;
 use common::{L2Update, Px, Qty, Side, Symbol, Ts};
 use futures_util::{SinkExt, StreamExt};
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info, warn};
@@ -51,7 +51,7 @@ pub struct DepthLevel {
 
 #[derive(Debug, Deserialize)]
 pub struct QuoteUpdate {
-    pub data: HashMap<String, QuoteData>,
+    pub data: FxHashMap<String, QuoteData>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -92,16 +92,16 @@ pub struct ZerodhaWebSocketFeed {
     config: FeedConfig,
     auth: ZerodhaAuth,
     symbols: Vec<Symbol>,
-    symbol_map: HashMap<u32, Symbol>, // token -> Symbol
-    token_map: HashMap<Symbol, u32>,  // Symbol -> token
+    symbol_map: FxHashMap<u32, Symbol>, // token -> Symbol
+    token_map: FxHashMap<Symbol, u32>,  // Symbol -> token
 }
 
 impl ZerodhaWebSocketFeed {
     /// Create new Zerodha WebSocket feed
     pub fn new(config: FeedConfig, auth: ZerodhaAuth) -> Self {
         // Create bidirectional mappings
-        let mut symbol_map = HashMap::new();
-        let mut token_map = HashMap::new();
+        let mut symbol_map = FxHashMap::with_capacity_and_hasher(1000, FxBuildHasher);
+        let mut token_map = FxHashMap::with_capacity_and_hasher(1000, FxBuildHasher);
 
         // Assuming symbol_map in config is Symbol -> instrument_token (as string)
         for (symbol, token_str) in &config.symbol_map {
@@ -114,7 +114,7 @@ impl ZerodhaWebSocketFeed {
         Self {
             config,
             auth,
-            symbols: Vec::new(),
+            symbols: Vec::with_capacity(1000),
             symbol_map,
             token_map,
         }
@@ -291,7 +291,7 @@ impl ZerodhaWebSocketFeed {
 
     /// Parse order update into L2Updates
     fn parse_order_update(&self, order: OrderUpdate) -> Vec<L2Update> {
-        let mut updates = Vec::new();
+        let mut updates = Vec::with_capacity(20); // Typical LOB depth
 
         if let Some(symbol) = self.symbol_map.get(&order.data.instrument_token) {
             let ts = Ts::from_nanos(order.data.timestamp as u64 * 1_000_000);
@@ -322,7 +322,7 @@ impl ZerodhaWebSocketFeed {
 
     /// Parse binary tick data (Kite's compact format)
     fn parse_binary_data(&self, data: &[u8]) -> anyhow::Result<Vec<L2Update>> {
-        let mut updates = Vec::new();
+        let mut updates = Vec::with_capacity(20); // Typical LOB depth
 
         if data.len() < 2 {
             return Ok(updates);

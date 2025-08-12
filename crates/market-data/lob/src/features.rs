@@ -154,9 +154,13 @@ mod tests {
             "Failed to apply ask update in test"
         );
 
-        let features = calc
-            .calculate(&book)
-            .unwrap_or_else(|| panic!("Failed to calculate features in test"));
+        let features = match calc.calculate(&book) {
+            Some(f) => f,
+            None => {
+                assert!(false, "Failed to calculate features in test - book should have valid BBO");
+                return;
+            }
+        };
 
         assert_eq!(features.symbol, Symbol::new(1));
         assert_eq!(features.spread_ticks, 10000); // 1.0 * 10000

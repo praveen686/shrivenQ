@@ -386,7 +386,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Collect events
-        let mut events = Vec::new();
+        let mut events = Vec::with_capacity(1000);
         while let Ok(Some(event)) = rx.try_recv() {
             events.push(event.into_inner());
         }
@@ -437,7 +437,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Collect events
-        let mut events = Vec::new();
+        let mut events = Vec::with_capacity(1000);
         while let Ok(Some(event)) = rx.try_recv() {
             events.push(event.into_inner());
         }

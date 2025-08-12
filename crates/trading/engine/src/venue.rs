@@ -302,9 +302,9 @@ pub struct VenueConfig {
 /// Create Zerodha adapter
 pub fn create_zerodha_adapter(config: VenueConfig) -> ZerodhaAdapter {
     let auth_config = auth::ZerodhaConfig::new(
-        String::new(), // Will be loaded from env
-        String::new(),
-        String::new(),
+        String::with_capacity(100), // Will be loaded from env
+        String::with_capacity(100),
+        String::with_capacity(100),
         config.api_key,
         config.api_secret,
     );

@@ -11,8 +11,8 @@ use crate::common::adapter::{FeedAdapter, FeedConfig};
 use auth::ZerodhaAuth;
 use common::{L2Update, Px, Qty, Side, Symbol, Ts};
 use futures_util::{SinkExt, StreamExt};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info, warn};
@@ -22,7 +22,7 @@ pub struct ZerodhaFeed {
     config: FeedConfig,
     auth: ZerodhaAuth,
     symbols: Vec<Symbol>,
-    symbol_map: HashMap<String, Symbol>,
+    symbol_map: FxHashMap<String, Symbol>,
 }
 
 impl ZerodhaFeed {
@@ -37,7 +37,7 @@ impl ZerodhaFeed {
         Self {
             config,
             auth,
-            symbols: Vec::new(),
+            symbols: Vec::with_capacity(1000),
             symbol_map,
         }
     }
@@ -48,12 +48,12 @@ impl ZerodhaFeed {
             Some(s) => *s,
             None => {
                 warn!("Unknown token: {}", msg.token);
-                return Vec::new();
+                return Vec::with_capacity(0); // Empty case
             }
         };
 
         let ts = Ts::from_nanos(msg.timestamp * 1_000_000);
-        let mut updates = Vec::new();
+        let mut updates = Vec::with_capacity(20);
 
         // Process bid levels
         for (i, level) in msg.depth.buy.iter().enumerate() {
@@ -148,8 +148,9 @@ impl FeedAdapter for ZerodhaFeed {
                                 }
                             }
                         }
-                        Err(_) => {
-                            // Ignore unparseable messages
+                        Err(e) => {
+                            // Log unparseable messages for debugging
+                            debug!("Failed to parse Zerodha message: {}", e);
                         }
                     }
                 }

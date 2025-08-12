@@ -2,21 +2,21 @@
 //!
 //! This test connects to Zerodha WebSocket and streams real NIFTY/BANKNIFTY data
 
+use crate::common::adapter::{FeedAdapter, FeedConfig};
+use crate::zerodha::websocket::ZerodhaWebSocketFeed;
 use auth::{ZerodhaAuth, ZerodhaConfig};
 use chrono::Timelike;
 use common::Symbol;
 use dotenv::dotenv;
-use feeds::common::adapter::{FeedAdapter, FeedConfig};
-use feeds::zerodha::websocket::ZerodhaWebSocketFeed;
 use lob::OrderBookV2;
-use std::collections::HashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::env;
 use std::time::Instant;
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+/// Live test for Zerodha market data integration
+pub async fn run_zerodha_live_integration() -> anyhow::Result<()> {
     // Initialize logging
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
     let auth = ZerodhaAuth::new(config);
 
     // Create feed configuration with correct instrument tokens
-    let mut symbol_map = HashMap::new();
+    let mut symbol_map = FxHashMap::with_capacity_and_hasher(10, FxBuildHasher);
     symbol_map.insert(Symbol(256265), "256265".to_string()); // NIFTY 50
     symbol_map.insert(Symbol(260105), "260105".to_string()); // NIFTY BANK
 
@@ -108,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Statistics
     let mut update_count = 0;
-    let mut latencies = Vec::new();
+    let mut latencies = Vec::with_capacity(1000);
     let start_time = Instant::now();
 
     info!("\n📈 Streaming market data...\n");

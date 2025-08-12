@@ -1,7 +1,7 @@
 //! Common feed adapter traits and configuration
 
 use common::{L2Update, Symbol};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use tokio::sync::mpsc;
 
 /// Feed adapter trait for market data sources
@@ -30,7 +30,7 @@ pub struct FeedConfig {
     /// REST API URL
     pub api_url: String,
     /// Symbol mappings (internal -> exchange)
-    pub symbol_map: HashMap<Symbol, String>,
+    pub symbol_map: FxHashMap<Symbol, String>,
     /// Max reconnect attempts
     pub max_reconnects: u32,
     /// Reconnect delay in milliseconds

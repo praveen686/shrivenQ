@@ -6,16 +6,17 @@
 //! - Advanced feature extraction on live order flow
 //! - Market regime detection from real conditions
 
+use crate::{CrossResolution, MarketRegime, OrderBookV2, features_v2};
 use common::{L2Update, Px, Qty, Side, Symbol, Ts};
 use futures_util::{SinkExt, StreamExt};
-use lob::{CrossResolution, MarketRegime, OrderBookV2, features_v2};
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// Demo function for Binance live features with LOB v2
+pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
@@ -27,10 +28,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create LOB v2 with ROI optimization around typical BTC price
     let symbol = Symbol(1); // BTCUSDT
     let mut book = OrderBookV2::new_with_roi(
-        symbol, 0.01,     // tick size (0.01 USDT)
-        0.001,    // lot size (0.001 BTC)
-        100000.0, // ROI center (typical BTC price)
-        5000.0,   // ROI width ($97.5k - $102.5k range)
+        symbol, 0.01,      // tick size (0.01 USDT)
+        0.001,     // lot size (0.001 BTC)
+        100_000.0, // ROI center (typical BTC price)
+        5000.0,    // ROI width ($97.5k - $102.5k range)
     );
     book.set_cross_resolution(CrossResolution::AutoResolve);
 
@@ -40,8 +41,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Statistics tracking
     let mut update_count = 0u64;
-    let mut feature_frames = Vec::new();
-    let mut regime_changes = Vec::new();
+    let mut feature_frames = Vec::with_capacity(1000);
+    let mut regime_changes = Vec::with_capacity(100);
     let mut last_regime = MarketRegime::Normal;
 
     // Connect to Binance testnet WebSocket
@@ -75,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let ts = Ts::from_nanos(
                             SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
-                                .unwrap()
+                                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                                 .as_nanos() as u64,
                         );
 
@@ -287,7 +288,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("  Max Volatility Forecast: {:.4}", volatility_max);
 
         // Regime distribution
-        let mut regime_counts = std::collections::HashMap::new();
+        let mut regime_counts = FxHashMap::with_capacity_and_hasher(5, FxBuildHasher);
         for frame in &feature_frames {
             *regime_counts.entry(frame.regime).or_insert(0) += 1;
         }

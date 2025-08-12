@@ -9,8 +9,8 @@
 //! - Hybrid storage strategies
 
 use common::{L2Update, Px, Qty, Side, Symbol, Ts};
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::arch::x86_64::*;
-use std::collections::HashMap;
 use thiserror::Error;
 
 /// Error types for LOB v2
@@ -113,7 +113,7 @@ pub struct SideBookV2 {
     roi_tick_size: f64,
 
     // Sparse fallback for outliers
-    sparse_levels: HashMap<i64, (Qty, Ts)>,
+    sparse_levels: FxHashMap<i64, (Qty, Ts)>,
 
     // Tracking
     best_price_tick: i64,
@@ -424,13 +424,13 @@ impl SideBookV2 {
             timestamps: [Ts::from_nanos(0); 32],
             depth: 0,
 
-            roi_qtys: Vec::new(),
-            roi_timestamps: Vec::new(),
+            roi_qtys: Vec::with_capacity(1000), // Pre-allocate for ROI range
+            roi_timestamps: Vec::with_capacity(1000),
             roi_lb_tick: 0,
             roi_ub_tick: 0,
             roi_tick_size: tick_size,
 
-            sparse_levels: HashMap::new(),
+            sparse_levels: FxHashMap::with_capacity_and_hasher(100, FxBuildHasher),
 
             best_price_tick: INVALID_MIN,
             total_volume: 0,
@@ -447,13 +447,13 @@ impl SideBookV2 {
             timestamps: [Ts::from_nanos(0); 32],
             depth: 0,
 
-            roi_qtys: Vec::new(),
-            roi_timestamps: Vec::new(),
+            roi_qtys: Vec::with_capacity(1000), // Pre-allocate for ROI range
+            roi_timestamps: Vec::with_capacity(1000),
             roi_lb_tick: 0,
             roi_ub_tick: 0,
             roi_tick_size: tick_size,
 
-            sparse_levels: HashMap::new(),
+            sparse_levels: FxHashMap::with_capacity_and_hasher(100, FxBuildHasher),
 
             best_price_tick: INVALID_MAX,
             total_volume: 0,

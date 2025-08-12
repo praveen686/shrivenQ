@@ -14,8 +14,9 @@ use common::{
     market::{L2Update, Side},
 };
 use lob::{FeatureCalculatorV2, OrderBookV2};
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use storage::{TickEvent, Wal, WalEvent};
@@ -83,10 +84,10 @@ struct InstrumentSubscription {
     next_future: Option<Instrument>,
 
     /// Call options (strike -> instrument)
-    calls: HashMap<i64, Instrument>,
+    calls: FxHashMap<i64, Instrument>,
 
     /// Put options (strike -> instrument)
-    puts: HashMap<i64, Instrument>,
+    puts: FxHashMap<i64, Instrument>,
 
     /// Active instrument tokens
     tokens: HashSet<u32>,
@@ -96,7 +97,7 @@ struct InstrumentSubscription {
 pub struct MarketDataPipeline {
     config: PipelineConfig,
     instrument_store: Arc<InstrumentStore>,
-    subscriptions: Arc<RwLock<HashMap<Symbol, InstrumentSubscription>>>,
+    subscriptions: Arc<RwLock<FxHashMap<Symbol, InstrumentSubscription>>>,
 
     /// WAL for tick data persistence
     tick_wal: Arc<RwLock<Wal>>,
@@ -105,10 +106,10 @@ pub struct MarketDataPipeline {
     lob_wal: Arc<RwLock<Wal>>,
 
     /// Live order books
-    order_books: Arc<RwLock<HashMap<Symbol, OrderBookV2>>>,
+    order_books: Arc<RwLock<FxHashMap<Symbol, OrderBookV2>>>,
 
     /// Feature calculators
-    feature_calcs: Arc<RwLock<HashMap<Symbol, FeatureCalculatorV2>>>,
+    feature_calcs: Arc<RwLock<FxHashMap<Symbol, FeatureCalculatorV2>>>,
 
     /// Metrics
     metrics: Arc<RwLock<PipelineMetrics>>,
@@ -154,11 +155,20 @@ impl MarketDataPipeline {
         Ok(Self {
             config,
             instrument_store,
-            subscriptions: Arc::new(RwLock::new(HashMap::new())),
+            subscriptions: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
+                100,
+                FxBuildHasher,
+            ))),
             tick_wal,
             lob_wal,
-            order_books: Arc::new(RwLock::new(HashMap::new())),
-            feature_calcs: Arc::new(RwLock::new(HashMap::new())),
+            order_books: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
+                1000,
+                FxBuildHasher,
+            ))),
+            feature_calcs: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
+                1000,
+                FxBuildHasher,
+            ))),
             metrics: Arc::new(RwLock::new(PipelineMetrics::default())),
         })
     }
@@ -223,9 +233,9 @@ impl MarketDataPipeline {
             spot: spot.clone(),
             current_future: None,
             next_future: None,
-            calls: HashMap::new(),
-            puts: HashMap::new(),
-            tokens: HashSet::new(),
+            calls: FxHashMap::with_capacity_and_hasher(50, FxBuildHasher),
+            puts: FxHashMap::with_capacity_and_hasher(50, FxBuildHasher),
+            tokens: HashSet::with_capacity(200),
         };
 
         // Add spot token
@@ -366,10 +376,6 @@ impl MarketDataPipeline {
 
         for (symbol, book) in order_books.iter() {
             // Create snapshot event
-            // Get best bid/ask for snapshot
-            let _best_bid = book.best_bid();
-            let _best_ask = book.best_ask();
-
             // Create custom snapshot event (you may need to extend WalEvent)
             let tick_event = TickEvent {
                 ts: Ts::now(),
@@ -536,7 +542,7 @@ impl MarketDataPipeline {
     /// Get all subscribed tokens
     pub async fn get_subscribed_tokens(&self) -> Vec<u32> {
         let subscriptions = self.subscriptions.read().await;
-        let mut tokens = Vec::new();
+        let mut tokens = Vec::with_capacity(100); // Expected number of tokens
 
         for sub in subscriptions.values() {
             tokens.extend(sub.tokens.iter().copied());

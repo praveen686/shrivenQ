@@ -51,6 +51,6 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 
 [dev-dependencies]
 criterion = { workspace = true }
-proptest = "1.0"
-tokio-test = "0.4"
-rstest = "0.18"
+proptest = { workspace = true }
+tokio-test = { workspace = true }
+rstest = { workspace = true }

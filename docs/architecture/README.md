@@ -45,8 +45,19 @@ ShrivenQuant is built on the following core principles:
 - **Components**:
   - Zerodha WebSocket connector for NSE/BSE
   - Binance WebSocket connector for crypto
-  - WAL-based data persistence
-  - Replay engine for historical data
+  - WAL-based data persistence with CRC validation
+  - Replay engine for historical data with time and symbol filtering
+  - LOB snapshot storage and reconstruction
+- **Event Types**:
+  - `TickEvent`: Best bid/ask/last with nanosecond timestamps
+  - `LobSnapshot`: Full order book depth with price levels
+  - `OrderEvent`: Order submission and status updates
+  - `FillEvent`: Trade execution events
+- **Performance (Measured)**:
+  - **298M events/min** replay speed (99.5x target of 3M)
+  - **229 MB/s** WAL write throughput (2.86x target of 80 MB/s)
+  - **Sub-microsecond** p50 latencies, <10µs p99
+  - See [Benchmark Results](/reports/benchmark/benchmark-results.md) for details
 
 ### 2. Event Bus (`bus/`)
 - **Purpose**: Zero-copy message passing between components

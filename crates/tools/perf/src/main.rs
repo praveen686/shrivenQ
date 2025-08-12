@@ -19,6 +19,7 @@ use clap::{Parser, Subcommand};
 use hdrhistogram::Histogram;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use std::{fs, path::PathBuf, time::Instant};
+use tracing::{info, error, warn};
 use tracing_subscriber::EnvFilter;
 
 mod wire;
@@ -154,15 +155,15 @@ fn cmd_write(
     let total_bytes = (events as usize) * record_size;
     let mb = total_bytes as f64 / (1024.0 * 1024.0);
 
-    println!("\n=== WRITE BENCHMARK ===");
-    println!("Events: {}", events);
-    println!("Record size: {} bytes", record_size);
-    println!("Segment size: {} MB", segment_mb);
-    println!("Fsync interval: {:?} ms", fsync_ms);
-    println!("\n--- Results ---");
-    println!("Total: {:.2} MB in {:.3}s", mb, dt);
-    println!("Throughput: {:.2} MB/s", mb / dt);
-    println!("Event rate: {:.0} events/sec", events as f64 / dt);
+    info!("\n=== WRITE BENCHMARK ===");
+    info!("Events: {}", events);
+    info!("Record size: {} bytes", record_size);
+    info!("Segment size: {} MB", segment_mb);
+    info!("Fsync interval: {:?} ms", fsync_ms);
+    info!("\n--- Results ---");
+    info!("Total: {:.2} MB in {:.3}s", mb, dt);
+    info!("Throughput: {:.2} MB/s", mb / dt);
+    info!("Event rate: {:.0} events/sec", events as f64 / dt);
     print_hist("Write latency", &latency_histogram);
 
     // Pass/Fail check
@@ -172,8 +173,8 @@ fn cmd_write(
     let p50 = latency_histogram.value_at_percentile(50.0);
     let p99 = latency_histogram.value_at_percentile(99.0);
 
-    println!("\n--- Pass/Fail (Dev Laptop Target) ---");
-    println!(
+    info!("\n--- Pass/Fail (Dev Laptop Target) ---");
+    info!(
         "Throughput: {} (target ≥ {} MB/s)",
         if mb / dt >= pass_mb_s {
             "✅ PASS"
@@ -182,7 +183,7 @@ fn cmd_write(
         },
         pass_mb_s
     );
-    println!(
+    info!(
         "Latency p50: {} (target ≤ {} µs)",
         if p50 <= pass_p50 {
             "✅ PASS"
@@ -191,7 +192,7 @@ fn cmd_write(
         },
         pass_p50
     );
-    println!(
+    info!(
         "Latency p99: {} (target ≤ {} µs)",
         if p99 <= pass_p99 {
             "✅ PASS"
@@ -226,19 +227,19 @@ fn cmd_replay(path: PathBuf, expect: Option<u64>) -> Result<()> {
 
     if let Some(e) = expect {
         if n != e {
-            eprintln!("❌ Count mismatch: got {} expected {}", n, e);
+            error!("❌ Count mismatch: got {} expected {}", n, e);
         }
     }
 
     let eps = n as f64 / dt;
     let events_per_minute = eps * 60.0;
 
-    println!("\n=== REPLAY BENCHMARK ===");
-    println!("Events: {}", n);
-    println!("Time: {:.3}s", dt);
-    println!("\n--- Results ---");
-    println!("Throughput: {:.0} events/sec", eps);
-    println!("Throughput: {:.2}M events/min", events_per_minute / 1e6);
+    info!("\n=== REPLAY BENCHMARK ===");
+    info!("Events: {}", n);
+    info!("Time: {:.3}s", dt);
+    info!("\n--- Results ---");
+    info!("Throughput: {:.0} events/sec", eps);
+    info!("Throughput: {:.2}M events/min", events_per_minute / 1e6);
     print_hist("Replay latency", &latency_histogram);
 
     // Pass/Fail check
@@ -248,8 +249,8 @@ fn cmd_replay(path: PathBuf, expect: Option<u64>) -> Result<()> {
     let p50 = latency_histogram.value_at_percentile(50.0);
     let p99 = latency_histogram.value_at_percentile(99.0);
 
-    println!("\n--- Pass/Fail (Dev Laptop Target) ---");
-    println!(
+    info!("\n--- Pass/Fail (Dev Laptop Target) ---");
+    info!(
         "Throughput: {} (target ≥ {}M events/min)",
         if events_per_minute >= pass_epm {
             "✅ PASS"
@@ -258,7 +259,7 @@ fn cmd_replay(path: PathBuf, expect: Option<u64>) -> Result<()> {
         },
         pass_epm / 1e6
     );
-    println!(
+    info!(
         "Latency p50: {} (target ≤ {} µs)",
         if p50 <= pass_p50 {
             "✅ PASS"
@@ -267,7 +268,7 @@ fn cmd_replay(path: PathBuf, expect: Option<u64>) -> Result<()> {
         },
         pass_p50
     );
-    println!(
+    info!(
         "Latency p99: {} (target ≤ {} µs)",
         if p99 <= pass_p99 {
             "✅ PASS"
@@ -299,37 +300,37 @@ fn cmd_corrupt(path: PathBuf, flip: usize) -> Result<()> {
     }
 
     let mut rng = StdRng::seed_from_u64(1337);
-    println!("\n=== CORRUPTION TEST ===");
-    println!("Target: {:?}", last);
-    println!("Flipping {} bytes", flip);
+    info!("\n=== CORRUPTION TEST ===");
+    info!("Target: {:?}", last);
+    info!("Flipping {} bytes", flip);
 
     for _ in 0..flip {
         let idx = rng.gen_range(0..data.len());
-        println!("Flipping byte at offset {:#x}", idx);
+        info!("Flipping byte at offset {:#x}", idx);
         data[idx] ^= 0xFF;
     }
 
     std::fs::write(&last, &data).context("write corrupted segment")?;
-    println!("✅ Corruption injected successfully");
+    info!("✅ Corruption injected successfully");
 
     // Now try to read and see if CRC catches it
-    println!("\nAttempting to read corrupted WAL...");
+    info!("\nAttempting to read corrupted WAL...");
     match open_reader(&path) {
         Ok(r) => {
             let result = r.replay(|_, _| {});
             match result {
-                Ok(n) => println!("⚠️  Read {} events (CRC may have skipped corrupt ones)", n),
-                Err(e) => println!("✅ CRC detected corruption: {}", e),
+                Ok(n) => info!("⚠️  Read {} events (CRC may have skipped corrupt ones)", n),
+                Err(e) => info!("✅ CRC detected corruption: {}", e),
             }
         }
-        Err(e) => println!("✅ Failed to open corrupted WAL: {}", e),
+        Err(e) => info!("✅ Failed to open corrupted WAL: {}", e),
     }
 
     Ok(())
 }
 
 fn cmd_recover(path: PathBuf) -> Result<()> {
-    println!("\n=== RECOVERY BENCHMARK ===");
+    info!("\n=== RECOVERY BENCHMARK ===");
 
     // Get WAL size
     let mut total_size = 0u64;
@@ -342,18 +343,19 @@ fn cmd_recover(path: PathBuf) -> Result<()> {
     }
     let gb = total_size as f64 / (1024.0 * 1024.0 * 1024.0);
 
-    println!("WAL size: {:.2} GB", gb);
+    info!("WAL size: {:.2} GB", gb);
 
     let t0 = Instant::now();
-    let _r = open_reader(&path).context("open_reader")?;
+    // Open reader to validate recovery time
+    open_reader(&path).context("open_reader")?;
     let ms = t0.elapsed().as_millis();
 
-    println!("Recovery time: {} ms", ms);
+    info!("Recovery time: {} ms", ms);
 
     // Pass/Fail check (1.5s per 10GB)
     let expected_ms = (gb / 10.0 * 1500.0) as u128;
-    println!("\n--- Pass/Fail ---");
-    println!(
+    info!("\n--- Pass/Fail ---");
+    info!(
         "Recovery: {} (target ≤ {} ms for {:.2} GB)",
         if ms <= expected_ms {
             "✅ PASS"
@@ -368,7 +370,7 @@ fn cmd_recover(path: PathBuf) -> Result<()> {
 }
 
 fn cmd_seek(path: PathBuf, probes: usize) -> Result<()> {
-    println!("\n=== SEEK BENCHMARK ===");
+    info!("\n=== SEEK BENCHMARK ===");
 
     // First, get timestamp range
     let reader = open_reader(&path)?;
@@ -384,13 +386,13 @@ fn cmd_seek(path: PathBuf, probes: usize) -> Result<()> {
         count += 1;
     })?;
 
-    println!("WAL contains {} events", count);
-    println!("Timestamp range: {} to {}", first_ts, last_ts);
+    info!("WAL contains {} events", count);
+    info!("Timestamp range: {} to {}", first_ts, last_ts);
 
     let mut rng = StdRng::seed_from_u64(99);
     let mut latency_histogram = Histogram::<u64>::new(3)?;
 
-    println!("\nRunning {} seek probes...", probes);
+    info!("\nRunning {} seek probes...", probes);
 
     for i in 0..probes {
         let target_ts = rng.gen_range(first_ts..=last_ts);
@@ -402,15 +404,15 @@ fn cmd_seek(path: PathBuf, probes: usize) -> Result<()> {
         let us = t0.elapsed().as_micros() as u64;
         let _ = latency_histogram.record(us / 1000); // Convert to ms for display
 
-        println!("  Probe {}: seek to {}% took {} ms", i + 1, pct, us / 1000);
+        info!("  Probe {}: seek to {}% took {} ms", i + 1, pct, us / 1000);
     }
 
     print_hist("Seek time (ms)", &latency_histogram);
 
     // Pass/Fail check (40ms target)
     let p99 = latency_histogram.value_at_percentile(99.0);
-    println!("\n--- Pass/Fail ---");
-    println!(
+    info!("\n--- Pass/Fail ---");
+    info!(
         "Seek p99: {} (target ≤ 40 ms)",
         if p99 <= 40 { "✅ PASS" } else { "❌ FAIL" }
     );
@@ -419,14 +421,14 @@ fn cmd_seek(path: PathBuf, probes: usize) -> Result<()> {
 }
 
 fn cmd_verify(path: PathBuf) -> Result<()> {
-    println!("\n=== DETERMINISTIC REPLAY VERIFICATION ===");
+    info!("\n=== DETERMINISTIC REPLAY VERIFICATION ===");
 
     // Read events twice and compare
     let r1 = open_reader(&path)?;
     let r2 = open_reader(&path)?;
 
-    let mut events1 = Vec::new();
-    let mut events2 = Vec::new();
+    let mut events1 = Vec::with_capacity(1000);
+    let mut events2 = Vec::with_capacity(1000);
 
     r1.replay(|ts, len| {
         events1.push((ts, len));
@@ -436,11 +438,11 @@ fn cmd_verify(path: PathBuf) -> Result<()> {
         events2.push((ts, len));
     })?;
 
-    println!("First read: {} events", events1.len());
-    println!("Second read: {} events", events2.len());
+    info!("First read: {} events", events1.len());
+    info!("Second read: {} events", events2.len());
 
     if events1.len() != events2.len() {
-        println!("❌ FAIL: Event count mismatch!");
+        info!("❌ FAIL: Event count mismatch!");
         return Ok(());
     }
 
@@ -448,16 +450,16 @@ fn cmd_verify(path: PathBuf) -> Result<()> {
     for (i, (e1, e2)) in events1.iter().zip(events2.iter()).enumerate() {
         if e1 != e2 {
             if mismatches < 10 {
-                println!("  Mismatch at event {}: {:?} vs {:?}", i, e1, e2);
+                info!("  Mismatch at event {}: {:?} vs {:?}", i, e1, e2);
             }
             mismatches += 1;
         }
     }
 
     if mismatches > 0 {
-        println!("❌ FAIL: {} events differ between reads", mismatches);
+        info!("❌ FAIL: {} events differ between reads", mismatches);
     } else {
-        println!(
+        info!(
             "✅ PASS: All {} events identical across reads",
             events1.len()
         );
@@ -468,37 +470,37 @@ fn cmd_verify(path: PathBuf) -> Result<()> {
 
 fn cmd_all(path: PathBuf) -> Result<()> {
     let separator = "=".repeat(60);
-    println!("\n{}", separator);
-    println!("RUNNING FULL SPRINT 2 VERIFICATION SUITE");
-    println!("{}", separator);
+    info!("\n{}", separator);
+    info!("RUNNING FULL SPRINT 2 VERIFICATION SUITE");
+    info!("{}", separator);
 
     // Clean start
     let _ = std::fs::remove_dir_all(&path);
 
     // 1. Write test
-    println!("\n[1/5] Write Performance Test");
+    info!("\n[1/5] Write Performance Test");
     cmd_write(path.clone(), 1_000_000, 128, 256, Some(100))?;
 
     // 2. Replay test
-    println!("\n[2/5] Replay Performance Test");
+    info!("\n[2/5] Replay Performance Test");
     cmd_replay(path.clone(), Some(1_000_000))?;
 
     // 3. Recovery test
-    println!("\n[3/5] Recovery Time Test");
+    info!("\n[3/5] Recovery Time Test");
     cmd_recover(path.clone())?;
 
     // 4. Determinism test
-    println!("\n[4/5] Deterministic Replay Test");
+    info!("\n[4/5] Deterministic Replay Test");
     cmd_verify(path.clone())?;
 
     // 5. Seek test
-    println!("\n[5/5] Seek Performance Test");
+    info!("\n[5/5] Seek Performance Test");
     cmd_seek(path.clone(), 10)?;
 
     let separator = "=".repeat(60);
-    println!("\n{}", separator);
-    println!("SPRINT 2 VERIFICATION COMPLETE");
-    println!("{}", separator);
+    info!("\n{}", separator);
+    info!("SPRINT 2 VERIFICATION COMPLETE");
+    info!("{}", separator);
 
     Ok(())
 }
@@ -513,7 +515,7 @@ fn now_ns() -> u64 {
 
 fn print_hist(name: &str, h: &Histogram<u64>) {
     if h.is_empty() {
-        println!("{}: No data", name);
+        info!("{}: No data", name);
         return;
     }
 
@@ -523,7 +525,7 @@ fn print_hist(name: &str, h: &Histogram<u64>) {
     let p999 = h.value_at_percentile(99.9);
     let max = h.max();
 
-    println!(
+    info!(
         "{}: p50={}µs p95={}µs p99={}µs p99.9={}µs max={}µs",
         name, p50, p95, p99, p999, max
     );

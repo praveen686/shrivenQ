@@ -2,16 +2,16 @@
 //!
 //! This demonstrates the original LOB v1 with Binance testnet data
 
+use crate::{FeatureCalculator, OrderBook};
 use common::{L2Update, Px, Qty, Side, Symbol, Ts};
 use futures_util::{SinkExt, StreamExt};
-use lob::{FeatureCalculator, OrderBook};
 use serde_json::Value;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// Demo function for Binance testnet with LOB v1
+pub async fn run_binance_testnet_v1_demo() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Performance tracking
     let mut update_count = 0u64;
-    let mut update_times = Vec::new();
+    let mut update_times = Vec::with_capacity(1000);
     let mut crossed_count = 0u64;
 
     // Try different testnet URLs
@@ -39,7 +39,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "wss://stream.testnet.binance.vision:9443/ws",
     ];
 
-    let mut connected = false;
     let mut ws_stream = None;
 
     for url in &testnet_urls {
@@ -48,7 +47,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok((stream, response)) => {
                 info!("✅ Connected! Response: {:?}", response.status());
                 ws_stream = Some(stream);
-                connected = true;
                 break;
             }
             Err(e) => {
@@ -57,12 +55,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    if !connected {
-        error!("Could not connect to any testnet URL");
-        return Err("Connection failed".into());
-    }
-
-    let ws = ws_stream.unwrap();
+    let ws = match ws_stream {
+        Some(ws) => ws,
+        None => {
+            error!("Could not connect to any testnet URL");
+            return Err("Connection failed".into());
+        }
+    };
     let (mut write, mut read) = ws.split();
 
     // Subscribe to depth updates - try multiple formats
@@ -134,7 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let ts = Ts::from_nanos(
                             SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
-                                .unwrap()
+                                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                                 .as_nanos() as u64,
                         );
 

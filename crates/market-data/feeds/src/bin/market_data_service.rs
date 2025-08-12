@@ -15,7 +15,7 @@ use feeds::{
     FeedAdapter, FeedConfig, InstrumentFetcher, InstrumentFetcherConfig, MarketDataPipeline,
     PipelineConfig, ZerodhaWebSocketFeed,
 };
-use std::collections::HashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -172,14 +172,22 @@ async fn run_service(cli: &Cli, symbols: String, strike_range: u32, dry_run: boo
     if cache_file.exists() {
         info!("Loading instruments from cache");
         instrument_store
-            .load_from_cache(cache_file.to_str().unwrap())
+            .load_from_cache(
+                cache_file
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid cache file path"))?,
+            )
             .await?;
         info!("Loaded {} instruments", instrument_store.count().await);
     } else {
         info!("No cached instruments found. Fetching...");
         fetch_instruments(cli).await?;
         instrument_store
-            .load_from_cache(cache_file.to_str().unwrap())
+            .load_from_cache(
+                cache_file
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid cache file path"))?,
+            )
             .await?;
     }
 
@@ -188,7 +196,11 @@ async fn run_service(cli: &Cli, symbols: String, strike_range: u32, dry_run: boo
         data_dir: PathBuf::from(&cli.data_dir),
         spot_symbols: spot_symbols.clone(),
         option_strike_range: strike_range,
-        strike_interval: 50.0, // TODO: Make configurable per symbol
+        strike_interval: if symbols.contains(&"BANKNIFTY".to_string()) {
+            100.0  // BANKNIFTY has 100 point strike intervals
+        } else {
+            50.0   // NIFTY 50 has 50 point strike intervals
+        },
         wal_segment_size: 100 * 1024 * 1024,
         snapshot_interval_secs: 60,
         enable_reconstruction: true,
@@ -234,7 +246,7 @@ async fn run_service(cli: &Cli, symbols: String, strike_range: u32, dry_run: boo
     let auth = ZerodhaAuth::new(zerodha_config);
 
     // Create feed configuration
-    let mut symbol_map = HashMap::new();
+    let mut symbol_map = FxHashMap::with_capacity_and_hasher(tokens.len(), FxBuildHasher);
     for token in &tokens {
         symbol_map.insert(Symbol::new(*token), token.to_string());
     }
@@ -360,7 +372,11 @@ async fn show_subscriptions(cli: &Cli, symbol: &str) -> Result<()> {
     }
 
     instrument_store
-        .load_from_cache(cache_file.to_str().unwrap())
+        .load_from_cache(
+            cache_file
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("Invalid cache file path"))?,
+        )
         .await?;
 
     // Create pipeline to build subscriptions
@@ -394,24 +410,356 @@ async fn show_subscriptions(cli: &Cli, symbol: &str) -> Result<()> {
     Ok(())
 }
 
-async fn replay_data(_cli: &Cli, start: &str, end: &str, symbol: Option<&str>) -> Result<()> {
-    info!("Replaying data from {} to {}", start, end);
+async fn replay_data(cli: &Cli, start: &str, end: &str, symbol: Option<&str>) -> Result<()> {
+    use chrono::{DateTime, Utc};
+    use storage::{Wal, WalEvent};
+    use common::Ts;
+
+    info!("Starting data replay from {} to {}", start, end);
 
     if let Some(sym) = symbol {
         info!("Symbol filter: {}", sym);
     }
 
-    // TODO: Implement replay functionality
-    warn!("Replay functionality not yet implemented");
+    // Parse timestamps
+    let start_time = DateTime::parse_from_rfc3339(start)
+        .map_err(|e| anyhow::anyhow!("Invalid start time format (use ISO format): {}", e))?
+        .with_timezone(&Utc);
+    let end_time = DateTime::parse_from_rfc3339(end)
+        .map_err(|e| anyhow::anyhow!("Invalid end time format (use ISO format): {}", e))?
+        .with_timezone(&Utc);
+
+    let start_ts = Ts::from_nanos(start_time.timestamp_nanos_opt()
+        .ok_or_else(|| anyhow::anyhow!("Invalid start timestamp"))? as u64);
+    let end_ts = Ts::from_nanos(end_time.timestamp_nanos_opt()
+        .ok_or_else(|| anyhow::anyhow!("Invalid end timestamp"))? as u64);
+
+    info!("Timestamp range: {} to {}", start_ts.as_nanos(), end_ts.as_nanos());
+
+    // Load instrument store for symbol resolution if filtering is needed
+    let instrument_store = if symbol.is_some() {
+        let store = Arc::new(InstrumentStore::new());
+        let cache_file = PathBuf::from(&cli.cache_dir).join("instruments/instruments.json");
+
+        if cache_file.exists() {
+            store.load_from_cache(
+                cache_file.to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid cache file path"))?
+            ).await?;
+            info!("Loaded {} instruments for symbol filtering", store.count().await);
+            Some(store)
+        } else {
+            warn!("No instrument cache found - symbol filtering will be limited");
+            None
+        }
+    } else {
+        None
+    };
+
+    // Open WAL files for replay
+    let data_dir = PathBuf::from(&cli.data_dir);
+    let tick_wal_path = data_dir.join("ticks");
+    let lob_wal_path = data_dir.join("lob");
+
+    let mut total_events = 0u64;
+    let mut tick_events = 0u64;
+    let mut lob_events = 0u64;
+    let mut skipped_events = 0u64;
+
+    // Replay tick events
+    if tick_wal_path.exists() {
+        info!("Replaying tick events from {:?}", tick_wal_path);
+        let wal = Wal::new(&tick_wal_path, None)?;
+        let mut stream = wal.stream::<WalEvent>(Some(start_ts))?;
+
+        while let Some(event) = stream.read_next_entry()? {
+            let event_ts = event.timestamp();
+
+            // Stop if we've passed the end time
+            if event_ts > end_ts {
+                break;
+            }
+
+            // Apply symbol filter if specified
+            if let Some(sym_filter) = symbol {
+                if let WalEvent::Tick(tick) = &event {
+                    // Check if this tick matches the symbol filter
+                    let mut should_skip = true;
+
+                    // First try to resolve via instrument store
+                    if let Some(ref store) = instrument_store {
+                        if let Some(instrument) = store.get_by_token(tick.symbol.0).await {
+                            if instrument.trading_symbol.contains(sym_filter) {
+                                should_skip = false;
+                            }
+                        }
+                    } else {
+                        // Fallback to venue check if no instrument store
+                        if tick.venue.contains(sym_filter) {
+                            should_skip = false;
+                        }
+                    }
+
+                    if should_skip {
+                        skipped_events += 1;
+                        continue;
+                    }
+                }
+            }
+
+            tick_events += 1;
+            total_events += 1;
+
+            // Log progress every 10000 events
+            if total_events % 10000 == 0 {
+                info!("Processed {} tick events", tick_events);
+            }
+        }
+        info!("Completed replay of {} tick events", tick_events);
+    } else {
+        warn!("No tick data found at {:?}", tick_wal_path);
+    }
+
+    // Replay LOB events
+    if lob_wal_path.exists() {
+        info!("Replaying LOB events from {:?}", lob_wal_path);
+        let wal = Wal::new(&lob_wal_path, None)?;
+        let mut stream = wal.stream::<WalEvent>(Some(start_ts))?;
+
+        while let Some(event) = stream.read_next_entry()? {
+            let event_ts = event.timestamp();
+
+            // Stop if we've passed the end time
+            if event_ts > end_ts {
+                break;
+            }
+
+            // Apply symbol filter if specified
+            if let Some(sym_filter) = symbol {
+                if let WalEvent::Lob(lob_snapshot) = &event {
+                    // Check if this LOB snapshot matches the symbol filter
+                    let mut should_skip = true;
+
+                    // First try to resolve via instrument store
+                    if let Some(ref store) = instrument_store {
+                        if let Some(instrument) = store.get_by_token(lob_snapshot.symbol.0).await {
+                            if instrument.trading_symbol.contains(sym_filter) {
+                                should_skip = false;
+                            }
+                        }
+                    } else {
+                        // Fallback to venue check if no instrument store
+                        if lob_snapshot.venue.contains(sym_filter) {
+                            should_skip = false;
+                        }
+                    }
+
+                    if should_skip {
+                        skipped_events += 1;
+                        continue;
+                    }
+                }
+            }
+
+            lob_events += 1;
+            total_events += 1;
+
+            // Log progress every 10000 events
+            if total_events % 10000 == 0 {
+                info!("Processed {} LOB events", lob_events);
+            }
+        }
+        info!("Completed replay of {} LOB events", lob_events);
+    } else {
+        warn!("No LOB data found at {:?}", lob_wal_path);
+    }
+
+    // Summary
+    info!("\n📊 Replay Summary");
+    info!("=================");
+    info!("Time range: {} to {}", start, end);
+    if let Some(sym) = symbol {
+        info!("Symbol filter: {}", sym);
+    }
+    info!("Total events replayed: {}", total_events);
+    info!("  - Tick events: {}", tick_events);
+    info!("  - LOB events: {}", lob_events);
+    if skipped_events > 0 {
+        info!("  - Skipped (filtered): {}", skipped_events);
+    }
+
+    let duration = (end_ts.as_nanos() - start_ts.as_nanos()) as f64 / 1_000_000_000.0;
+    if duration > 0.0 && total_events > 0 {
+        let events_per_sec = total_events as f64 / duration;
+        info!("Replay rate: {:.0} events/second", events_per_sec);
+    }
 
     Ok(())
 }
 
 async fn monitor_service(_cli: &Cli) -> Result<()> {
-    info!("Monitoring service metrics");
+    use std::time::Duration;
+    use std::fs;
+    use std::path::Path;
+    use tokio::time::interval;
 
-    // TODO: Implement monitoring dashboard
-    warn!("Monitoring functionality not yet implemented");
+    info!("Starting service metrics monitoring dashboard");
 
-    Ok(())
+    // Monitor data directory size and WAL segments
+    let data_dir = Path::new("data");
+    let mut refresh_interval = interval(Duration::from_secs(5));
+
+    loop {
+        refresh_interval.tick().await;
+
+        // Clear screen for dashboard effect
+        print!("\x1B[2J\x1B[1;1H");
+
+        info!("╔══════════════════════════════════════════════════════════╗");
+        info!("║       ShrivenQuant Market Data Service Monitor          ║");
+        info!("╠══════════════════════════════════════════════════════════╣");
+        info!("║ Timestamp: {:?}", chrono::Local::now());
+        info!("╠══════════════════════════════════════════════════════════╣");
+
+        // Check WAL directories
+        if data_dir.exists() {
+            let mut total_size = 0u64;
+            let mut wal_count = 0;
+            let mut segment_count = 0;
+            let mut tick_events = 0u64;
+            let mut l2_events = 0u64;
+
+            // Scan data directory
+            if let Ok(entries) = fs::read_dir(data_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        let dirname = path.file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("");
+
+                        // Count different WAL types
+                        if dirname.contains("tick") {
+                            tick_events += 1;
+                        } else if dirname.contains("lob") {
+                            l2_events += 1;
+                        }
+                        wal_count += 1;
+
+                        // Count segments in each WAL
+                        if let Ok(wal_entries) = fs::read_dir(&path) {
+                            for wal_entry in wal_entries.flatten() {
+                                segment_count += 1;
+                                if let Ok(metadata) = wal_entry.metadata() {
+                                    total_size += metadata.len();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            info!("║ 📊 Storage Metrics:");
+            info!("║   WAL Directories: {}", wal_count);
+            info!("║   - Tick WALs:    {}", tick_events);
+            info!("║   - LOB WALs:     {}", l2_events);
+            info!("║   Total Segments:  {}", segment_count);
+            info!("║   Total Size:      {:.2} GB", total_size as f64 / (1024.0 * 1024.0 * 1024.0));
+
+            // Calculate average segment size
+            if segment_count > 0 {
+                let avg_segment_mb = (total_size / segment_count) as f64 / (1024.0 * 1024.0);
+                info!("║   Avg Segment:     {:.1} MB", avg_segment_mb);
+            }
+
+            info!("║");
+
+            // Check latest modified times for activity
+            info!("║ 📈 Data Pipeline Activity:");
+
+            let mut latest_activity = None;
+            let mut latest_file = String::from("");
+
+            if let Ok(entries) = fs::read_dir(data_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        // Check segments within each WAL
+                        if let Ok(wal_entries) = fs::read_dir(&path) {
+                            for wal_entry in wal_entries.flatten() {
+                                if let Ok(metadata) = wal_entry.metadata() {
+                                    if let Ok(modified) = metadata.modified() {
+                                        if latest_activity.map_or(true, |last| modified > last) {
+                                            latest_activity = Some(modified);
+                                            latest_file = wal_entry.path()
+                                                .file_name()
+                                                .and_then(|n| n.to_str())
+                                                .unwrap_or("")
+                                                .to_string();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Some(last_mod) = latest_activity {
+                if let Ok(elapsed) = last_mod.elapsed() {
+                    info!("║   Last Update:     {:?} ago", elapsed);
+                    info!("║   Latest File:     {}", latest_file);
+
+                    // Check if pipeline is stale
+                    if elapsed > Duration::from_secs(300) {
+                        info!("║   Status:          ❌ DEAD (no updates > 5min)");
+                    } else if elapsed > Duration::from_secs(60) {
+                        info!("║   Status:          ⚠️  STALE (no updates > 60s)");
+                    } else if elapsed > Duration::from_secs(10) {
+                        info!("║   Status:          ⚡ SLOW (no updates > 10s)");
+                    } else {
+                        info!("║   Status:          ✅ ACTIVE");
+                    }
+                }
+            } else {
+                info!("║   Status:          ❌ NO DATA");
+            }
+
+            // Performance metrics
+            info!("║");
+            info!("║ ⚡ Performance Targets:");
+            info!("║   LOB Updates:     > 200k/sec");
+            info!("║   WAL Writes:      > 80 MB/s");
+            info!("║   Replay Speed:    > 3M events/min");
+            info!("║   Apply p50:       < 200ns");
+            info!("║   Apply p99:       < 900ns");
+
+            // System info
+            info!("║");
+            info!("║ 💻 System Info:");
+
+            // Memory usage approximation
+            if let Ok(contents) = fs::read_to_string("/proc/self/status") {
+                for line in contents.lines() {
+                    if line.starts_with("VmRSS:") {
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        if parts.len() >= 2 {
+                            if let Ok(kb) = parts[1].parse::<u64>() {
+                                info!("║   Memory Usage:    {:.1} MB", kb as f64 / 1024.0);
+                            }
+                        }
+                    }
+                }
+            }
+
+        } else {
+            info!("║ ❌ Data directory not found!");
+            info!("║");
+            info!("║ Run with 'run' command first to start collecting data");
+        }
+
+        info!("╠══════════════════════════════════════════════════════════╣");
+        info!("║ Press Ctrl+C to exit                                    ║");
+        info!("╚══════════════════════════════════════════════════════════╝");
+    }
 }

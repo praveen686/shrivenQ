@@ -28,17 +28,35 @@ fn benchmark_sequential_write(c: &mut Criterion) {
         group.bench_function(format!("sequential_{size}"), |b| {
             b.iter_with_setup(
                 || {
-                    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-                    let wal = Wal::new(temp_dir.path(), Some(128 * 1024 * 1024))
-                        .expect("Failed to create WAL");
+                    // Benchmarks need to fail if setup fails - we can't measure performance without proper setup
+                    let temp_dir = match TempDir::new() {
+                        Ok(dir) => dir,
+                        Err(e) => {
+                            eprintln!("Benchmark setup failed: Could not create temp dir: {}", e);
+                            std::process::exit(1);
+                        }
+                    };
+                    let wal = match Wal::new(temp_dir.path(), Some(128 * 1024 * 1024)) {
+                        Ok(wal) => wal,
+                        Err(e) => {
+                            eprintln!("Benchmark setup failed: Could not create WAL: {}", e);
+                            std::process::exit(1);
+                        }
+                    };
                     (temp_dir, wal)
                 },
                 |(_temp_dir, mut wal)| {
                     for i in 0..*size {
                         let event = create_test_event(i);
-                        wal.append(&event).expect("Failed to append event");
+                        if let Err(e) = wal.append(&event) {
+                            eprintln!("Benchmark error: Failed to append event: {}", e);
+                            return;
+                        }
                     }
-                    wal.flush().expect("Failed to flush WAL");
+                    if let Err(e) = wal.flush() {
+                        eprintln!("Benchmark error: Failed to flush WAL: {}", e);
+                        return;
+                    }
                 },
             );
         });
@@ -54,30 +72,65 @@ fn benchmark_read_throughput(c: &mut Criterion) {
         group.throughput(Throughput::Elements(*size));
         group.bench_function(format!("stream_{size}"), |b| {
             // Setup: create WAL with events
-            let temp_dir = TempDir::new().expect("Failed to create temp dir");
+            let temp_dir = match TempDir::new() {
+                Ok(dir) => dir,
+                Err(e) => {
+                    eprintln!("Benchmark setup error: Failed to create temp dir: {}", e);
+                    return;
+                }
+            };
             let wal_path = temp_dir.path();
 
             {
-                let mut wal =
-                    Wal::new(wal_path, Some(128 * 1024 * 1024)).expect("Failed to create WAL");
+                let mut wal = match Wal::new(wal_path, Some(128 * 1024 * 1024)) {
+                    Ok(w) => w,
+                    Err(e) => {
+                        eprintln!("Benchmark setup error: Failed to create WAL: {}", e);
+                        return;
+                    }
+                };
                 for i in 0..*size {
                     let event = create_test_event(i);
-                    wal.append(&event).expect("Failed to append event");
+                    if let Err(e) = wal.append(&event) {
+                        eprintln!("Benchmark setup error: Failed to append event: {}", e);
+                        return;
+                    }
                 }
-                wal.flush().expect("Failed to flush WAL");
+                if let Err(e) = wal.flush() {
+                    eprintln!("Benchmark setup error: Failed to flush WAL: {}", e);
+                    return;
+                }
             }
 
             b.iter(|| {
-                let wal =
-                    Wal::new(wal_path, Some(128 * 1024 * 1024)).expect("Failed to create WAL");
-                let mut iter = wal
-                    .stream::<WalEvent>(None)
-                    .expect("Failed to create stream");
+                let wal = match Wal::new(wal_path, Some(128 * 1024 * 1024)) {
+                    Ok(w) => w,
+                    Err(e) => {
+                        eprintln!("Benchmark error: Failed to create WAL: {}", e);
+                        return;
+                    }
+                };
+                let mut iter = match wal.stream::<WalEvent>(None) {
+                    Ok(it) => it,
+                    Err(e) => {
+                        eprintln!("Benchmark error: Failed to create stream: {}", e);
+                        return;
+                    }
+                };
 
                 let mut count = 0;
-                while let Some(event) = iter.read_next_entry().expect("Failed to read event") {
-                    black_box(event);
-                    count += 1;
+                loop {
+                    match iter.read_next_entry() {
+                        Ok(Some(event)) => {
+                            black_box(event);
+                            count += 1;
+                        }
+                        Ok(None) => break,
+                        Err(e) => {
+                            eprintln!("Benchmark error: Failed to read event: {}", e);
+                            return;
+                        }
+                    }
                 }
                 assert_eq!(count, *size);
             });
@@ -91,25 +144,56 @@ fn benchmark_append_latency(c: &mut Criterion) {
     let mut group = c.benchmark_group("wal_latency");
 
     group.bench_function("single_append", |b| {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let mut wal =
-            Wal::new(temp_dir.path(), Some(128 * 1024 * 1024)).expect("Failed to create WAL");
+        let temp_dir = match TempDir::new() {
+            Ok(dir) => dir,
+            Err(e) => {
+                eprintln!("Benchmark setup error: Failed to create temp dir: {}", e);
+                return;
+            }
+        };
+        let mut wal = match Wal::new(temp_dir.path(), Some(128 * 1024 * 1024)) {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("Benchmark setup error: Failed to create WAL: {}", e);
+                return;
+            }
+        };
         let event = create_test_event(0);
 
         b.iter(|| {
-            wal.append(&event).expect("Failed to append event");
+            if let Err(e) = wal.append(&event) {
+                eprintln!("Benchmark error: Failed to append event: {}", e);
+                return;
+            }
         });
     });
 
     group.bench_function("append_with_flush", |b| {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let mut wal =
-            Wal::new(temp_dir.path(), Some(128 * 1024 * 1024)).expect("Failed to create WAL");
+        let temp_dir = match TempDir::new() {
+            Ok(dir) => dir,
+            Err(e) => {
+                eprintln!("Benchmark setup error: Failed to create temp dir: {}", e);
+                return;
+            }
+        };
+        let mut wal = match Wal::new(temp_dir.path(), Some(128 * 1024 * 1024)) {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("Benchmark setup error: Failed to create WAL: {}", e);
+                return;
+            }
+        };
         let event = create_test_event(0);
 
         b.iter(|| {
-            wal.append(&event).expect("Failed to append event");
-            wal.flush().expect("Failed to flush WAL");
+            if let Err(e) = wal.append(&event) {
+                eprintln!("Benchmark error: Failed to append event: {}", e);
+                return;
+            }
+            if let Err(e) = wal.flush() {
+                eprintln!("Benchmark error: Failed to flush WAL: {}", e);
+                return;
+            }
         });
     });
 
@@ -122,15 +206,30 @@ fn benchmark_segment_rotation(c: &mut Criterion) {
     group.bench_function("small_segments", |b| {
         b.iter_with_setup(
             || {
-                let temp_dir = TempDir::new().expect("Failed to create temp dir");
-                let wal = Wal::new(temp_dir.path(), Some(10 * 1024)).expect("Failed to create WAL"); // 10KB segments
+                let temp_dir = match TempDir::new() {
+                    Ok(dir) => dir,
+                    Err(e) => {
+                        eprintln!("Benchmark setup failed: Could not create temp dir: {}", e);
+                        std::process::exit(1);
+                    }
+                };
+                let wal = match Wal::new(temp_dir.path(), Some(10 * 1024)) { // 10KB segments
+                    Ok(w) => w,
+                    Err(e) => {
+                        eprintln!("Benchmark setup failed: Could not create WAL: {}", e);
+                        std::process::exit(1);
+                    }
+                };
                 (temp_dir, wal)
             },
             |(_temp_dir, mut wal)| {
                 // Write enough to trigger multiple rotations
                 for i in 0..1000 {
                     let event = create_test_event(i);
-                    wal.append(&event).expect("Failed to append event");
+                    if let Err(e) = wal.append(&event) {
+                        eprintln!("Benchmark error: Failed to append event: {}", e);
+                        return;
+                    }
                 }
             },
         );

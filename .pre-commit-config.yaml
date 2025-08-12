@@ -51,6 +51,44 @@ repos:
         args: ['--fix=lf']
 
   # ============================================================================
+  # AGENT COMPLIANCE - MUST BE FIRST
+  # ============================================================================
+  - repo: local
+    hooks:
+      # Initialize agent environment
+      - id: initialize-agent
+        name: "🚀 Initialize Agent Environment"
+        description: "Set up agent environment for compliance checks"
+        entry: bash
+        args: [-c, './scripts/compliance/initialize-agent.sh']
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+        always_run: true
+
+      # Agent compliance check (blocks everything else if failed)
+      - id: agent-compliance
+        name: "🤖 Agent Compliance Check"
+        description: "Ensure agent follows quantitative development best practices"
+        entry: bash
+        args: [-c, './scripts/compliance/agent-compliance-check.sh']
+        language: system
+        files: \.rs$
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Generate compliance summary report
+      - id: compliance-summary
+        name: "📊 Generate Compliance Summary Report"
+        description: "Generate and save comprehensive compliance report"
+        entry: bash
+        args: [-c, './scripts/compliance/compliance-summary.sh']
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+        always_run: true
+
+  # ============================================================================
   # RUST CODE QUALITY - Core Language Checks
   # ============================================================================
   - repo: local
@@ -140,7 +178,7 @@ repos:
         name: "⚡ Performance Regression Check"
         description: "Ensure no performance regressions in critical paths"
         entry: bash
-        args: [-c, './scripts/performance-check.sh']
+        args: [-c, './scripts/performance/performance-check.sh']
         language: system
         files: \.rs$
         pass_filenames: false
@@ -150,7 +188,7 @@ repos:
         name: "🧠 Hot Path Allocation Check"
         description: "Ensure no allocations in performance-critical code"
         entry: bash
-        args: [-c, './scripts/check-hot-path-allocations.sh']
+        args: [-c, './scripts/performance/check-hot-path-allocations.sh']
         language: system
         files: \.rs$
         pass_filenames: false
@@ -165,7 +203,7 @@ repos:
         name: "⚙️ Configuration Validation"
         description: "Validate trading system configuration files"
         entry: bash
-        args: [-c, './scripts/validate-configs.sh']
+        args: [-c, './scripts/development/validate-configs.sh']
         language: system
         files: \.toml$|\.yaml$|\.json$
         pass_filenames: false
@@ -175,7 +213,7 @@ repos:
         name: "🔌 API Compatibility Check"
         description: "Ensure API changes don't break compatibility"
         entry: bash
-        args: [-c, './scripts/api-compatibility-check.sh']
+        args: [-c, './scripts/deployment/api-compatibility-check.sh']
         language: system
         files: \.rs$
         pass_filenames: false
@@ -185,7 +223,7 @@ repos:
         name: "⚠️ Risk Limits Validation"
         description: "Validate risk management parameters"
         entry: bash
-        args: [-c, './scripts/validate-risk-limits.sh']
+        args: [-c, './scripts/compliance/validate-risk-limits.sh']
         language: system
         files: engine/src/risk\.rs|config/.*\.toml
         pass_filenames: false
@@ -250,7 +288,7 @@ repos:
         name: "🏁 Final System Validation"
         description: "Complete system health check before commit"
         entry: bash
-        args: [-c, './scripts/system-validation.sh']
+        args: [-c, './scripts/testing/system-validation.sh']
         language: system
         files: \.rs$|\.toml$|\.md$
         pass_filenames: false
@@ -261,7 +299,7 @@ repos:
         name: "📈 Benchmark Baseline Update"
         description: "Update performance baselines if needed"
         entry: bash
-        args: [-c, './scripts/update-benchmarks.sh']
+        args: [-c, './scripts/performance/update-benchmarks.sh']
         language: system
         files: \.rs$
         pass_filenames: false

@@ -1,10 +1,11 @@
 //! Demonstration of advanced feature extraction with LOB v2
 
+use crate::{CrossResolution, MarketRegime, OrderBookV2, features_v2};
 use common::{L2Update, Px, Qty, Side, Symbol, Ts};
-use lob::{CrossResolution, MarketRegime, OrderBookV2, features_v2};
 use rand::prelude::*;
 
-fn main() {
+/// Demo function showing advanced feature extraction with LOB v2
+pub fn run_features_demo() {
     println!("🎯 Advanced Feature Extraction Demo");
     println!("====================================\n");
 
@@ -188,7 +189,7 @@ fn main() {
     println!("\n✅ Demo completed successfully!");
 }
 
-fn print_features(features: &lob::features_v2::FeatureFrameV2, strategy: &str) {
+fn print_features(features: &features_v2::FeatureFrameV2, strategy: &str) {
     println!("\n  {} Features:", strategy);
     println!(
         "    Spread: {} ticks ({:.2} bps)",

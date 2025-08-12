@@ -1,0 +1,108 @@
+warning: unused import: `warn`
+  --> crates/tools/perf/src/main.rs:22:28
+   |
+22 | use tracing::{info, error, warn};
+   |                            ^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `perf` (bin "sq-perf") generated 1 warning (run `cargo fix --bin "sq-perf"` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 0.21s
+     Running `target/release/sq-perf all --path /tmp/perf-benchmark-20250812`
+[2m2025-08-12T17:19:46.028794Z[0m [32m INFO[0m
+============================================================
+[2m2025-08-12T17:19:46.028826Z[0m [32m INFO[0m RUNNING FULL SPRINT 2 VERIFICATION SUITE
+[2m2025-08-12T17:19:46.028830Z[0m [32m INFO[0m ============================================================
+[2m2025-08-12T17:19:46.028855Z[0m [32m INFO[0m
+[1/5] Write Performance Test
+[2m2025-08-12T17:19:46.028992Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 256 MB
+[2m2025-08-12T17:19:46.580736Z[0m [32m INFO[0m
+=== WRITE BENCHMARK ===
+[2m2025-08-12T17:19:46.580759Z[0m [32m INFO[0m Events: 1000000
+[2m2025-08-12T17:19:46.580763Z[0m [32m INFO[0m Record size: 128 bytes
+[2m2025-08-12T17:19:46.580765Z[0m [32m INFO[0m Segment size: 256 MB
+[2m2025-08-12T17:19:46.580768Z[0m [32m INFO[0m Fsync interval: Some(100) ms
+[2m2025-08-12T17:19:46.580772Z[0m [32m INFO[0m
+--- Results ---
+[2m2025-08-12T17:19:46.580774Z[0m [32m INFO[0m Total: 122.07 MB in 0.552s
+[2m2025-08-12T17:19:46.580778Z[0m [32m INFO[0m Throughput: 221.26 MB/s
+[2m2025-08-12T17:19:46.580781Z[0m [32m INFO[0m Event rate: 1812536 events/sec
+[2m2025-08-12T17:19:46.580784Z[0m [32m INFO[0m Write latency: p50=0µs p95=0µs p99=0µs p99.9=7µs max=521µs
+[2m2025-08-12T17:19:46.580787Z[0m [32m INFO[0m
+--- Pass/Fail (Dev Laptop Target) ---
+[2m2025-08-12T17:19:46.580790Z[0m [32m INFO[0m Throughput: ✅ PASS (target ≥ 80 MB/s)
+[2m2025-08-12T17:19:46.580793Z[0m [32m INFO[0m Latency p50: ✅ PASS (target ≤ 120 µs)
+[2m2025-08-12T17:19:46.580796Z[0m [32m INFO[0m Latency p99: ✅ PASS (target ≤ 700 µs)
+[2m2025-08-12T17:19:46.581480Z[0m [32m INFO[0m
+[2/5] Replay Performance Test
+[2m2025-08-12T17:19:46.581528Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:46.893353Z[0m [32m INFO[0m
+=== REPLAY BENCHMARK ===
+[2m2025-08-12T17:19:46.893375Z[0m [32m INFO[0m Events: 1000000
+[2m2025-08-12T17:19:46.893378Z[0m [32m INFO[0m Time: 0.312s
+[2m2025-08-12T17:19:46.893381Z[0m [32m INFO[0m
+--- Results ---
+[2m2025-08-12T17:19:46.893382Z[0m [32m INFO[0m Throughput: 3207054 events/sec
+[2m2025-08-12T17:19:46.893384Z[0m [32m INFO[0m Throughput: 192.42M events/min
+[2m2025-08-12T17:19:46.893386Z[0m [32m INFO[0m Replay latency: p50=1µs p95=3µs p99=12µs p99.9=19µs max=46µs
+[2m2025-08-12T17:19:46.893389Z[0m [32m INFO[0m
+--- Pass/Fail (Dev Laptop Target) ---
+[2m2025-08-12T17:19:46.893390Z[0m [32m INFO[0m Throughput: ✅ PASS (target ≥ 3M events/min)
+[2m2025-08-12T17:19:46.893392Z[0m [32m INFO[0m Latency p50: ✅ PASS (target ≤ 150 µs)
+[2m2025-08-12T17:19:46.893394Z[0m [32m INFO[0m Latency p99: ✅ PASS (target ≤ 900 µs)
+[2m2025-08-12T17:19:46.893396Z[0m [32m INFO[0m
+[3/5] Recovery Time Test
+[2m2025-08-12T17:19:46.893398Z[0m [32m INFO[0m
+=== RECOVERY BENCHMARK ===
+[2m2025-08-12T17:19:46.893423Z[0m [32m INFO[0m WAL size: 0.07 GB
+[2m2025-08-12T17:19:46.893437Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:46.893440Z[0m [32m INFO[0m Recovery time: 0 ms
+[2m2025-08-12T17:19:46.893443Z[0m [32m INFO[0m
+--- Pass/Fail ---
+[2m2025-08-12T17:19:46.893444Z[0m [32m INFO[0m Recovery: ✅ PASS (target ≤ 10 ms for 0.07 GB)
+[2m2025-08-12T17:19:46.893446Z[0m [32m INFO[0m
+[4/5] Deterministic Replay Test
+[2m2025-08-12T17:19:46.893449Z[0m [32m INFO[0m
+=== DETERMINISTIC REPLAY VERIFICATION ===
+[2m2025-08-12T17:19:46.893458Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:46.893478Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:47.292010Z[0m [32m INFO[0m First read: 1000000 events
+[2m2025-08-12T17:19:47.292029Z[0m [32m INFO[0m Second read: 1000000 events
+[2m2025-08-12T17:19:47.293869Z[0m [32m INFO[0m ✅ PASS: All 1000000 events identical across reads
+[2m2025-08-12T17:19:47.295252Z[0m [32m INFO[0m
+[5/5] Seek Performance Test
+[2m2025-08-12T17:19:47.295259Z[0m [32m INFO[0m
+=== SEEK BENCHMARK ===
+[2m2025-08-12T17:19:47.295284Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:47.467488Z[0m [32m INFO[0m WAL contains 1000000 events
+[2m2025-08-12T17:19:47.467518Z[0m [32m INFO[0m Timestamp range: 58 to 546730920
+[2m2025-08-12T17:19:47.467525Z[0m [32m INFO[0m
+Running 10 seek probes...
+[2m2025-08-12T17:19:47.467558Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:47.467576Z[0m [32m INFO[0m   Probe 1: seek to 69% took 0 ms
+[2m2025-08-12T17:19:47.467593Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:47.467606Z[0m [32m INFO[0m   Probe 2: seek to 22% took 0 ms
+[2m2025-08-12T17:19:47.467621Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:47.467633Z[0m [32m INFO[0m   Probe 3: seek to 12% took 0 ms
+[2m2025-08-12T17:19:47.467649Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:47.467661Z[0m [32m INFO[0m   Probe 4: seek to 76% took 0 ms
+[2m2025-08-12T17:19:47.467676Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:47.467690Z[0m [32m INFO[0m   Probe 5: seek to 1% took 0 ms
+[2m2025-08-12T17:19:47.467705Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:47.467717Z[0m [32m INFO[0m   Probe 6: seek to 30% took 0 ms
+[2m2025-08-12T17:19:47.467731Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:47.467744Z[0m [32m INFO[0m   Probe 7: seek to 12% took 0 ms
+[2m2025-08-12T17:19:47.467758Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:47.467771Z[0m [32m INFO[0m   Probe 8: seek to 87% took 0 ms
+[2m2025-08-12T17:19:47.467785Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:47.467799Z[0m [32m INFO[0m   Probe 9: seek to 4% took 0 ms
+[2m2025-08-12T17:19:47.467814Z[0m [32m INFO[0m Initialized WAL at /tmp/perf-benchmark-20250812 with segment size 128 MB
+[2m2025-08-12T17:19:47.467826Z[0m [32m INFO[0m   Probe 10: seek to 42% took 0 ms
+[2m2025-08-12T17:19:47.467830Z[0m [32m INFO[0m Seek time (ms): p50=0µs p95=0µs p99=0µs p99.9=0µs max=0µs
+[2m2025-08-12T17:19:47.467833Z[0m [32m INFO[0m
+--- Pass/Fail ---
+[2m2025-08-12T17:19:47.467836Z[0m [32m INFO[0m Seek p99: ✅ PASS (target ≤ 40 ms)
+[2m2025-08-12T17:19:47.467840Z[0m [32m INFO[0m
+============================================================
+[2m2025-08-12T17:19:47.467844Z[0m [32m INFO[0m SPRINT 2 VERIFICATION COMPLETE
+[2m2025-08-12T17:19:47.467847Z[0m [32m INFO[0m ============================================================

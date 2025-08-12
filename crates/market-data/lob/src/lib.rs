@@ -13,9 +13,11 @@
 #![deny(missing_docs)]
 #![allow(unsafe_code)] // Allowed for SIMD optimizations in v2
 
+pub mod adapters;
 pub mod book;
 pub mod features;
 pub mod features_v2;
+pub mod loaders;
 pub mod price_levels;
 pub mod v2;
 

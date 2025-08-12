@@ -17,6 +17,16 @@ ShrivenQ is a world-class, institutional-grade trading platform designed for:
 - **Reliability:** Crash-safe with WAL persistence
 - **Quality:** Zero warnings, zero dead code, 100% safe
 
+## ✨ Key Features
+
+- **📊 Market Data Pipeline:** Real-time tick and LOB data collection with nanosecond precision
+- **🔄 Historical Replay:** Replay market data from any time period with symbol filtering
+- **💾 WAL Persistence:** Crash-safe storage with deterministic replay guarantees
+- **📈 LOB Snapshots:** Full order book snapshots with efficient storage and retrieval
+- **🎯 Smart Filtering:** Intelligent symbol resolution using instrument metadata
+- **⚡ Performance:** Achieves 298M events/min replay (measured), 229 MB/s writes
+- **🔍 Monitoring:** Real-time dashboard for system health and performance metrics
+
 ## 🚀 Quick Start
 
 ```bash
@@ -25,13 +35,22 @@ git clone https://github.com/praveen686/shrivenQ.git
 cd shrivenQ
 
 # Run quality checks
-bash scripts/strict-check.sh
+./scripts/compliance/strict-check.sh
 
 # Start the platform with heartbeat monitoring
 cargo run -p cli -- dev up --heartbeat-ms 500
 
 # Check system health
 cargo run -p cli -- dev ping
+
+# Start market data collection
+cargo run --bin market-data-service -- run --symbols "NIFTY 50,NIFTY BANK"
+
+# Replay historical data
+cargo run --bin market-data-service -- replay \
+  --start "2024-01-15T09:15:00+05:30" \
+  --end "2024-01-15T15:30:00+05:30" \
+  --symbol "NIFTY"
 ```
 
 ## 📊 Sprint Status
@@ -67,8 +86,8 @@ cargo run -p cli -- dev ping
 - `crates/infra/bus/` - Lock-free event bus with crossbeam channels
 - `crates/infra/storage/` - Write-ahead log with deterministic replay
 - `crates/infra/auth/` - Multi-venue authentication (Zerodha, Binance)
-- `crates/market-data/lob/` - Ultra-fast order book engine
-- `crates/market-data/feeds/` - Market data adapters and WebSocket feeds
+- `crates/market-data/lob/` - Ultra-fast order book engine with adapters & loaders
+- `crates/market-data/feeds/` - Market data adapters, WebSocket feeds & integration
 - `crates/trading/engine/` - Zero-allocation trading engine
 - `crates/trading/sim/` - Simulation and backtesting framework
 - `crates/tools/cli/` - Command-line interface
@@ -98,7 +117,7 @@ cargo run -p cli -- dev ping
 **Enforcement:**
 ```bash
 # Run before every commit
-bash scripts/strict-check.sh
+./scripts/compliance/strict-check.sh
 ```
 
 ## 🔧 Development
@@ -135,7 +154,7 @@ shrivenq/
 │   └── workflows/       # CI/CD pipelines
 ├── .pre-commit-config.yaml # Pre-commit hooks
 ├── docs/                # Documentation
-├── scripts/             # Build and test scripts
+├── scripts/             # Automation & build scripts (see below)
 └── crates/              # All source code
     ├── core/            # Core functionality
     │   └── common/      # Shared types and utilities
@@ -144,8 +163,8 @@ shrivenq/
     │   ├── bus/         # Event bus
     │   └── storage/     # WAL persistence
     ├── market-data/     # Market data processing
-    │   ├── feeds/       # Feed adapters
-    │   └── lob/         # Order book
+    │   ├── feeds/       # Feed adapters & integration modules
+    │   └── lob/         # Order book, data loaders & adapters
     ├── trading/         # Trading logic
     │   ├── engine/      # Execution engine
     │   └── sim/         # Simulation
@@ -153,6 +172,62 @@ shrivenq/
         ├── cli/         # CLI interface
         └── perf/        # Performance tools
 ```
+
+## 🛠️ Scripts & Automation
+
+The `scripts/` directory contains comprehensive automation for building, testing, and maintaining the ShrivenQuant platform. All scripts are organized into logical categories:
+
+### Directory Structure
+```
+scripts/
+├── build/           # Build automation
+├── compliance/      # Code quality checking  
+├── deployment/      # Deployment automation
+├── development/     # Development tools
+├── performance/     # Performance testing
+└── testing/         # Test execution
+```
+
+### Key Scripts
+
+**Build & Compilation:**
+- `./scripts/build/orchestrator.sh [quick|release|docker|cross|all]` - Main build pipeline
+- `./scripts/build/build.rs [release|debug|bench|check]` - Rust build automation (requires rust-script)
+- `./scripts/build/cross-compile.sh` - Cross-platform binary generation
+- `./scripts/build/docker-build.sh` - Multi-stage Docker builds
+
+**Compliance & Quality:**
+- `./scripts/compliance/strict-check.sh` - **Primary compliance check (MUST PASS)**
+- `./scripts/compliance/agent-compliance-check.sh` - AI agent code validation
+- `./scripts/compliance/compliance-summary.sh` - Detailed compliance report
+
+**Testing & Performance:**
+- `./scripts/testing/run-integration-tests.sh` - Full integration test suite
+- `./scripts/performance/performance-check.sh` - Performance benchmarks
+- `./scripts/performance/check-hot-path-allocations.sh` - Detect critical path allocations
+
+### Quick Commands
+
+```bash
+# Before committing (mandatory)
+./scripts/compliance/strict-check.sh
+
+# Quick build with tests
+./scripts/build/orchestrator.sh quick
+
+# Full release build
+./scripts/build/orchestrator.sh release
+
+# Setup pre-commit hooks
+./scripts/development/install-precommit.sh
+
+# Cross-platform builds
+./scripts/build/cross-compile.sh
+```
+
+**Note:** Build scripts require `rust-script` installed: `cargo install rust-script`
+
+For complete documentation, see [scripts/README.md](scripts/README.md)
 
 ## 📈 Roadmap
 
@@ -176,7 +251,7 @@ shrivenq/
 
 1. Fork the repository
 2. Create a feature branch
-3. Ensure all checks pass: `bash scripts/strict-check.sh`
+3. Ensure all checks pass: `./scripts/compliance/strict-check.sh`
 4. Submit a pull request
 
 ## 📚 Documentation

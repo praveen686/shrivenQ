@@ -141,15 +141,20 @@ struct ArenaChunk {
 
 impl Arena {
     /// Create arena with specified chunk size
-    pub fn new(chunk_size: usize) -> Self {
-        let mut chunks = Vec::new();
+    pub fn new(chunk_size: usize) -> Result<Self, String> {
+        let mut chunks = Vec::with_capacity(100);
         // Pre-allocate first chunk
         if chunk_size > 0 {
-            let layout = Layout::from_size_align(chunk_size, 64).unwrap();
+            // Ensure alignment is power of 2 and size is multiple of alignment
+            let align = 64;
+            let size = (chunk_size + align - 1) & !(align - 1); // Round up to alignment
+            let layout = Layout::from_size_align(size, align)
+                .unwrap_or_else(|_| Layout::new::<[u8; 64]>());
             let data = unsafe {
                 let ptr = alloc(layout);
                 if ptr.is_null() {
-                    panic!("Failed to allocate arena chunk");
+                    // Allocation failed - return error
+                    return Err(format!("Failed to allocate {} bytes for arena chunk", size));
                 }
                 NonNull::new_unchecked(ptr)
             };
@@ -160,11 +165,11 @@ impl Arena {
             });
         }
 
-        Self {
+        Ok(Self {
             chunks,
             current: AtomicUsize::new(0),
             chunk_size,
-        }
+        })
     }
 
     /// Allocate memory from arena

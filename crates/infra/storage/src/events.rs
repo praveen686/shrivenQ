@@ -18,6 +18,8 @@ pub enum WalEvent {
     Risk(RiskEvent),
     /// System event (startup, shutdown, etc)
     System(SystemEvent),
+    /// LOB snapshot event
+    Lob(LobSnapshot),
 }
 
 impl WalEvent {
@@ -31,6 +33,7 @@ impl WalEvent {
             Self::Signal(e) => e.ts,
             Self::Risk(e) => e.ts,
             Self::System(e) => e.ts,
+            Self::Lob(e) => e.ts,
         }
     }
 }
@@ -206,6 +209,23 @@ pub enum SystemEventType {
     Info,
 }
 
+/// LOB snapshot event
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LobSnapshot {
+    /// Event timestamp
+    pub ts: Ts,
+    /// Trading symbol
+    pub symbol: Symbol,
+    /// Venue/exchange
+    pub venue: String,
+    /// Bid levels (price, quantity)
+    pub bids: Vec<(Px, Qty)>,
+    /// Ask levels (price, quantity)
+    pub asks: Vec<(Px, Qty)>,
+    /// Sequence number for ordering
+    pub sequence: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,6 +277,14 @@ mod tests {
                 ts: Ts::from_nanos(3),
                 event_type: SystemEventType::Startup,
                 message: "System started".to_string(),
+            }),
+            WalEvent::Lob(LobSnapshot {
+                ts: Ts::from_nanos(4),
+                symbol: Symbol::new(1),
+                venue: "test".to_string(),
+                bids: vec![(Px::new(100.0), Qty::new(10.0))],
+                asks: vec![(Px::new(101.0), Qty::new(10.0))],
+                sequence: 1,
             }),
         ];
 

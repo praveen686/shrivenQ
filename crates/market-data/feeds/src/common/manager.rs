@@ -11,7 +11,7 @@ use auth::{
 use bus::{Bus, Publisher};
 use common::{L2Update, Symbol};
 use lob::OrderBook;
-use std::collections::HashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
 use tracing::{error, info, warn};
@@ -40,7 +40,7 @@ pub struct ZerodhaConfig {
     /// REST API URL
     pub api_url: String,
     /// Symbol mappings
-    pub symbols: HashMap<Symbol, String>,
+    pub symbols: FxHashMap<Symbol, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,13 +54,13 @@ pub struct BinanceConfig {
     /// REST API URL
     pub api_url: String,
     /// Symbol mappings
-    pub symbols: HashMap<Symbol, String>,
+    pub symbols: FxHashMap<Symbol, String>,
 }
 
 /// Manages all feed connections with authentication
 pub struct FeedManager {
     config: FeedManagerConfig,
-    books: Arc<RwLock<HashMap<Symbol, OrderBook>>>,
+    books: Arc<RwLock<FxHashMap<Symbol, OrderBook>>>,
     bus: Arc<Bus<MarketEvent>>,
 }
 
@@ -69,7 +69,10 @@ impl FeedManager {
     pub fn new(config: FeedManagerConfig, bus: Arc<Bus<MarketEvent>>) -> Self {
         Self {
             config,
-            books: Arc::new(RwLock::new(HashMap::new())),
+            books: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
+                1000,
+                FxBuildHasher,
+            ))),
             bus,
         }
     }
@@ -236,7 +239,7 @@ impl FeedManager {
     /// Process L2 update through LOB and publish to event bus
     async fn process_update(
         update: L2Update,
-        books: &Arc<RwLock<HashMap<Symbol, OrderBook>>>,
+        books: &Arc<RwLock<FxHashMap<Symbol, OrderBook>>>,
         bus: &Arc<Bus<MarketEvent>>,
     ) {
         let mut books = books.write().await;
