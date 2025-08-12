@@ -20,47 +20,78 @@ impl fmt::Display for Symbol {
     }
 }
 
-/// Price type with f64 precision
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
-pub struct Px(pub f64);
+/// Price type (stored as i64 ticks for determinism, 4 decimal places)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct Px(i64); // Internal: price in ticks (1 tick = 0.0001)
 
 impl Px {
-    /// Create a new Price
+    /// Create a new Price from f64 (converts to ticks)
     pub fn new(value: f64) -> Self {
-        Self(value)
+        Self((value * 10000.0).round() as i64)
     }
 
     /// Get the price as f64
     pub fn as_f64(&self) -> f64 {
+        self.0 as f64 / 10000.0
+    }
+    
+    /// Get price as i64 ticks
+    pub fn as_i64(&self) -> i64 {
         self.0
     }
+    
+    /// Create from i64 ticks
+    pub fn from_i64(ticks: i64) -> Self {
+        Self(ticks)
+    }
+    
+    /// Zero price
+    pub const ZERO: Self = Self(0);
 }
 
 impl fmt::Display for Px {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.2}", self.0)
+        write!(f, "{:.4}", self.as_f64())
     }
 }
 
-/// Quantity type for order sizes
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
-pub struct Qty(pub f64);
+/// Quantity type for order sizes (stored as i64 units for determinism, 4 decimal places)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct Qty(i64); // Internal: quantity in units (1 unit = 0.0001)
 
 impl Qty {
-    /// Create a new Quantity
+    /// Create a new Quantity from f64
     pub fn new(value: f64) -> Self {
-        Self(value)
+        Self((value * 10000.0).round() as i64)
     }
 
     /// Get the quantity as f64
     pub fn as_f64(&self) -> f64 {
+        self.0 as f64 / 10000.0
+    }
+    
+    /// Get quantity as i64 units
+    pub fn as_i64(&self) -> i64 {
         self.0
     }
+    
+    /// Create from i64 units
+    pub fn from_i64(units: i64) -> Self {
+        Self(units)
+    }
+    
+    /// Check if quantity is zero
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0
+    }
+    
+    /// Zero quantity
+    pub const ZERO: Self = Self(0);
 }
 
 impl fmt::Display for Qty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.4}", self.0)
+        write!(f, "{:.4}", self.as_f64())
     }
 }
 

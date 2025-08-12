@@ -6,6 +6,9 @@ members = [
     "storage",
     "sim",
     "perf",
+    "auth",
+    "lob",
+    "feeds",
 ]
 resolver = "2"
 

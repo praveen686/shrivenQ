@@ -1,6 +1,6 @@
 //! ShrivenQ Performance Benchmarks
 
-use std::{fs, path::PathBuf, time::{Duration, Instant}};
+use std::{fs, path::PathBuf, time::Instant};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use hdrhistogram::Histogram;

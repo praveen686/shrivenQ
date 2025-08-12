@@ -34,6 +34,8 @@ pub fn open_reader(path: &Path) -> Result<Reader> {
 impl Writer {
     pub fn append_synth(&mut self, ev: &SyntheticEvent) -> Result<()> {
         // Map SyntheticEvent to a TickEvent for our WAL
+        // Use payload length to vary the volume field for more realistic testing
+        let volume = ev.payload.len() as f64;
         let event = WalEvent::Tick(TickEvent {
             ts: Ts::from_nanos(ev.ts_ns),
             venue: "benchmark".to_string(),
@@ -41,7 +43,7 @@ impl Writer {
             bid: Some(Px::new(100.0)),
             ask: Some(Px::new(100.5)),
             last: Some(Px::new(100.25)),
-            volume: Some(Qty::new(1000.0)),
+            volume: Some(Qty::new(volume)),
         });
         self.inner.append(&event)?;
         Ok(())

@@ -10,6 +10,10 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
+pub mod instrument;
+pub mod market;
 pub mod types;
 
+pub use instrument::*;
+pub use market::*;
 pub use types::*;

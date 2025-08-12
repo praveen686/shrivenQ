@@ -37,6 +37,9 @@ flamegraph.svg
 .env
 .env.local
 
+# Cache directory (contains sensitive tokens)
+/cache/
+
 # Logs
 *.log
 logs/
@@ -48,3 +51,12 @@ temp/
 # OS specific
 Thumbs.db
 desktop.ini
+
+# Reference materials (external repos)
+reference/
+
+# Market data files
+data/
+
+# Python test scripts
+*.py
