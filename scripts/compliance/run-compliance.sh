@@ -1,10 +1,16 @@
 #!/bin/bash
-# Wrapper for external sq-compliance tool
-# The tool is located outside the project to avoid self-checking
+# Wrapper for compliance checking
+# Uses external tool locally, falls back to CI script in CI environment
 
 set -eo pipefail
 
-# Use external compliance tool
+# Check if we're in CI environment
+if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+    # In CI, use the simplified compliance script
+    exec "$(dirname "$0")/run-compliance-ci.sh"
+fi
+
+# Local environment - use external compliance tool
 BINARY_PATH="/home/praveen/sq-compliance-tools/sq-compliance/target/release/sq-compliance"
 PROJECT_PATH="/home/praveen/ShrivenQuant"
 

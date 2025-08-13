@@ -38,7 +38,8 @@ jobs:
       - name: ShrivenQuant Compliance Check
         run: |
           echo "Running comprehensive compliance check..."
-          ./scripts/compliance/run-compliance.sh --no-build --strict || 
+          # Use CI-specific script that doesn't depend on external tools
+          ./scripts/compliance/run-compliance-ci.sh || 
             (echo "::error::Compliance check failed" && exit 1)
       
       # TODO/FIXME check now handled by compliance checker
