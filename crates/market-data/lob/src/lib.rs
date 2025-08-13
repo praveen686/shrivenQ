@@ -14,15 +14,19 @@
 #![allow(unsafe_code)] // Allowed for SIMD optimizations in v2
 
 pub mod adapters;
+pub mod analytics;
 pub mod book;
 pub mod features;
-pub mod features_v2;
+pub mod features_v2_fixed;
 pub mod loaders;
 pub mod price_levels;
 pub mod v2;
 
 pub use book::OrderBook;
 pub use features::FeatureCalculator;
-pub use features_v2::{FeatureCalculatorV2, FeatureFrameV2, MarketRegime};
+pub use features_v2_fixed::{
+    FeatureCalculatorV2Fixed, FeatureFrameV2Fixed, MarketRegime, create_hft_calculator_fixed,
+    create_mm_calculator_fixed,
+};
 pub use price_levels::{DEPTH, SideBook};
 pub use v2::{CrossResolution, LobV2Error, OrderBookV2, SideBookV2};

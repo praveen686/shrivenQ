@@ -3,10 +3,11 @@
 //! This test connects to Zerodha WebSocket and streams real NIFTY/BANKNIFTY data
 
 use crate::common::adapter::{FeedAdapter, FeedConfig};
+use crate::display_utils::*;
 use crate::zerodha::websocket::ZerodhaWebSocketFeed;
 use auth::{ZerodhaAuth, ZerodhaConfig};
 use chrono::Timelike;
-use common::Symbol;
+use common::{Px, Qty, Symbol};
 use dotenv::dotenv;
 use lob::OrderBookV2;
 use rustc_hash::{FxBuildHasher, FxHashMap};
@@ -92,18 +93,18 @@ pub async fn run_zerodha_live_integration() -> anyhow::Result<()> {
     // Create order books
     let mut nifty_book = OrderBookV2::new_with_roi(
         Symbol(256265),
-        0.05,    // tick size
-        25.0,    // lot size
-        25000.0, // ROI center
-        250.0,   // ROI width
+        Px::new(0.05),    // tick size
+        Qty::new(25.0),   // lot size
+        Px::new(25000.0), // ROI center
+        Px::new(250.0),   // ROI width
     );
 
     let mut banknifty_book = OrderBookV2::new_with_roi(
         Symbol(260105),
-        0.05,    // tick size
-        15.0,    // lot size
-        52000.0, // ROI center
-        500.0,   // ROI width
+        Px::new(0.05),    // tick size
+        Qty::new(15.0),   // lot size
+        Px::new(52000.0), // ROI center
+        Px::new(500.0),   // ROI width
     );
 
     // Statistics
@@ -133,6 +134,7 @@ pub async fn run_zerodha_live_integration() -> anyhow::Result<()> {
         }
 
         let latency = process_start.elapsed();
+        // SAFETY: Cast is safe within expected range
         latencies.push(latency.as_nanos() as u64);
         update_count += 1;
 
@@ -176,7 +178,7 @@ pub async fn run_zerodha_live_integration() -> anyhow::Result<()> {
             info!("  Latency: p50={} ns, p99={} ns", p50, p99);
             info!(
                 "  Rate: {:.1} updates/sec\n",
-                update_count as f64 / start_time.elapsed().as_secs_f64()
+                calc_events_per_sec(update_count, start_time.elapsed().as_secs_f64())
             );
         }
 
@@ -197,7 +199,7 @@ pub async fn run_zerodha_live_integration() -> anyhow::Result<()> {
     info!("Duration: {:.1}s", start_time.elapsed().as_secs_f64());
     info!(
         "Average rate: {:.1} updates/sec",
-        update_count as f64 / start_time.elapsed().as_secs_f64()
+        calc_events_per_sec(update_count, start_time.elapsed().as_secs_f64())
     );
 
     if !latencies.is_empty() {

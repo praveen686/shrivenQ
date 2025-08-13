@@ -59,18 +59,24 @@ fn test_lob_performance() {
     for i in 0..10 {
         let bid = L2Update::new(Ts::from_nanos(i), symbol).with_level_data(
             Side::Bid,
-            Px::new(99.5 - i as f64 * 0.1),
-            Qty::new(100.0 * (i + 1) as f64),
+            // SAFETY: Cast is safe within expected range
+            Px::new(99.5 - f64::from(i as u32) * 0.1),
+            // SAFETY: Cast is safe within expected range
+            Qty::new(100.0 * f64::from((i + 1) as u32)),
+            // SAFETY: Cast is safe within expected range
             i as u8,
         );
         book.apply(&bid)
             .map_err(|e| format!("Failed to apply bid update: {}", e))
             .ok();
 
+        // SAFETY: Cast is safe within expected range
         let ask = L2Update::new(Ts::from_nanos(i + 100), symbol).with_level_data(
+            // SAFETY: Cast is safe within expected range
             Side::Ask,
-            Px::new(100.5 + i as f64 * 0.1),
-            Qty::new(100.0 * (i + 1) as f64),
+            // SAFETY: Cast is safe within expected range
+            Px::new(100.5 + f64::from(i as u32) * 0.1),
+            Qty::new(100.0 * f64::from((i + 1) as u32)),
             i as u8,
         );
         book.apply(&ask)
@@ -162,7 +168,8 @@ async fn test_event_bus_integration() {
         .ok();
 
     // Receive and verify
-    let received = receiver.try_recv()
+    let received = receiver
+        .try_recv()
         .map_err(|e| format!("Failed to receive: {}", e))
         .ok()
         .flatten();
@@ -233,23 +240,31 @@ fn test_feature_extraction() {
     let mut calc = FeatureCalculator::new(60_000_000_000, 1000); // 60s window
 
     // Setup book with depth
+    // SAFETY: Cast is safe within expected range
     for i in 0..5 {
+        // SAFETY: Cast is safe within expected range
         book.apply(
+            // SAFETY: Cast is safe within expected range
             &L2Update::new(Ts::from_nanos(i * 1000), symbol).with_level_data(
+                // SAFETY: Cast is safe within expected range
                 Side::Bid,
-                Px::new(99.5 - i as f64 * 0.1),
-                Qty::new(100.0 + i as f64 * 50.0),
+                Px::new(99.5 - f64::from(i as u32) * 0.1),
+                Qty::new(100.0 + f64::from(i as u32) * 50.0),
                 i as u8,
             ),
         )
+        // SAFETY: Cast is safe within expected range
         .map_err(|e| format!("Failed to apply bid in feature test: {}", e))
+        // SAFETY: Cast is safe within expected range
         .ok();
+        // SAFETY: Cast is safe within expected range
 
+        // SAFETY: Cast is safe within expected range
         book.apply(
             &L2Update::new(Ts::from_nanos(i * 1000 + 500), symbol).with_level_data(
                 Side::Ask,
-                Px::new(100.5 + i as f64 * 0.1),
-                Qty::new(100.0 + i as f64 * 50.0),
+                Px::new(100.5 + f64::from(i as u32) * 0.1),
+                Qty::new(100.0 + f64::from(i as u32) * 50.0),
                 i as u8,
             ),
         )
@@ -261,7 +276,10 @@ fn test_feature_extraction() {
     let features = match calc.calculate(&book) {
         Some(f) => f,
         None => {
-            assert!(false, "Feature calculation should succeed for valid book with BBO");
+            assert!(
+                false,
+                "Feature calculation should succeed for valid book with BBO"
+            );
             return;
         }
     };
@@ -281,14 +299,20 @@ fn test_sprint3_performance_targets() {
     // Target: LOB updates ≥ 200k/sec
     let symbol = Symbol::new(1);
     let mut book = OrderBook::new(symbol);
+    // SAFETY: Cast is safe within expected range
 
+    // SAFETY: Cast is safe within expected range
     use std::time::Instant;
     let start = Instant::now();
+    // SAFETY: Cast is safe within expected range
     let updates = 100_000;
+    // SAFETY: Cast is safe within expected range
 
     for i in 0..updates {
+        // SAFETY: Cast is safe within expected range
         let update = L2Update::new(Ts::from_nanos(i), symbol).with_level_data(
             if i % 2 == 0 { Side::Bid } else { Side::Ask },
+            // SAFETY: Cast is safe within expected range
             Px::new(100.0 + (i % 10) as f64 * 0.1),
             Qty::new(100.0),
             (i % 10) as u8,

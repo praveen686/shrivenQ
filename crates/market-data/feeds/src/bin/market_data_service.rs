@@ -6,11 +6,13 @@
 //! - Real-time market data streaming
 
 use anyhow::Result;
+
 use auth::{ZerodhaAuth, ZerodhaConfig};
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use common::instrument::InstrumentStore;
 use common::{L2Update, Symbol};
+use feeds::display_utils::*;
 use feeds::{
     FeedAdapter, FeedConfig, InstrumentFetcher, InstrumentFetcherConfig, MarketDataPipeline,
     PipelineConfig, ZerodhaWebSocketFeed,
@@ -197,9 +199,9 @@ async fn run_service(cli: &Cli, symbols: String, strike_range: u32, dry_run: boo
         spot_symbols: spot_symbols.clone(),
         option_strike_range: strike_range,
         strike_interval: if symbols.contains(&"BANKNIFTY".to_string()) {
-            100.0  // BANKNIFTY has 100 point strike intervals
+            100.0 // BANKNIFTY has 100 point strike intervals
         } else {
-            50.0   // NIFTY 50 has 50 point strike intervals
+            50.0 // NIFTY 50 has 50 point strike intervals
         },
         wal_segment_size: 100 * 1024 * 1024,
         snapshot_interval_secs: 60,
@@ -412,8 +414,8 @@ async fn show_subscriptions(cli: &Cli, symbol: &str) -> Result<()> {
 
 async fn replay_data(cli: &Cli, start: &str, end: &str, symbol: Option<&str>) -> Result<()> {
     use chrono::{DateTime, Utc};
-    use storage::{Wal, WalEvent};
     use common::Ts;
+    use storage::{Wal, WalEvent};
 
     info!("Starting data replay from {} to {}", start, end);
 
@@ -429,12 +431,24 @@ async fn replay_data(cli: &Cli, start: &str, end: &str, symbol: Option<&str>) ->
         .map_err(|e| anyhow::anyhow!("Invalid end time format (use ISO format): {}", e))?
         .with_timezone(&Utc);
 
-    let start_ts = Ts::from_nanos(start_time.timestamp_nanos_opt()
-        .ok_or_else(|| anyhow::anyhow!("Invalid start timestamp"))? as u64);
-    let end_ts = Ts::from_nanos(end_time.timestamp_nanos_opt()
-        .ok_or_else(|| anyhow::anyhow!("Invalid end timestamp"))? as u64);
+    let start_nanos = start_time
+        .timestamp_nanos_opt()
+        .ok_or_else(|| anyhow::anyhow!("Invalid start timestamp"))?;
+    let start_ts = Ts::from_nanos(
+        u64::try_from(start_nanos).map_err(|_| anyhow::anyhow!("Start timestamp is negative"))?,
+    );
+    let end_nanos = end_time
+        .timestamp_nanos_opt()
+        .ok_or_else(|| anyhow::anyhow!("Invalid end timestamp"))?;
+    let end_ts = Ts::from_nanos(
+        u64::try_from(end_nanos).map_err(|_| anyhow::anyhow!("End timestamp is negative"))?,
+    );
 
-    info!("Timestamp range: {} to {}", start_ts.as_nanos(), end_ts.as_nanos());
+    info!(
+        "Timestamp range: {} to {}",
+        start_ts.as_nanos(),
+        end_ts.as_nanos()
+    );
 
     // Load instrument store for symbol resolution if filtering is needed
     let instrument_store = if symbol.is_some() {
@@ -442,11 +456,17 @@ async fn replay_data(cli: &Cli, start: &str, end: &str, symbol: Option<&str>) ->
         let cache_file = PathBuf::from(&cli.cache_dir).join("instruments/instruments.json");
 
         if cache_file.exists() {
-            store.load_from_cache(
-                cache_file.to_str()
-                    .ok_or_else(|| anyhow::anyhow!("Invalid cache file path"))?
-            ).await?;
-            info!("Loaded {} instruments for symbol filtering", store.count().await);
+            store
+                .load_from_cache(
+                    cache_file
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("Invalid cache file path"))?,
+                )
+                .await?;
+            info!(
+                "Loaded {} instruments for symbol filtering",
+                store.count().await
+            );
             Some(store)
         } else {
             warn!("No instrument cache found - symbol filtering will be limited");
@@ -588,9 +608,11 @@ async fn replay_data(cli: &Cli, start: &str, end: &str, symbol: Option<&str>) ->
         info!("  - Skipped (filtered): {}", skipped_events);
     }
 
-    let duration = (end_ts.as_nanos() - start_ts.as_nanos()) as f64 / 1_000_000_000.0;
+    // Convert to seconds for display
+    let nanos_diff = end_ts.as_nanos().saturating_sub(start_ts.as_nanos());
+    let duration = fmt_nanos_to_secs(nanos_diff);
     if duration > 0.0 && total_events > 0 {
-        let events_per_sec = total_events as f64 / duration;
+        let events_per_sec = calc_events_per_sec(total_events, duration);
         info!("Replay rate: {:.0} events/second", events_per_sec);
     }
 
@@ -598,9 +620,9 @@ async fn replay_data(cli: &Cli, start: &str, end: &str, symbol: Option<&str>) ->
 }
 
 async fn monitor_service(_cli: &Cli) -> Result<()> {
-    use std::time::Duration;
     use std::fs;
     use std::path::Path;
+    use std::time::Duration;
     use tokio::time::interval;
 
     info!("Starting service metrics monitoring dashboard");
@@ -634,9 +656,7 @@ async fn monitor_service(_cli: &Cli) -> Result<()> {
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_dir() {
-                        let dirname = path.file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("");
+                        let dirname = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
                         // Count different WAL types
                         if dirname.contains("tick") {
@@ -664,11 +684,12 @@ async fn monitor_service(_cli: &Cli) -> Result<()> {
             info!("║   - Tick WALs:    {}", tick_events);
             info!("║   - LOB WALs:     {}", l2_events);
             info!("║   Total Segments:  {}", segment_count);
-            info!("║   Total Size:      {:.2} GB", total_size as f64 / (1024.0 * 1024.0 * 1024.0));
+            info!("║   Total Size:      {:.2} GB", fmt_bytes_gib(total_size));
 
             // Calculate average segment size
             if segment_count > 0 {
-                let avg_segment_mb = (total_size / segment_count) as f64 / (1024.0 * 1024.0);
+                let avg_bytes = total_size / segment_count;
+                let avg_segment_mb = fmt_bytes_mib(avg_bytes);
                 info!("║   Avg Segment:     {:.1} MB", avg_segment_mb);
             }
 
@@ -691,7 +712,8 @@ async fn monitor_service(_cli: &Cli) -> Result<()> {
                                     if let Ok(modified) = metadata.modified() {
                                         if latest_activity.map_or(true, |last| modified > last) {
                                             latest_activity = Some(modified);
-                                            latest_file = wal_entry.path()
+                                            latest_file = wal_entry
+                                                .path()
                                                 .file_name()
                                                 .and_then(|n| n.to_str())
                                                 .unwrap_or("")
@@ -745,13 +767,12 @@ async fn monitor_service(_cli: &Cli) -> Result<()> {
                         let parts: Vec<&str> = line.split_whitespace().collect();
                         if parts.len() >= 2 {
                             if let Ok(kb) = parts[1].parse::<u64>() {
-                                info!("║   Memory Usage:    {:.1} MB", kb as f64 / 1024.0);
+                                info!("║   Memory Usage:    {:.1} MB", fmt_kb_to_mb(kb));
                             }
                         }
                     }
                 }
             }
-
         } else {
             info!("║ ❌ Data directory not found!");
             info!("║");

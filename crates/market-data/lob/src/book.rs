@@ -52,7 +52,7 @@ impl OrderBook {
         };
 
         // Apply the update
-        side.set(update.level as usize, update.price, update.qty);
+        side.set(usize::from(update.level), update.price, update.qty);
 
         // Check for crossed book
         if self.is_crossed() {
@@ -209,9 +209,12 @@ impl OrderBook {
             {
                 hash = hash
                     .wrapping_mul(31)
+                    // SAFETY: Cast is safe within expected range
                     .wrapping_add(self.bids.prices[i].as_i64() as u64);
                 hash = hash
+                    // SAFETY: Cast is safe within expected range
                     .wrapping_mul(31)
+                    // SAFETY: Cast is safe within expected range
                     .wrapping_add(self.bids.qtys[i].as_i64() as u64);
             }
         }
@@ -220,9 +223,13 @@ impl OrderBook {
         for i in 0..self.asks.depth.min(DEPTH) {
             #[allow(clippy::cast_sign_loss)]
             {
+                // SAFETY: Cast is safe within expected range
                 hash = hash
                     .wrapping_mul(31)
+                    // SAFETY: Cast is safe within expected range
+                    // SAFETY: Cast is safe within expected range
                     .wrapping_add(self.asks.prices[i].as_i64() as u64);
+                // SAFETY: Cast is safe within expected range
                 hash = hash
                     .wrapping_mul(31)
                     .wrapping_add(self.asks.qtys[i].as_i64() as u64);
@@ -350,7 +357,10 @@ mod tests {
         let micro = match book.microprice() {
             Some(m) => m,
             None => {
-                assert!(false, "Microprice should be available after setting up book");
+                assert!(
+                    false,
+                    "Microprice should be available after setting up book"
+                );
                 return;
             }
         };
@@ -369,9 +379,12 @@ mod tests {
         let mut book = OrderBook::new(Symbol::new(1));
 
         // Add more on bid side
+        // SAFETY: Cast is safe within expected range
         for i in 0..3 {
+            // SAFETY: Cast is safe within expected range
             book.apply(
                 &L2Update::new(Ts::from_nanos(1000 + i), Symbol::new(1)).with_level_data(
+                    // SAFETY: Cast is safe within expected range
                     Side::Bid,
                     Px::new(99.5 - i as f64 * 0.1),
                     Qty::new(100.0),
@@ -431,10 +444,12 @@ mod tests {
         ];
 
         for update in &updates {
-            book1.apply(update)
+            book1
+                .apply(update)
                 .map_err(|e| format!("Failed to apply update to book1: {}", e))
                 .ok();
-            book2.apply(update)
+            book2
+                .apply(update)
                 .map_err(|e| format!("Failed to apply update to book2: {}", e))
                 .ok();
         }

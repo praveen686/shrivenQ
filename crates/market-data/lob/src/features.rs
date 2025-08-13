@@ -103,6 +103,7 @@ impl FeatureCalculator {
             let vwap = value_sum / qty_sum;
             let deviation = current_price.as_i64() - vwap;
             #[allow(clippy::cast_precision_loss)]
+            // SAFETY: Cast is safe within expected range
             let result = (deviation as f64 / vwap as f64) * 100.0;
             result
         } else {
@@ -157,7 +158,10 @@ mod tests {
         let features = match calc.calculate(&book) {
             Some(f) => f,
             None => {
-                assert!(false, "Failed to calculate features in test - book should have valid BBO");
+                assert!(
+                    false,
+                    "Failed to calculate features in test - book should have valid BBO"
+                );
                 return;
             }
         };

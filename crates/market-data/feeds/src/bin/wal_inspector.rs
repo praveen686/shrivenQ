@@ -1,6 +1,7 @@
 //! WAL Inspector - Analyze and categorize market data from WAL files
 
 use clap::{Parser, Subcommand};
+use feeds::display_utils::*;
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::fs::File;
 use std::io::Read;
@@ -78,7 +79,7 @@ fn extract_tokens(buffer: &[u8]) -> FxHashMap<u32, usize> {
 
     for (start, end) in token_ranges {
         for token in start..=end {
-            let token_bytes = (token as u32).to_le_bytes();
+            let token_bytes = u32::try_from(token).unwrap_or(0).to_le_bytes();
             let count = buffer.windows(4).filter(|w| *w == token_bytes).count();
             if count > 0 {
                 tokens.insert(token, count);
@@ -124,18 +125,19 @@ fn show_summary(file_path: &str, with_lob: bool) -> Result<(), Box<dyn std::erro
 
     let tokens = extract_tokens(&buffer);
 
-    let mut spot_count = 0;
-    let mut future_count = 0;
-    let mut option_count = 0;
-    let mut total_count = 0;
+    let mut spot_count = 0u64;
+    let mut future_count = 0u64;
+    let mut option_count = 0u64;
+    let mut total_count = 0u64;
 
     for (token, count) in &tokens {
         let (category, _) = categorize_token(*token);
-        total_count += count;
+        let count_u64 = u64::try_from(*count).unwrap_or(0);
+        total_count += count_u64;
         match category {
-            "SPOT" => spot_count += count,
-            "FUTURE" => future_count += count,
-            "OPTION" => option_count += count,
+            "SPOT" => spot_count += count_u64,
+            "FUTURE" => future_count += count_u64,
+            "OPTION" => option_count += count_u64,
             _ => {}
         }
     }
@@ -149,29 +151,17 @@ fn show_summary(file_path: &str, with_lob: bool) -> Result<(), Box<dyn std::erro
     println!(
         "  Spot:    {:6} ticks ({:.1}%)",
         spot_count,
-        if total_count > 0 {
-            (spot_count as f64 / total_count as f64) * 100.0
-        } else {
-            0.0
-        }
+        calc_percentage(spot_count, total_count)
     );
     println!(
         "  Futures: {:6} ticks ({:.1}%)",
         future_count,
-        if total_count > 0 {
-            (future_count as f64 / total_count as f64) * 100.0
-        } else {
-            0.0
-        }
+        calc_percentage(future_count, total_count)
     );
     println!(
         "  Options: {:6} ticks ({:.1}%)",
         option_count,
-        if total_count > 0 {
-            (option_count as f64 / total_count as f64) * 100.0
-        } else {
-            0.0
-        }
+        calc_percentage(option_count, total_count)
     );
 
     // Check LOB data if requested

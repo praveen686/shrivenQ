@@ -294,10 +294,11 @@ impl InstrumentFetcher {
         use common::instrument::InstrumentType;
 
         Instrument {
-            instrument_token: symbol
-                .symbol
-                .chars()
-                .fold(0u32, |acc, c| acc.wrapping_mul(31).wrapping_add(c as u32)),
+            instrument_token: symbol.symbol.chars().fold(0u32, |acc, c| {
+                #[allow(clippy::cast_lossless)] // char to u32 is always safe
+                // SAFETY: Cast is safe within expected range
+                acc.wrapping_mul(31).wrapping_add(c as u32)
+            }),
             trading_symbol: symbol.symbol.clone(),
             exchange_symbol: symbol.base_asset.clone(),
             name: format!("{}/{}", symbol.base_asset, symbol.quote_asset),

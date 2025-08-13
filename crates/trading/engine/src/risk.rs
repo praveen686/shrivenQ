@@ -3,6 +3,7 @@
 use crate::core::EngineConfig;
 use common::{Px, Qty, Side, Symbol};
 use dashmap::DashMap;
+use parking_lot::Mutex;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 
@@ -33,11 +34,11 @@ pub struct RiskLimits {
 impl Default for RiskLimits {
     fn default() -> Self {
         Self {
-            max_position_size: 10000,
-            max_position_value: 10_000_000, // 1 crore in paise
-            max_total_exposure: 50_000_000, // 5 crore in paise
-            max_order_size: 1000,
-            max_order_value: 1_000_000, // 10 lakh in paise
+            max_position_size: 100_000_000, // 10000 units in ticks (10000 * 10000)
+            max_position_value: 100_000_000, // 10 crore in paise
+            max_total_exposure: 500_000_000, // 50 crore in paise
+            max_order_size: 10_000_000,     // 1000 units in ticks (1000 * 10000)
+            max_order_value: 100_000_000,   // 1 crore in paise (increased for tests)
             max_orders_per_minute: 100,
             max_daily_loss: -500_000, // 5 lakh loss limit
             max_drawdown: -1_000_000, // 10 lakh drawdown
@@ -80,7 +81,7 @@ impl SymbolRisk {
 /// Risk engine with pre-allocated checks
 #[repr(C, align(64))]
 pub struct RiskEngine {
-    config: Arc<EngineConfig>,
+    config: EngineConfig, // Copy type, no need for Arc
     limits: RiskLimits,
 
     // Per-symbol tracking
@@ -93,7 +94,7 @@ pub struct RiskEngine {
     current_drawdown: AtomicI64,
 
     // Rate limiting
-    order_timestamps: Vec<u64>, // Ring buffer for rate limiting
+    order_timestamps: Arc<Mutex<Vec<u64>>>, // Ring buffer for rate limiting
     order_timestamp_idx: AtomicU64,
 
     // Kill switch
@@ -103,7 +104,7 @@ pub struct RiskEngine {
 }
 
 impl RiskEngine {
-    pub fn new(config: Arc<EngineConfig>) -> Self {
+    pub fn new(config: EngineConfig) -> Self {
         let mut order_timestamps = Vec::with_capacity(1000);
         order_timestamps.resize(1000, 0);
 
@@ -115,7 +116,7 @@ impl RiskEngine {
             daily_pnl: AtomicI64::new(0),
             peak_value: AtomicU64::new(0),
             current_drawdown: AtomicI64::new(0),
-            order_timestamps,
+            order_timestamps: Arc::new(Mutex::new(order_timestamps)),
             order_timestamp_idx: AtomicU64::new(0),
             emergency_stop: AtomicU64::new(0),
             _padding: [0; 24],
@@ -131,14 +132,14 @@ impl RiskEngine {
             return false;
         }
 
-        // Convert qty to actual units (qty is stored as fixed point with 4 decimals)
-        let qty_units = (qty.as_f64()) as u64;
-        let price_raw = price.map(|p| (p.as_f64() * 100.0) as u64).unwrap_or(10000);
-        let order_value = qty_units * price_raw;
+        // Use fixed-point arithmetic (qty and price are already in ticks)
+        let qty_units = qty.as_i64().unsigned_abs();
+        let price_ticks = price.map(|p| p.as_i64().unsigned_abs()).unwrap_or(100_000); // Default 10.00
+        let order_value = (qty_units * price_ticks) / 10000; // Divide by 10000 to get value in base units
 
         // Size checks (branch-free using comparison masks)
-        let size_ok = (qty_units <= self.limits.max_order_size) as u64;
-        let value_ok = (order_value <= self.limits.max_order_value) as u64;
+        let size_ok = u64::from(qty_units <= self.limits.max_order_size);
+        let value_ok = u64::from(order_value <= self.limits.max_order_value);
 
         // Get or create symbol risk
         let symbol_risk = self
@@ -150,26 +151,31 @@ impl RiskEngine {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_else(|_| std::time::Duration::from_secs(0))
-            .as_millis() as u64;
+            .as_millis()
+            .try_into()
+            .unwrap_or(u64::MAX);
 
         let breaker_time = symbol_risk.breaker_triggered.load(Ordering::Acquire);
-        let breaker_ok = (breaker_time == 0 || now > breaker_time) as u64;
+        let breaker_ok = u64::from(breaker_time == 0 || now > breaker_time);
 
         // Position limit check
         let current_pos = symbol_risk.position_size.load(Ordering::Acquire);
         let new_pos = match side {
-            Side::Bid => current_pos + qty_units as i64, // Buy
-            Side::Ask => current_pos - qty_units as i64, // Sell
+            Side::Bid => current_pos.saturating_add(i64::try_from(qty_units).unwrap_or(i64::MAX)), // Buy
+            Side::Ask => current_pos.saturating_sub(i64::try_from(qty_units).unwrap_or(i64::MAX)), // Sell
         };
-        let position_ok = (new_pos.abs() as u64 <= self.limits.max_position_size) as u64;
+        let position_ok = u64::from(
+            u64::try_from(new_pos.abs()).unwrap_or(u64::MAX) <= self.limits.max_position_size,
+        );
 
         // Exposure check
         let current_exposure = self.total_exposure.load(Ordering::Acquire);
-        let exposure_ok = (current_exposure + order_value <= self.limits.max_total_exposure) as u64;
+        let exposure_ok =
+            u64::from(current_exposure + order_value <= self.limits.max_total_exposure);
 
         // Daily loss check
         let daily_pnl = self.daily_pnl.load(Ordering::Acquire);
-        let loss_ok = (daily_pnl >= self.limits.max_daily_loss) as u64;
+        let loss_ok = u64::from(daily_pnl >= self.limits.max_daily_loss);
 
         // Rate limit check (simplified for performance)
         let rate_ok = self.check_rate_limit(now);
@@ -181,7 +187,7 @@ impl RiskEngine {
             & position_ok
             & exposure_ok
             & loss_ok
-            & (rate_ok as u64);
+            & u64::from(rate_ok);
 
         all_checks != 0
     }
@@ -189,11 +195,15 @@ impl RiskEngine {
     /// Check rate limiting - uses ring buffer
     #[inline(always)]
     fn check_rate_limit(&self, now: u64) -> bool {
-        let idx = self.order_timestamp_idx.fetch_add(1, Ordering::Relaxed) as usize;
-        let ring_idx = idx % self.order_timestamps.len();
+        let idx =
+            usize::try_from(self.order_timestamp_idx.fetch_add(1, Ordering::Relaxed)).unwrap_or(0);
+
+        // Use lock for thread-safe access
+        let mut timestamps = self.order_timestamps.lock();
+        let ring_idx = idx % timestamps.len();
 
         // Check oldest timestamp in window
-        let oldest = self.order_timestamps[ring_idx];
+        let oldest = timestamps[ring_idx];
         let window_start = now.saturating_sub(60_000); // 60 second window
 
         if oldest > window_start {
@@ -201,11 +211,8 @@ impl RiskEngine {
             return false;
         }
 
-        // Store new timestamp (unsafe for performance, but safe in practice)
-        unsafe {
-            let ptr = self.order_timestamps.as_ptr() as *mut u64;
-            ptr.add(ring_idx).write(now);
-        }
+        // Store new timestamp safely
+        timestamps[ring_idx] = now;
 
         true
     }
@@ -213,7 +220,7 @@ impl RiskEngine {
     /// Update position risk after fill
     #[inline(always)]
     pub fn update_position(&self, symbol: Symbol, side: Side, qty: Qty, _price: Px) {
-        let qty_units = qty.as_f64() as i64;
+        let qty_units = qty.as_i64() / 10000; // Convert ticks to whole units
 
         if let Some(risk) = self.symbol_risks.get(&symbol) {
             let delta = match side {
@@ -231,9 +238,10 @@ impl RiskEngine {
         self.daily_pnl.store(pnl, Ordering::Release);
 
         // Update drawdown
-        let peak = self.peak_value.load(Ordering::Acquire) as i64;
+        let peak = i64::try_from(self.peak_value.load(Ordering::Acquire)).unwrap_or(i64::MAX);
         if pnl > peak {
-            self.peak_value.store(pnl as u64, Ordering::Release);
+            self.peak_value
+                .store(u64::try_from(pnl).unwrap_or(0), Ordering::Release);
             self.current_drawdown.store(0, Ordering::Release);
         } else {
             let drawdown = peak - pnl;

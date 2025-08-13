@@ -88,57 +88,41 @@ Multi-stage Docker image builder.
 
 ## ✅ Compliance Scripts (`compliance/`)
 
-### `strict-check.sh`
-Primary compliance validation - **MUST PASS** before commits.
+### `run-compliance.sh`
+Enhanced Rust-based compliance checker - **MUST PASS** before commits.
 
 **Usage:**
 ```bash
-./scripts/compliance/strict-check.sh
+./scripts/compliance/run-compliance.sh [OPTIONS]
+
+# Options:
+--no-build         # Skip cargo build check
+--strict           # Use stricter thresholds
+--details          # Show top offenders per violation
+--report-dir PATH  # Custom report directory
 ```
 
-**Checks:**
-- Forbidden patterns (TODO, FIXME, panic!, unwrap())
-- Clippy with strict settings
-- Dead code detection
-- Code formatting
-- Documentation completeness
-- Test execution
+**14 Comprehensive Checks:**
+1. Build verification
+2. Numeric casts without annotations
+3. Panic/unwrap/expect detection
+4. std::HashMap in hot paths
+5. Float money calculations
+6. TODO/FIXME markers
+7. Ignored errors (Err(_))
+8. Excessive cloning
+9. String allocations
+10. Underscore variable abuse
+11. Magic numbers
+12. Warning suppressions
+13. Documentation duplication
+14. Large functions (>50 lines)
 
-### `agent-compliance-check.sh`
-AI agent compliance validation for automated code generation.
-
-**Usage:**
-```bash
-./scripts/compliance/agent-compliance-check.sh
-```
-
-**Validates:**
-- Hot path allocations
-- Floating-point money calculations
-- Error handling patterns
-- Agent anti-patterns
-
-### `compliance-summary.sh`
-Generates detailed compliance report with scoring.
-
-**Usage:**
-```bash
-./scripts/compliance/compliance-summary.sh
-```
-
-**Output:**
-- Critical violations count
-- Performance impact assessment
-- Compliance score (0-100)
-- Detailed violation locations
-
-### `initialize-agent.sh`
-Initializes new AI agents with compliance framework.
-
-**Usage:**
-```bash
-./scripts/compliance/initialize-agent.sh <agent_id>
-```
+**Configuration:**
+Edit `compliance.toml` in project root to:
+- Adjust thresholds
+- Configure per-check allowlists
+- Set CI behavior
 
 ### `validate-risk-limits.sh`
 Validates risk management configurations.

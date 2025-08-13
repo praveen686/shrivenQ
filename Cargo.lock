@@ -902,6 +902,7 @@ dependencies = [
  "feeds",
  "indexmap",
  "lob",
+ "parking_lot",
  "proptest",
  "rstest",
  "serde",

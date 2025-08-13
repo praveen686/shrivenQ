@@ -22,8 +22,9 @@ async fn test_zerodha_real_auth() -> Result<(), Box<dyn std::error::Error>> {
 
     let api_key = env::var("ZERODHA_API_KEY")
         .map_err(|_| "ZERODHA_API_KEY not found in .env - please set this environment variable")?;
-    let api_secret = env::var("ZERODHA_API_SECRET")
-        .map_err(|_| "ZERODHA_API_SECRET not found in .env - please set this environment variable")?;
+    let api_secret = env::var("ZERODHA_API_SECRET").map_err(
+        |_| "ZERODHA_API_SECRET not found in .env - please set this environment variable",
+    )?;
     let user_id = env::var("ZERODHA_USER_ID").unwrap_or_else(|_| "test_user".to_string());
     let password = env::var("ZERODHA_PASSWORD").unwrap_or_else(|_| "test_pass".to_string());
     let totp_secret = env::var("ZERODHA_TOTP_SECRET").unwrap_or_else(|_| "test_totp".to_string());
@@ -45,8 +46,9 @@ async fn test_binance_real_auth() -> Result<(), Box<dyn std::error::Error>> {
 
     let api_key = env::var("BINANCE_API_KEY")
         .map_err(|_| "BINANCE_API_KEY not found in .env - please set this environment variable")?;
-    let api_secret = env::var("BINANCE_API_SECRET")
-        .map_err(|_| "BINANCE_API_SECRET not found in .env - please set this environment variable")?;
+    let api_secret = env::var("BINANCE_API_SECRET").map_err(
+        |_| "BINANCE_API_SECRET not found in .env - please set this environment variable",
+    )?;
 
     println!("Testing Binance auth with API key: {}...", &api_key[..8]);
 
@@ -69,8 +71,9 @@ async fn test_zerodha_websocket_connection() -> Result<(), Box<dyn std::error::E
 
     let api_key = env::var("ZERODHA_API_KEY")
         .map_err(|_| "ZERODHA_API_KEY not found in .env - please set this environment variable")?;
-    let api_secret = env::var("ZERODHA_API_SECRET")
-        .map_err(|_| "ZERODHA_API_SECRET not found in .env - please set this environment variable")?;
+    let api_secret = env::var("ZERODHA_API_SECRET").map_err(
+        |_| "ZERODHA_API_SECRET not found in .env - please set this environment variable",
+    )?;
     let user_id = env::var("ZERODHA_USER_ID").unwrap_or_else(|_| "test_user".to_string());
     let password = env::var("ZERODHA_PASSWORD").unwrap_or_else(|_| "test_pass".to_string());
     let totp_secret = env::var("ZERODHA_TOTP_SECRET").unwrap_or_else(|_| "test_totp".to_string());

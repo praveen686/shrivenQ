@@ -78,8 +78,8 @@ pub struct OrderBookV2 {
     pub asks: SideBookV2,
 
     // Configuration
-    tick_size: f64,
-    lot_size: f64,
+    tick_size: Px, // Fixed-point tick size
+    lot_size: Qty, // Fixed-point lot size,
 
     // Cross-book resolution strategy
     cross_resolution: CrossResolution,
@@ -108,9 +108,9 @@ pub struct SideBookV2 {
     // ROI optimization - dense array for hot price range
     roi_qtys: Vec<Qty>,
     roi_timestamps: Vec<Ts>,
-    roi_lb_tick: i64, // Lower bound in ticks
-    roi_ub_tick: i64, // Upper bound in ticks
-    roi_tick_size: f64,
+    roi_lb_tick: i64,   // Lower bound in ticks
+    roi_ub_tick: i64,   // Upper bound in ticks
+    roi_tick_size: i64, // Store as fixed-point ticks
 
     // Sparse fallback for outliers
     sparse_levels: FxHashMap<i64, (Qty, Ts)>,
@@ -129,7 +129,7 @@ const INVALID_MAX: i64 = i64::MAX;
 
 impl OrderBookV2 {
     /// Create a new order book with advanced features
-    pub fn new(symbol: Symbol, tick_size: f64, lot_size: f64) -> Self {
+    pub fn new(symbol: Symbol, tick_size: Px, lot_size: Qty) -> Self {
         Self {
             symbol,
             ts: Ts::from_nanos(0),
@@ -142,8 +142,8 @@ impl OrderBookV2 {
             ask_best_qty: Qty::ZERO,
             ask_best_ts: Ts::from_nanos(0),
 
-            bids: SideBookV2::new_bid(tick_size),
-            asks: SideBookV2::new_ask(tick_size),
+            bids: SideBookV2::new_bid(tick_size.as_f64()),
+            asks: SideBookV2::new_ask(tick_size.as_f64()),
 
             tick_size,
             lot_size,
@@ -154,16 +154,16 @@ impl OrderBookV2 {
     /// Create with ROI optimization for specific price range
     pub fn new_with_roi(
         symbol: Symbol,
-        tick_size: f64,
-        lot_size: f64,
-        roi_center: f64,
-        roi_width: f64,
+        tick_size: Px,
+        lot_size: Qty,
+        roi_center: Px,
+        roi_width: Px,
     ) -> Self {
         let mut book = Self::new(symbol, tick_size, lot_size);
 
-        // Initialize ROI for both sides
-        let roi_lower_bound = roi_center - roi_width / 2.0;
-        let roi_upper_bound = roi_center + roi_width / 2.0;
+        // Initialize ROI for both sides using fixed-point arithmetic
+        let roi_lower_bound = roi_center.sub(Px::from_i64(roi_width.as_i64() / 2));
+        let roi_upper_bound = roi_center.add(Px::from_i64(roi_width.as_i64() / 2));
 
         book.bids
             .init_roi(roi_lower_bound, roi_upper_bound, tick_size);
@@ -371,8 +371,9 @@ impl OrderBookV2 {
     pub fn spread_ticks(&self) -> Option<i64> {
         match (self.best_bid(), self.best_ask()) {
             (Some((bid, _)), Some((ask, _))) => {
-                #[allow(clippy::cast_possible_truncation)]
-                let ticks = ((ask.as_f64() - bid.as_f64()) / self.tick_size) as i64;
+                // Calculate spread in ticks using fixed-point arithmetic
+                let spread = ask.sub(bid);
+                let ticks = spread.as_i64() / self.tick_size.as_i64();
                 Some(ticks)
             }
             _ => None,
@@ -382,15 +383,15 @@ impl OrderBookV2 {
     /// Get tick size
     #[inline]
     #[must_use]
-    pub const fn tick_size(&self) -> f64 {
-        self.tick_size
+    pub fn tick_size(&self) -> f64 {
+        self.tick_size.as_f64()
     }
 
     /// Get lot size
     #[inline]
     #[must_use]
-    pub const fn lot_size(&self) -> f64 {
-        self.lot_size
+    pub fn lot_size(&self) -> f64 {
+        self.lot_size.as_f64()
     }
 
     /// Set cross-book resolution strategy
@@ -428,7 +429,7 @@ impl SideBookV2 {
             roi_timestamps: Vec::with_capacity(1000),
             roi_lb_tick: 0,
             roi_ub_tick: 0,
-            roi_tick_size: tick_size,
+            roi_tick_size: i64::try_from((tick_size * 10000.0).round() as i128).unwrap_or(i64::MAX), // Safe conversion to fixed-point
 
             sparse_levels: FxHashMap::with_capacity_and_hasher(100, FxBuildHasher),
 
@@ -451,7 +452,7 @@ impl SideBookV2 {
             roi_timestamps: Vec::with_capacity(1000),
             roi_lb_tick: 0,
             roi_ub_tick: 0,
-            roi_tick_size: tick_size,
+            roi_tick_size: i64::try_from((tick_size * 10000.0).round() as i128).unwrap_or(i64::MAX), // Safe conversion to fixed-point
 
             sparse_levels: FxHashMap::with_capacity_and_hasher(100, FxBuildHasher),
 
@@ -462,17 +463,15 @@ impl SideBookV2 {
     }
 
     /// Initialize ROI range
-    pub fn init_roi(&mut self, roi_lower_bound: f64, roi_upper_bound: f64, tick_size: f64) {
-        #[allow(clippy::cast_possible_truncation)]
-        {
-            self.roi_lb_tick = (roi_lower_bound / tick_size).round() as i64;
-            self.roi_ub_tick = (roi_upper_bound / tick_size).round() as i64;
-        }
+    pub fn init_roi(&mut self, roi_lower_bound: Px, roi_upper_bound: Px, tick_size: Px) {
+        // Use fixed-point arithmetic to calculate tick boundaries
+        self.roi_lb_tick = roi_lower_bound.as_i64() / tick_size.as_i64();
+        self.roi_ub_tick = roi_upper_bound.as_i64() / tick_size.as_i64();
         let roi_size = usize::try_from(self.roi_ub_tick - self.roi_lb_tick + 1).unwrap_or(0);
 
         self.roi_qtys = vec![Qty::ZERO; roi_size];
         self.roi_timestamps = vec![Ts::from_nanos(0); roi_size];
-        self.roi_tick_size = tick_size;
+        self.roi_tick_size = tick_size.as_i64();
     }
 
     /// Update with validation
@@ -483,7 +482,12 @@ impl SideBookV2 {
     /// Returns `LobV2Error::InvalidLevel` if level >= 32
     pub fn update(&mut self, price: Px, qty: Qty, ts: Ts, level: u8) -> Result<(), LobV2Error> {
         #[allow(clippy::cast_possible_truncation)]
-        let price_tick = (price.as_f64() / self.roi_tick_size).round() as i64;
+        // Use fixed-point arithmetic for tick calculation
+        let price_tick = if self.roi_tick_size > 0 {
+            price.as_i64() / self.roi_tick_size
+        } else {
+            0
+        };
 
         // Try ROI update first (fastest path)
         if self.update_roi(price_tick, qty, ts) {
@@ -645,8 +649,8 @@ impl SideBookV2 {
         {
             let idx = usize::try_from(self.best_price_tick - self.roi_lb_tick).unwrap_or(0);
             if idx < self.roi_qtys.len() && !self.roi_qtys[idx].is_zero() {
-                #[allow(clippy::cast_precision_loss)]
-                let price = Px::new(self.best_price_tick as f64 * self.roi_tick_size);
+                // Convert tick back to price using fixed-point arithmetic
+                let price = Px::from_i64(self.best_price_tick * self.roi_tick_size);
                 return Some((price, self.roi_qtys[idx], self.roi_timestamps[idx]));
             }
         }
@@ -695,7 +699,12 @@ impl SideBookV2 {
         // Clear ROI if needed
         if !self.roi_qtys.is_empty() {
             #[allow(clippy::cast_possible_truncation)]
-            let price_tick = (price.as_f64() / self.roi_tick_size).round() as i64;
+            // Use fixed-point arithmetic for tick calculation
+            let price_tick = if self.roi_tick_size > 0 {
+                price.as_i64() / self.roi_tick_size
+            } else {
+                0
+            };
             if price_tick >= self.roi_lb_tick {
                 let clear_up_to = usize::try_from(price_tick - self.roi_lb_tick + 1)
                     .unwrap_or(0)
@@ -726,7 +735,12 @@ impl SideBookV2 {
         // Clear ROI if needed
         if !self.roi_qtys.is_empty() {
             #[allow(clippy::cast_possible_truncation)]
-            let price_tick = (price.as_f64() / self.roi_tick_size).round() as i64;
+            // Use fixed-point arithmetic for tick calculation
+            let price_tick = if self.roi_tick_size > 0 {
+                price.as_i64() / self.roi_tick_size
+            } else {
+                0
+            };
             if price_tick <= self.roi_ub_tick {
                 let clear_from = usize::try_from(price_tick - self.roi_lb_tick).unwrap_or(0);
                 for i in clear_from..self.roi_qtys.len() {
@@ -829,10 +843,10 @@ mod tests {
     fn test_roi_updates() {
         let mut book = OrderBookV2::new_with_roi(
             Symbol(1),
-            0.01,  // tick size
-            1.0,   // lot size
-            100.0, // center
-            10.0,  // width (95-105)
+            Px::new(0.01),  // tick size
+            Qty::new(1.0),  // lot size
+            Px::new(100.0), // center
+            Px::new(10.0),  // width (95-105)
         );
 
         // Update within ROI
@@ -849,7 +863,7 @@ mod tests {
 
     #[test]
     fn test_cross_resolution() {
-        let mut book = OrderBookV2::new(Symbol(1), 0.01, 1.0);
+        let mut book = OrderBookV2::new(Symbol(1), Px::new(0.01), Qty::new(1.0));
         book.cross_resolution = CrossResolution::AutoResolve;
 
         // Set up initial book
@@ -894,7 +908,7 @@ mod tests {
 
     #[test]
     fn test_timestamp_validation() {
-        let mut book = OrderBookV2::new(Symbol(1), 0.01, 1.0);
+        let mut book = OrderBookV2::new(Symbol(1), Px::new(0.01), Qty::new(1.0));
 
         // First update
         assert!(

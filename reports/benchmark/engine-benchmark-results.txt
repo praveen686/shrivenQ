@@ -1,0 +1,45 @@
+    Finished `bench` profile [optimized] target(s) in 0.23s
+     Running unittests src/lib.rs (target/release/deps/engine-db91edd7b0fd40d9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/engine_bench.rs (target/release/deps/engine_bench-788f24e47b7294e6)
+Gnuplot not found, using plotters backend
+Benchmarking memory_pool/object_pool_acquire_release
+Benchmarking memory_pool/object_pool_acquire_release: Warming up for 3.0000 s
+Benchmarking memory_pool/object_pool_acquire_release: Collecting 100 samples in estimated 5.0001 s (190M iterations)
+Benchmarking memory_pool/object_pool_acquire_release: Analyzing
+memory_pool/object_pool_acquire_release
+                        time:   [23.662 ns 23.997 ns 24.357 ns]
+                        change: [-2.3310% +0.5633% +3.5208%] (p = 0.71 > 0.05)
+                        No change in performance detected.
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+Benchmarking memory_pool/arena_allocation
+Benchmarking memory_pool/arena_allocation: Warming up for 3.0000 s
+Benchmarking memory_pool/arena_allocation: Collecting 100 samples in estimated 5.0000 s (548M iterations)
+Benchmarking memory_pool/arena_allocation: Analyzing
+memory_pool/arena_allocation
+                        time:   [8.9201 ns 9.1051 ns 9.2901 ns]
+                        change: [+1.1131% +3.8675% +6.5403%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+
+Benchmarking risk_checks/risk_order_check
+Benchmarking risk_checks/risk_order_check: Warming up for 3.0000 s
+Benchmarking risk_checks/risk_order_check: Collecting 100 samples in estimated 5.0003 s (50M iterations)
+Benchmarking risk_checks/risk_order_check: Analyzing
+risk_checks/risk_order_check
+                        time:   [94.580 ns 97.301 ns 100.04 ns]
+
+Benchmarking order_execution/paper_order_execution
+Benchmarking order_execution/paper_order_execution: Warming up for 3.0000 s
+Benchmarking order_execution/paper_order_execution: Collecting 100 samples in estimated 5.0006 s (35M iterations)
+Benchmarking order_execution/paper_order_execution: Analyzing
+order_execution/paper_order_execution
+                        time:   [139.61 ns 143.50 ns 147.51 ns]
+Benchmarking order_execution/backtest_order_execution
+Benchmarking order_execution/backtest_order_execution: Warming up for 3.0000 s
+Benchmarking order_execution/backtest_order_execution: Collecting 100 samples in estimated 5.0001 s (35M iterations)

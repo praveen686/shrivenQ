@@ -40,8 +40,8 @@ impl Position {
     /// Update position with fill - LOCK-FREE
     #[inline(always)]
     pub fn apply_fill(&self, side: u8, qty: Qty, price: Px, ts: Ts) {
-        let qty_raw = qty.raw() as i64;
-        let price_raw = (price.as_f64() * 100.0) as u64;
+        let qty_raw = qty.raw();
+        let price_raw = price.as_i64().unsigned_abs();
 
         // Determine quantity delta
         let qty_delta = if side == 0 { qty_raw } else { -qty_raw }; // Buy = 0, Sell = 1
@@ -57,8 +57,9 @@ impl Position {
             let new_avg = if old_qty == 0 {
                 price_raw
             } else {
-                ((old_avg * old_qty.abs() as u64) + (price_raw * qty_raw.abs() as u64))
-                    / (old_qty.abs() + qty_raw.abs()) as u64
+                ((old_avg * u64::try_from(old_qty.abs()).unwrap_or(0))
+                    + (price_raw * u64::try_from(qty_raw.abs()).unwrap_or(0)))
+                    / u64::try_from(old_qty.abs() + qty_raw.abs()).unwrap_or(1)
             };
             self.avg_price.store(new_avg, Ordering::Release);
         } else if old_qty != 0 && new_qty * old_qty <= 0 {
@@ -67,10 +68,12 @@ impl Position {
             let closed_qty = old_qty.abs().min(qty_raw.abs());
             let pnl = if old_qty > 0 {
                 // Was long, now selling
-                (price_raw as i64 - old_avg as i64) * closed_qty
+                (i64::try_from(price_raw).unwrap_or(0) - i64::try_from(old_avg).unwrap_or(0))
+                    * closed_qty
             } else {
                 // Was short, now buying
-                (old_avg as i64 - price_raw as i64) * closed_qty
+                (i64::try_from(old_avg).unwrap_or(0) - i64::try_from(price_raw).unwrap_or(0))
+                    * closed_qty
             };
 
             // Add to realized PnL
@@ -89,8 +92,8 @@ impl Position {
     /// Update market prices for unrealized PnL - LOCK-FREE
     #[inline(always)]
     pub fn update_market(&self, bid: Px, ask: Px, ts: Ts) {
-        let bid_raw = (bid.as_f64() * 100.0) as u64;
-        let ask_raw = (ask.as_f64() * 100.0) as u64;
+        let bid_raw = bid.as_i64().unsigned_abs();
+        let ask_raw = ask.as_i64().unsigned_abs();
 
         self.last_bid.store(bid_raw, Ordering::Relaxed);
         self.last_ask.store(ask_raw, Ordering::Relaxed);
@@ -102,9 +105,11 @@ impl Position {
             let mark_price = if qty > 0 { bid_raw } else { ask_raw };
 
             let unrealized = if qty > 0 {
-                (mark_price as i64 - avg_price as i64) * qty
+                (i64::try_from(mark_price).unwrap_or(0) - i64::try_from(avg_price).unwrap_or(0))
+                    * qty
             } else {
-                (avg_price as i64 - mark_price as i64) * qty.abs()
+                (i64::try_from(avg_price).unwrap_or(0) - i64::try_from(mark_price).unwrap_or(0))
+                    * qty.abs()
             };
 
             self.unrealized_pnl

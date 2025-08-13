@@ -35,7 +35,7 @@ git clone https://github.com/praveen686/shrivenQ.git
 cd shrivenQ
 
 # Run quality checks
-./scripts/compliance/strict-check.sh
+./scripts/compliance/run-compliance.sh
 
 # Start the platform with heartbeat monitoring
 cargo run -p cli -- dev up --heartbeat-ms 500
@@ -88,7 +88,7 @@ cargo run --bin market-data-service -- replay \
 - `crates/infra/auth/` - Multi-venue authentication (Zerodha, Binance)
 - `crates/market-data/lob/` - Ultra-fast order book engine with adapters & loaders
 - `crates/market-data/feeds/` - Market data adapters, WebSocket feeds & integration
-- `crates/trading/engine/` - Zero-allocation trading engine
+- `crates/trading/engine/` - Zero-allocation trading engine with lock-free memory pools
 - `crates/trading/sim/` - Simulation and backtesting framework
 - `crates/tools/cli/` - Command-line interface
 - `crates/tools/perf/` - Performance monitoring tools
@@ -108,7 +108,7 @@ cargo run --bin market-data-service -- replay \
 **Zero Tolerance Policy:**
 - ❌ No compiler warnings
 - ❌ No dead or unused code
-- ❌ No TODO/FIXME comments
+- ❌ No incomplete work markers
 - ❌ No `unwrap()`, `expect()`, `panic!`
 - ❌ No `println!`, `dbg!` macros
 - ❌ No missing documentation
@@ -282,3 +282,4 @@ For licensing inquiries: praveenkumar.avln@gmail.com
 ---
 
 ⭐ If you find ShrivenQ useful, please star the repository!
+# Trigger hooks

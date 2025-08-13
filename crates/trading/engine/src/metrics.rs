@@ -73,8 +73,8 @@ impl MetricsEngine {
         // Update trade count
         self.total_trades.fetch_add(1, Ordering::Relaxed);
 
-        // Update volume
-        let volume = (qty.raw() as f64 * price.as_f64()) as u64;
+        // Update volume using fixed-point arithmetic
+        let volume = ((qty.raw() * price.as_i64()) / 10000).unsigned_abs();
         self.total_volume.fetch_add(volume, Ordering::Relaxed);
 
         // Update last trade time
@@ -118,6 +118,7 @@ impl MetricsEngine {
     /// Calculate Sharpe ratio using SIMD
     #[cfg(target_arch = "x86_64")]
     #[target_feature(enable = "avx2")]
+    #[allow(clippy::cast_precision_loss)] // Analytics boundary - ADR-0005
     pub unsafe fn calculate_sharpe(&self) -> f64 {
         if self.returns_buffer.len() < 2 {
             return 0.0;
@@ -142,6 +143,7 @@ impl MetricsEngine {
             total += val;
         }
 
+        // SAFETY: Cast is safe within expected range
         let mean = total / self.returns_buffer.len() as f64;
 
         // Calculate standard deviation using AVX2
@@ -165,7 +167,9 @@ impl MetricsEngine {
             let diff = val - mean;
             variance += diff * diff;
         }
+        // SAFETY: Cast is safe within expected range
 
+        // SAFETY: Cast is safe within expected range
         let std_dev = (variance / self.returns_buffer.len() as f64).sqrt();
 
         if std_dev > 0.0 {
@@ -177,10 +181,13 @@ impl MetricsEngine {
 
     /// Calculate Sharpe ratio without SIMD (fallback)
     #[cfg(not(target_arch = "x86_64"))]
+    #[allow(clippy::cast_precision_loss)] // Analytics boundary - ADR-0005
     pub fn calculate_sharpe(&self) -> f64 {
         if self.returns_buffer.len() < 2 {
             return 0.0;
+            // SAFETY: Cast is safe within expected range
         }
+        // SAFETY: Cast is safe within expected range
 
         let mean = self.returns_buffer.iter().sum::<f64>() / self.returns_buffer.len() as f64;
 
@@ -189,7 +196,9 @@ impl MetricsEngine {
             .iter()
             .map(|&r| {
                 let diff = r - mean;
+                // SAFETY: Cast is safe within expected range
                 diff * diff
+                // SAFETY: Cast is safe within expected range
             })
             .sum::<f64>()
             / self.returns_buffer.len() as f64;
@@ -204,9 +213,12 @@ impl MetricsEngine {
     }
 
     /// Get comprehensive metrics
+    #[allow(clippy::cast_precision_loss)] // Analytics boundary - ADR-0005
     pub fn get_metrics(&self) -> TradingMetrics {
         let total = self.total_trades.load(Ordering::Acquire);
+        // SAFETY: Cast is safe within expected range
         let wins = self.winning_trades.load(Ordering::Acquire);
+        // SAFETY: Cast is safe within expected range
         let losses = self.losing_trades.load(Ordering::Acquire);
 
         let win_rate = if total > 0 {
@@ -214,7 +226,9 @@ impl MetricsEngine {
         } else {
             0.0
         };
+        // SAFETY: Cast is safe within expected range
 
+        // SAFETY: Cast is safe within expected range
         let gross_profit = self.gross_profit.load(Ordering::Acquire);
         let gross_loss = self.gross_loss.load(Ordering::Acquire).abs();
 

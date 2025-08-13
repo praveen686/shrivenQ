@@ -54,17 +54,14 @@ const MAX_SIZE: usize = 1024;         // Named constants
 ## 🔧 BEFORE COMMITTING
 
 ```bash
-# 1. Run compliance check
-./compliance/agent-compliance-check.sh
+# 1. Run comprehensive compliance check
+./scripts/compliance/run-compliance.sh --details
 
-# 2. Get detailed report  
-./compliance/compliance-summary.sh
+# 2. Run with strict thresholds
+./scripts/compliance/run-compliance.sh --strict
 
-# 3. Full validation
-./compliance/strict-check.sh
-
-# 4. Initialize if new agent
-./compliance/initialize-agent.sh your_agent_id
+# 3. Check risk limits
+./scripts/compliance/validate-risk-limits.sh
 ```
 
 ---

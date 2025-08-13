@@ -48,6 +48,10 @@ rustc-hash = "2.0"
 criterion = { workspace = true }
 tokio-test = "0.4"
 
+[features]
+default = []
+test-utils = []  # Expose test utilities for benchmarks and integration tests
+
 
 [[bin]]
 name = "instrument-service"

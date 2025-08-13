@@ -12,9 +12,13 @@ fn create_test_event(i: u64) -> WalEvent {
     WalEvent::Tick(TickEvent {
         ts: Ts::from_nanos(i * 1000),
         venue: "benchmark".to_string(),
+        // SAFETY: Cast is safe within expected range
         symbol: Symbol::new((i % 100) as u32),
+        // SAFETY: Cast is safe within expected range
         bid: Some(Px::new((i as f64).mul_add(0.01, 100.0))),
+        // SAFETY: Cast is safe within expected range
         ask: Some(Px::new((i as f64).mul_add(0.01, 100.5))),
+        // SAFETY: Cast is safe within expected range
         last: Some(Px::new((i as f64).mul_add(0.01, 100.25))),
         volume: Some(Qty::new(1000.0 + i as f64)),
     })
@@ -213,7 +217,8 @@ fn benchmark_segment_rotation(c: &mut Criterion) {
                         std::process::exit(1);
                     }
                 };
-                let wal = match Wal::new(temp_dir.path(), Some(10 * 1024)) { // 10KB segments
+                let wal = match Wal::new(temp_dir.path(), Some(10 * 1024)) {
+                    // 10KB segments
                     Ok(w) => w,
                     Err(e) => {
                         eprintln!("Benchmark setup failed: Could not create WAL: {}", e);

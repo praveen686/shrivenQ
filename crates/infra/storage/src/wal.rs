@@ -137,7 +137,7 @@ impl Wal {
     /// Returns an error if file system operations fail while gathering statistics.
     pub fn stats(&self) -> Result<WalStats> {
         let segments = Self::list_segments(&self.dir)?;
-        let segment_count = segments.len() as u64;
+        let segment_count = u64::try_from(segments.len()).unwrap_or(0);
 
         let mut total_size = 0;
         let mut total_entries = 0;

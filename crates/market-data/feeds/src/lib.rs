@@ -14,6 +14,7 @@ pub mod zerodha;
 
 // Common components
 pub mod common;
+pub mod display_utils;
 
 // Integration modules
 pub mod integration;

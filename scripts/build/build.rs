@@ -192,7 +192,10 @@ fn check_dependencies() {
             eprintln!("{}", String::from_utf8_lossy(&output.stdout));
             exit(1);
         }
-        Err(_) => println!("⚠️  cargo-audit not installed, run: cargo install cargo-audit"),
+        Err(e) => {
+            eprintln!("⚠️  cargo-audit not available: {}", e);
+            println!("   Run: cargo install cargo-audit");
+        }
     }
 }
 
@@ -206,7 +209,7 @@ fn optimize_binaries() {
 
     match strip {
         Ok(_) => println!("  ✅ Stripped debug symbols"),
-        Err(_) => println!("  ⚠️  strip not available, skipping"),
+        Err(e) => println!("  ⚠️  strip not available ({}), skipping", e),
     }
 
     // UPX compression (if upx is available)
@@ -216,7 +219,7 @@ fn optimize_binaries() {
 
     match upx {
         Ok(_) => println!("  ✅ Compressed binary with UPX"),
-        Err(_) => println!("  ⚠️  UPX not available, skipping compression"),
+        Err(e) => println!("  ⚠️  UPX not available ({}), skipping compression", e),
     }
 }
 

@@ -72,6 +72,11 @@ fn process_tick() {
 let price = 123.45_f64;  // Precision errors!
 let quantity = price * 1000.0;  // Rounding errors!
 
+// ✅ DO: Use fixed-point types for all financial calculations
+use common::{Px, Qty};
+let price = Px::from_i64(1234500);  // Fixed-point: 123.45
+let quantity = Qty::from_units(1000);  // Exact representation
+
 // ❌ DON'T: Use std::collections::HashMap in hot paths
 use std::collections::HashMap;  // Too slow
 let mut map = HashMap::new();
@@ -87,6 +92,64 @@ let msg = format!("Price: {}", price);  // String allocation
 ```
 
 ---
+
+## Numeric Types and Precision
+
+### Fixed-Point Arithmetic (MANDATORY)
+
+All financial calculations MUST use fixed-point arithmetic:
+
+```rust
+// ✅ CORRECT: Fixed-point types
+use common::{Px, Qty};
+
+let price = Px::new(100.50);      // Stored as i64: 1005000 (4 decimal places)
+let qty = Qty::from_units(100);   // Stored as i64: 1000000 (4 decimal places)
+let notional = price.mul_qty(qty); // Exact calculation, no precision loss
+
+// ❌ WRONG: Floating-point for money
+let price = 100.50_f64;            // Cannot exactly represent 0.50
+let qty = 100.0;
+let notional = price * qty;        // Accumulates rounding errors
+```
+
+### API Boundary Conversions
+
+Floating-point is ONLY allowed at system boundaries:
+
+```rust
+// ✅ CORRECT: Convert at API boundary only
+impl Px {
+    // Only for external APIs that require f64
+    #[allow(clippy::cast_precision_loss)]  // Documented exception
+    pub fn as_f64(&self) -> f64 {
+        self.0 as f64 / 10000.0
+    }
+}
+
+// ❌ WRONG: Using floats internally
+fn calculate_pnl(entry: f64, exit: f64) -> f64 {  // NO!
+    exit - entry  // Precision loss
+}
+```
+
+### Unsafe Numeric Casts
+
+ALL numeric casts must be checked:
+
+```rust
+// ✅ CORRECT: Safe conversions
+let value: u32 = 42;
+let safe_i64 = i64::from(value);  // Widening conversion, always safe
+let safe_i32 = i32::try_from(value).unwrap_or(0);  // Checked conversion
+
+// ❌ WRONG: Unsafe casts
+let value: u32 = 42;
+let unsafe_i32 = value as i32;  // Can overflow!
+let unsafe_f64 = value as f64;  // Precision loss for large values
+```
+
+See [ADR-0003: Fixed-Point Arithmetic](../architecture/decisions/0003-fixed-point-arithmetic.md) for detailed rationale.
 
 ## Memory Management
 
@@ -583,7 +646,7 @@ let _guard = mutex.lock();  // Legitimate underscore for guard/phantom types
 
 // ❌ SHORTCUT COMMENTS - Don't leave unfinished work
 fn calculate_risk() -> f64 {
-    // TODO: implement proper risk calculation
+    // INCOMPLETE: implement proper risk calculation
     0.0  // Placeholder return
 }
 
@@ -684,6 +747,94 @@ match result {
         log::error!("Order processing failed: {}", e);
         return Err(ProcessingError::OrderValidation(e));
     }
+}
+
+// ❌ TYPE ANNOTATION SHORTCUTS - Don't let compiler infer critical types
+let price = 123.45;  // Is this f32? f64? Agent doesn't specify!
+let quantity = calculate_qty();  // What type is returned?
+
+// ✅ CORRECT - Explicit type annotations for clarity
+let price: Price = Price::from_cents(12345);  // Clear fixed-point type
+let quantity: Quantity = calculate_qty();  // Explicit type
+
+// ❌ IF-ELSE SHORTCUTS - Don't use if-else for simple value returns
+fn get_fee_rate(vip_level: u8) -> f64 {
+    if vip_level > 5 {
+        0.001
+    } else if vip_level > 3 {
+        0.002
+    } else {
+        0.003
+    }  // Should use match for exhaustive handling
+}
+
+// ✅ CORRECT - Use match for exhaustive pattern matching
+fn get_fee_rate(vip_level: VipLevel) -> FeeRate {
+    match vip_level {
+        VipLevel::Platinum => FeeRate::from_basis_points(10),
+        VipLevel::Gold => FeeRate::from_basis_points(20),
+        VipLevel::Silver | VipLevel::Bronze => FeeRate::from_basis_points(30),
+    }
+}
+
+// ❌ LOOP SHORTCUTS - Don't use while true or loop without clear exit
+loop {
+    if condition {
+        break;  // Hidden exit condition
+    }
+    process();
+}
+
+// ✅ CORRECT - Clear loop conditions
+while !should_stop() {
+    process();
+}
+
+// ❌ IMPORT SHORTCUTS - Don't use wildcard imports
+use std::collections::*;  // Imports everything
+use crate::utils::*;  // Unclear dependencies
+
+// ✅ CORRECT - Explicit imports
+use std::collections::{HashMap, HashSet};
+use crate::utils::{calculate_risk, validate_order};
+
+// ❌ RESULT SHORTCUTS - Don't use .ok() to ignore errors
+let value = parse_price(input).ok().unwrap_or(0);  // Error context lost
+
+// ✅ CORRECT - Preserve error context
+let value = parse_price(input)
+    .map_err(|e| log::warn!("Failed to parse price: {}", e))
+    .unwrap_or_else(|_| Price::zero());
+
+// ❌ UNSAFE SHORTCUTS - Don't use unsafe without safety documentation
+unsafe {
+    let data = std::mem::transmute(bytes);  // No safety justification
+}
+
+// ✅ CORRECT - Document safety invariants
+// SAFETY: bytes is guaranteed to be properly aligned and sized
+// from the validated network protocol parser
+unsafe {
+    debug_assert_eq!(bytes.len(), std::mem::size_of::<MarketData>());
+    debug_assert_eq!(bytes.as_ptr() as usize % std::mem::align_of::<MarketData>(), 0);
+    std::ptr::read(bytes.as_ptr() as *const MarketData)
+}
+
+// ❌ TESTING SHORTCUTS - Don't write tests without assertions
+#[test]
+fn test_order_processing() {
+    let order = create_order();
+    process_order(order);  // No assertion!
+}
+
+// ✅ CORRECT - Comprehensive test assertions
+#[test]
+fn test_order_processing() {
+    let order = create_order();
+    let result = process_order(order);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().trades.len(), 2);
+    assert!(result.unwrap().total_volume > Quantity::zero());
 }
 ```
 

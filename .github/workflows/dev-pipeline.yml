@@ -1,0 +1,206 @@
+name: Dev Pipeline - Feature Branches
+
+# Triggered on any push to feature branches (not main)
+on:
+  push:
+    branches-ignore:
+      - main
+      - staging
+      - production
+  pull_request:
+    branches:
+      - main
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  # Stage 1: Quick validation (fails fast)
+  quick-check:
+    name: Quick Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/compliance/*.sh
+          chmod +x scripts/performance/*.sh
+      
+      # REPLICATE PRE-COMMIT CHECKS
+      - name: ShrivenQuant Compliance Check
+        run: |
+          echo "Running comprehensive compliance check..."
+          # Use CI-specific script that doesn't depend on external tools
+          ./scripts/compliance/run-compliance-ci.sh || 
+            (echo "::error::Compliance check failed" && exit 1)
+      
+      # TODO/FIXME check now handled by compliance checker
+      
+      - name: Check formatting
+        run: cargo fmt -- --check
+      
+      - name: Quick compile check
+        run: cargo check --all-features
+
+  # Stage 2: Full testing suite
+  test-suite:
+    name: Dev Testing Suite
+    needs: quick-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build all components
+        run: cargo build --all --all-features
+      
+      - name: Run unit tests
+        run: cargo test --all --lib
+      
+      - name: Run integration tests
+        run: cargo test --all --test '*'
+      
+      - name: Run doc tests
+        run: cargo test --all --doc
+      
+      - name: Clippy analysis
+        run: cargo clippy --all --all-features -- -D warnings
+      
+      - name: Check for unsafe code
+        run: |
+          echo "Checking for unsafe code in production..."
+          ! grep -r "unsafe {" crates/*/src --include="*.rs" || echo "::warning::Unsafe code detected"
+      
+      # ADDITIONAL PRE-COMMIT CHECKS
+      - name: Check for unsafe numeric casts
+        run: |
+          echo "Checking for unsafe numeric casts..."
+          ! grep -r "as u\|as i\|as f" crates/*/src --include="*.rs" | \
+            grep -v "// SAFETY:\|// Safe:\|#\[allow" || \
+            echo "::warning::Potential unsafe numeric casts detected"
+      
+      - name: Verify no panics in production
+        run: |
+          echo "Checking for panic/unwrap/expect..."
+          ! grep -r "panic!\|unwrap()\|expect(" crates/*/src --include="*.rs" | \
+            grep -v "// TEST:\|#\[cfg(test)\]" || \
+            echo "::warning::Potential panics in production code"
+
+  # Stage 3: Performance validation
+  performance-check:
+    name: Performance Validation
+    needs: quick-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Make performance scripts executable
+        run: chmod +x scripts/performance/*.sh || true
+      
+      - name: Run benchmarks
+        run: |
+          cargo bench --package engine -- --output-format bencher | tee output.txt
+      
+      # REPLICATE PERFORMANCE VALIDATION FROM PRE-COMMIT
+      - name: Validate performance against baseline
+        run: |
+          echo "Checking performance baseline..."
+          if [ -f "reports/benchmark/baselines/current.json" ]; then
+            ./scripts/performance/validate-performance.sh || \
+              echo "::warning::Performance regression detected"
+          else
+            echo "No baseline found, skipping comparison"
+          fi
+          
+      - name: Check for allocations in hot path
+        run: |
+          echo "Checking for allocations in hot paths..."
+          ! grep -r "String::from\|to_string()\|format!\|Vec::new()\|Box::new\|Arc::new" \
+            crates/trading/engine/src/core.rs \
+            crates/trading/engine/src/execution.rs \
+            crates/trading/engine/src/risk.rs \
+            --include="*.rs" || echo "::warning::Potential allocation in hot path"
+      
+      - name: Memory allocation check
+        run: |
+          echo "Checking for heap allocations in critical paths..."
+          ! grep -r "clone()" crates/trading/engine/src --include="*.rs" | \
+            grep -v "// OK:\|#\[cfg(test)\]\|Arc::clone" || \
+            echo "::warning::Unnecessary clones detected"
+      
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: output.txt
+
+  # Stage 4: Security audit
+  security-audit:
+    name: Security Audit
+    needs: quick-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run cargo audit
+        uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Check for exposed secrets
+        run: |
+          echo "Checking for hardcoded secrets..."
+          ! grep -r "api_key\|api_secret\|password\|token" crates/ --include="*.rs" | grep -v "// \|pub struct\|fn\|let.*=.*env" || echo "::warning::Potential secret exposure"
+
+  # Stage 5: Generate test report
+  test-report:
+    name: Generate Dev Report
+    needs: [test-suite, performance-check, security-audit]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Create test summary
+        run: |
+          echo "# Dev Pipeline Report" >> $GITHUB_STEP_SUMMARY
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "- Unit Tests: ${{ needs.test-suite.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Performance: ${{ needs.performance-check.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Security: ${{ needs.security-audit.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "## Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY

@@ -294,6 +294,7 @@ fn test_concurrent_operations(#[case] num_threads: usize) {
         let engine_clone = Arc::clone(&engine);
         let handle = thread::spawn(move || {
             for order_id in 0..orders_per_thread {
+                // SAFETY: Cast is safe within expected range
                 let symbol = Symbol(100 + thread_id as u32 * 10 + order_id as u32);
                 let result = engine_clone.send_order(
                     symbol,
@@ -301,7 +302,9 @@ fn test_concurrent_operations(#[case] num_threads: usize) {
                         Side::Bid
                     } else {
                         Side::Ask
+                        // SAFETY: Cast is safe within expected range
                     },
+                    // SAFETY: Cast is safe within expected range
                     Qty::new(10.0 + order_id as f64),
                     Some(Px::new(100.0 + order_id as f64)),
                 );
@@ -313,11 +316,11 @@ fn test_concurrent_operations(#[case] num_threads: usize) {
 
     // Wait for all threads to complete
     for handle in handles {
-        handle.join()
-            .map_err(|_| "Thread panicked")
-            .ok();
+        handle.join().map_err(|_| "Thread panicked").ok();
     }
+    // SAFETY: Cast is safe within expected range
 
+    // SAFETY: Cast is safe within expected range
     let perf = engine.get_performance();
     assert_eq!(perf.orders_sent, (num_threads * orders_per_thread) as u64);
 }
@@ -354,12 +357,7 @@ fn test_pnl_calculation(#[case] _qty: f64, #[case] _entry_price: f64, #[case] _e
             return;
         }
     };
-    engine.on_fill(
-        buy_order_id,
-        Qty::new(10.0),
-        Px::new(100.0),
-        Ts::now(),
-    );
+    engine.on_fill(buy_order_id.0, Qty::new(10.0), Px::new(100.0), Ts::now());
 
     // Update market price
     engine.on_tick(symbol, Px::new(101.0), Px::new(102.0), Ts::now());

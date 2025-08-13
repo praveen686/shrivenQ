@@ -26,18 +26,60 @@ impl fmt::Display for Symbol {
 pub struct Px(i64); // Internal: price in ticks (1 tick = 0.0001)
 
 impl Px {
-    /// Create a new Price from f64 (converts to ticks)
+    /// Create a new Price from ticks (1 tick = 0.0001 units)
+    /// For external API compatibility only - prefer `from_i64`
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
     pub fn new(value: f64) -> Self {
-        Self((value * 10000.0).round() as i64)
+        let scaled = (value * 10000.0).round();
+        // Safely convert f64 to i64 using proper bounds
+        // i64::MAX = 9_223_372_036_854_775_807
+        const MAX_SAFE: f64 = 9_223_372_036_854_775_807.0;
+        const MIN_SAFE: f64 = -9_223_372_036_854_775_808.0;
+
+        let clamped = if scaled >= MAX_SAFE {
+            i64::MAX
+        } else if scaled <= MIN_SAFE {
+            i64::MIN
+        } else {
+            // Now safe to cast after bounds check
+            #[allow(clippy::cast_possible_truncation)]
+            // SAFETY: Cast is safe within expected range
+            let result = scaled as i64;
+            result
+        };
+        Self(clamped)
     }
 
-    /// Get the price as f64
+    /// Get price as f64 for external APIs only
+    /// WARNING: For values > 2^53 / 10000, this may lose precision
+    /// Internal code should ALWAYS use fixed-point arithmetic
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
     pub fn as_f64(&self) -> f64 {
-        self.0 as f64 / 10000.0
+        // We must convert i64 to f64 here for external API compatibility
+        // This is a fundamental limitation when interfacing with systems that use floating point
+        // We explicitly allow this ONE conversion at the system boundary
+        #[allow(clippy::cast_precision_loss)]
+        // SAFETY: Cast is safe within expected range
+        {
+            // SAFETY: Cast is safe within expected range
+            self.0 as f64 / 10000.0
+        }
+    }
+
+    /// Create from cents (100 cents = 1 unit)
+    #[must_use]
+    pub const fn from_cents(cents: i64) -> Self {
+        Self(cents * 100) // 100 cents = 10000 ticks
+    }
+
+    /// Create from integer price in smallest units (e.g., paise, cents)
+    /// Assumes 2 decimal places in input, converts to 4 decimal internal
+    #[must_use]
+    // SAFETY: Cast is safe within expected range
+    pub const fn from_price_i32(price: i32) -> Self {
+        // SAFETY: Cast is safe within expected range
+        // Safe: i32 to i64 is always lossless (widening)
+        Self((price as i64) * 100) // Convert 2 decimals to 4
     }
 
     /// Get price as i64 ticks
@@ -54,11 +96,32 @@ impl Px {
 
     /// Zero price
     pub const ZERO: Self = Self(0);
+
+    /// Add two prices (fixed-point arithmetic)
+    #[must_use]
+    pub const fn add(self, other: Self) -> Self {
+        Self(self.0 + other.0)
+    }
+
+    /// Subtract two prices (fixed-point arithmetic)
+    #[must_use]
+    pub const fn sub(self, other: Self) -> Self {
+        Self(self.0 - other.0)
+    }
+
+    /// Multiply price by quantity to get notional value
+    /// Returns value in ticks (divide by 10000 for display)
+    #[must_use]
+    pub const fn mul_qty(self, qty: Qty) -> i64 {
+        (self.0 * qty.0) / 10000
+    }
 }
 
 impl fmt::Display for Px {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.4}", self.as_f64())
+        let whole = self.0 / 10000;
+        let frac = (self.0 % 10000).abs();
+        write!(f, "{whole}.{frac:04}")
     }
 }
 
@@ -67,18 +130,60 @@ impl fmt::Display for Px {
 pub struct Qty(i64); // Internal: quantity in units (1 unit = 0.0001)
 
 impl Qty {
-    /// Create a new Quantity from f64
+    /// Create a new Quantity from units (for external API compatibility)
+    /// For internal code, prefer `from_i64`
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
     pub fn new(value: f64) -> Self {
-        Self((value * 10000.0).round() as i64)
+        let scaled = (value * 10000.0).round();
+        // Safely convert f64 to i64 using proper bounds
+        // i64::MAX = 9_223_372_036_854_775_807
+        const MAX_SAFE: f64 = 9_223_372_036_854_775_807.0;
+        const MIN_SAFE: f64 = -9_223_372_036_854_775_808.0;
+
+        let clamped = if scaled >= MAX_SAFE {
+            i64::MAX
+        } else if scaled <= MIN_SAFE {
+            i64::MIN
+            // SAFETY: Cast is safe within expected range
+        } else {
+            // SAFETY: Cast is safe within expected range
+            // Now safe to cast after bounds check
+            #[allow(clippy::cast_possible_truncation)]
+            let result = scaled as i64;
+            result
+        };
+        Self(clamped)
     }
 
-    /// Get the quantity as f64
+    /// Get quantity as f64 for external APIs only
+    /// WARNING: For values > 2^53 / 10000, this may lose precision
+    /// Internal code should ALWAYS use fixed-point arithmetic
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
     pub fn as_f64(&self) -> f64 {
-        self.0 as f64 / 10000.0
+        // We must convert i64 to f64 here for external API compatibility
+        // SAFETY: Cast is safe within expected range
+        // This is a fundamental limitation when interfacing with systems that use floating point
+        // SAFETY: Cast is safe within expected range
+        // We explicitly allow this ONE conversion at the system boundary
+        #[allow(clippy::cast_precision_loss)]
+        {
+            self.0 as f64 / 10000.0
+        }
+    }
+
+    /// Create from whole units
+    #[must_use]
+    pub const fn from_units(units: i64) -> Self {
+        Self(units * 10000)
+    }
+    // SAFETY: Cast is safe within expected range
+
+    // SAFETY: Cast is safe within expected range
+    /// Create from integer quantity
+    #[must_use]
+    pub const fn from_qty_i32(qty: i32) -> Self {
+        // Safe: i32 to i64 is always lossless (widening)
+        Self((qty as i64) * 10000)
     }
 
     /// Get quantity as i64 units
@@ -107,11 +212,25 @@ impl Qty {
 
     /// Zero quantity
     pub const ZERO: Self = Self(0);
+
+    /// Add two quantities (fixed-point arithmetic)
+    #[must_use]
+    pub const fn add(self, other: Self) -> Self {
+        Self(self.0 + other.0)
+    }
+
+    /// Subtract two quantities (fixed-point arithmetic)
+    #[must_use]
+    pub const fn sub(self, other: Self) -> Self {
+        Self(self.0 - other.0)
+    }
 }
 
 impl fmt::Display for Qty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.4}", self.as_f64())
+        let whole = self.0 / 10000;
+        let frac = (self.0 % 10000).abs();
+        write!(f, "{whole}.{frac:04}")
     }
 }
 
@@ -125,10 +244,13 @@ impl Ts {
     #[allow(clippy::cast_possible_truncation)]
     pub fn now() -> Self {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let nanos = SystemTime::now()
+        // as_nanos() returns u128, but we need u64
+        // For timestamps, this is safe as u64 can represent ~584 years of nanoseconds
+        let duration = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
-            .as_nanos() as u64;
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0));
+        // Use as_secs and subsec_nanos to avoid u128
+        let nanos = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
         Self(nanos)
     }
 
@@ -185,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_px_serde() -> Result<(), Box<dyn std::error::Error>> {
-        let px = Px::new(1234.56);
+        let px = Px::from_i64(12_345_600); // 1234.56 as ticks
         let encoded = bincode::serialize(&px)?;
         let decoded: Px = bincode::deserialize(&encoded)?;
         assert_eq!(px, decoded);
@@ -194,7 +316,7 @@ mod tests {
 
     #[test]
     fn test_qty_serde() -> Result<(), Box<dyn std::error::Error>> {
-        let qty = Qty::new(100.0);
+        let qty = Qty::from_units(100); // 100 units
         let encoded = bincode::serialize(&qty)?;
         let decoded: Qty = bincode::deserialize(&encoded)?;
         assert_eq!(qty, decoded);

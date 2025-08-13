@@ -165,6 +165,17 @@ pub struct Position {
 - Arena allocators for bulk operations
 - Stack allocators for temporary data
 
+## Performance Guidelines
+
+For detailed performance best practices, see [Performance Guidelines](../performance/guidelines.md).
+
+Key principles:
+- **Zero allocations in hot paths** - Use object pools and pre-allocation
+- **Copy for small POD types** - Avoid Arc for types <64 bytes
+- **Cache-line alignment** - Prevent false sharing in concurrent code
+- **Static errors** - Replace String errors with enums
+- **Lock-free algorithms** - Use atomics instead of mutexes
+
 ## Performance Optimizations
 
 ### 1. Branch-Free Code
@@ -263,6 +274,8 @@ pub const fn new() -> Self  // Compile-time construction
 Key architectural decisions documented for future reference:
 
 - [ADR-001: Dependency Version Management Strategy](./ADR-001-dependency-management.md) - How we handle transitive dependency conflicts
+- [ADR-006: Memory Pool Design](./decisions/0006-memory-pool-design.md) - Lock-free memory pools with RAII
+- [ADR-007: Zero-Copy and Clone Elimination Philosophy](./decisions/0007-zero-copy-philosophy.md) - When to use Copy, Arc, and borrows
 
 ### ADR-001: Rust as Primary Language
 **Status:** Accepted  

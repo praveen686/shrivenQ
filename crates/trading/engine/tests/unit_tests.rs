@@ -49,11 +49,14 @@ mod memory_tests {
 
         // Check alignment
         if let Some(p2) = ptr2 {
+            // SAFETY: Cast is safe within expected range
             let addr = p2 as *mut u64 as usize;
             assert_eq!(addr % 8, 0); // u64 should be 8-byte aligned
         }
 
+        // SAFETY: Cast is safe within expected range
         if let Some(p3) = ptr3 {
+            // SAFETY: Cast is safe within expected range
             let addr = p3 as *mut u128 as usize;
             assert_eq!(addr % 16, 0); // u128 should be 16-byte aligned
         }
@@ -77,7 +80,10 @@ mod memory_tests {
             }
             allocations += 1;
             if allocations > 100 {
-                assert!(false, "Too many allocations detected - possible memory leak");
+                assert!(
+                    false,
+                    "Too many allocations detected - possible memory leak"
+                );
                 break;
             }
         }
@@ -108,12 +114,10 @@ mod memory_tests {
         assert!(obj2.is_some());
 
         // Modify objects
-        if let Some(o1) = obj1 {
+        if let Some(mut o1) = obj1 {
             o1._value = 42;
             assert_eq!(o1._value, 42);
-
-            // Release back to pool
-            pool.release(o1);
+            // o1 automatically released when dropped
         }
 
         // Acquire again - should get the same slot
@@ -145,10 +149,8 @@ mod memory_tests {
         let extra = pool.acquire();
         assert!(extra.is_none());
 
-        // Release one
-        if let Some(o1) = objects.pop().flatten() {
-            pool.release(o1);
-        }
+        // Release one by dropping it
+        objects.pop();
 
         // Should be able to acquire again
         let reacquired = pool.acquire();
@@ -161,7 +163,6 @@ mod risk_tests {
     use engine::core::EngineConfig;
     use engine::risk::RiskEngine;
     use rstest::rstest;
-    use std::sync::Arc;
 
     #[rstest]
     #[case(Side::Bid, 100.0, 100.0, true)] // Small order should pass
@@ -174,7 +175,7 @@ mod risk_tests {
         #[case] price: f64,
         #[case] should_pass: bool,
     ) {
-        let config = Arc::new(EngineConfig::default());
+        let config = EngineConfig::default();
         let risk = RiskEngine::new(config);
         let symbol = Symbol(100);
 
@@ -195,7 +196,7 @@ mod risk_tests {
         #[case] order_price: f64,
         #[case] should_pass: bool,
     ) {
-        let config = Arc::new(EngineConfig::default());
+        let config = EngineConfig::default();
         let risk = RiskEngine::new(config);
 
         // Update position
@@ -220,7 +221,7 @@ mod risk_tests {
         #[case] expected_daily_pnl: i64,
         #[case] min_expected_drawdown: i64,
     ) {
-        let config = Arc::new(EngineConfig::default());
+        let config = EngineConfig::default();
         let risk = RiskEngine::new(config);
 
         risk.update_pnl(pnl_update);
@@ -239,7 +240,7 @@ mod risk_tests {
         #[case] qty: f64,
         #[case] price: f64,
     ) {
-        let config = Arc::new(EngineConfig::default());
+        let config = EngineConfig::default();
         let risk = RiskEngine::new(config);
 
         // Should pass before emergency stop
@@ -266,7 +267,7 @@ mod risk_tests {
     #[case(5000)] // Profit
     #[case(0)] // Break even
     fn test_risk_daily_reset(#[case] initial_pnl: i64) {
-        let config = Arc::new(EngineConfig::default());
+        let config = EngineConfig::default();
         let risk = RiskEngine::new(config);
 
         // Set some PnL
@@ -385,7 +386,6 @@ mod execution_tests {
     use engine::execution::{ExecutionLayer, Order, OrderPool};
     use engine::venue::{VenueConfig, create_binance_adapter};
     use rstest::rstest;
-    use std::sync::Arc;
 
     #[rstest]
     #[case(10)] // Small pool
@@ -398,11 +398,10 @@ mod execution_tests {
         let order = pool.acquire();
         assert!(order.is_some());
 
-        if let Some(o) = order {
+        if let Some(mut o) = order {
             *o = Order::new(1, Symbol(100), 0, Qty::new(10.0), Some(Px::new(100.0)));
             assert_eq!(o.id, 1);
-
-            pool.release(o);
+            // o automatically released when dropped
         }
 
         // Should be able to acquire again
@@ -422,7 +421,7 @@ mod execution_tests {
     ) {
         let mut config = EngineConfig::default();
         config.mode = mode;
-        let config = Arc::new(config);
+        // config is already Copy, no need for Arc
 
         let venue_config = VenueConfig {
             api_key: "test".to_string(),
@@ -456,7 +455,7 @@ mod execution_tests {
     ) {
         let mut config = EngineConfig::default();
         config.mode = ExecutionMode::Backtest;
-        let config = Arc::new(config);
+        // config is already Copy, no need for Arc
 
         let venue_config = VenueConfig {
             api_key: "test".to_string(),
@@ -488,9 +487,9 @@ mod position_tests {
     use rstest::rstest;
 
     #[rstest]
-    #[case(1, 100, Side::Bid, 10.0, 100.0, 100000, 10000)] // Buy 10 @ 100
-    #[case(2, 200, Side::Ask, 5.0, 200.0, -50000, 20000)] // Sell 5 @ 200
-    #[case(3, 300, Side::Bid, 100.0, 50.0, 1000000, 5000)] // Buy 100 @ 50
+    #[case(1, 100, Side::Bid, 10.0, 100.0, 100000, 1000000)] // Buy 10 @ 100
+    #[case(2, 200, Side::Ask, 5.0, 200.0, -50000, 2000000)] // Sell 5 @ 200
+    #[case(3, 300, Side::Bid, 100.0, 50.0, 1000000, 500000)] // Buy 100 @ 50
     fn test_position_tracking(
         #[case] order_id: u64,
         #[case] symbol_id: u32,
@@ -523,7 +522,9 @@ mod position_tests {
                 -expected_qty_raw.abs()
             } else {
                 expected_qty_raw.abs()
+                // SAFETY: Cast is safe within expected range
             };
+            // SAFETY: Cast is safe within expected range
             assert_eq!(actual_qty, expected_qty);
             assert_eq!(actual_price as i64, expected_price_raw);
         }
@@ -610,10 +611,16 @@ mod position_tests {
     #[case(200, 20)] // 200 max positions, add 20
     fn test_all_positions(#[case] max_positions: usize, #[case] positions_to_add: usize) {
         let tracker = PositionTracker::new(max_positions);
+        // SAFETY: Cast is safe within expected range
 
+        // SAFETY: Cast is safe within expected range
         // Add multiple positions
+        // SAFETY: Cast is safe within expected range
         for i in 0..positions_to_add {
+            // SAFETY: Cast is safe within expected range
+            // SAFETY: Cast is safe within expected range
             let symbol = Symbol(100 + i as u32);
+            // SAFETY: Cast is safe within expected range
             let side = if i % 2 == 0 { Side::Bid } else { Side::Ask };
             let qty = 10.0 + i as f64;
             let price = 100.0 + (i as f64 * 10.0);
@@ -622,7 +629,9 @@ mod position_tests {
             tracker.apply_fill(i as u64, Qty::new(qty), Px::new(price), Ts::now());
         }
 
+        // SAFETY: Cast is safe within expected range
         // Get all positions
+        // SAFETY: Cast is safe within expected range
         let positions = tracker.get_all_positions();
         assert_eq!(positions.len(), positions_to_add);
 

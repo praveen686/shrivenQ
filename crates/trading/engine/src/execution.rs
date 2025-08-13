@@ -4,7 +4,6 @@ use crate::core::{EngineConfig, ExecutionMode};
 use crate::memory::ObjectPool;
 use crate::venue::VenueAdapter;
 use common::{Px, Qty, Side, Symbol, Ts};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 
 /// Order structure - cache-aligned POD
@@ -33,7 +32,7 @@ impl Order {
             status: AtomicU8::new(0),
             quantity: qty,
             filled_qty: AtomicU64::new(0),
-            price: price.map(|p| (p.as_f64() * 100.0) as u64).unwrap_or(0),
+            price: price.map(|p| p.as_i64().unsigned_abs()).unwrap_or(0),
             timestamp: Ts::now().nanos(),
             venue_id: 0,
             _padding: [0; 16],
@@ -59,32 +58,55 @@ impl Default for Order {
     }
 }
 
-/// Order pool for zero-allocation order management
+/// Order pool wrapper for zero-allocation order management
+///
+/// Provides a high-level interface for managing orders without heap allocation.
+/// Orders are pre-allocated and reused via the underlying lock-free object pool.
+///
+/// # Usage
+/// ```ignore
+/// let pool = OrderPool::new(1000);
+/// if let Some(mut order) = pool.acquire() {
+///     // Configure order
+///     *order = Order::new(id, symbol, side, qty, price);
+///     // Order automatically returned when dropped
+/// }
+/// ```
 pub struct OrderPool {
     pool: ObjectPool<Order>,
 }
 
 impl OrderPool {
+    /// Create a new order pool with specified capacity
+    ///
+    /// Pre-allocates `capacity` orders for reuse. Choose capacity based on
+    /// expected peak concurrent orders.
     pub fn new(capacity: usize) -> Self {
         Self {
             pool: ObjectPool::new(capacity),
         }
     }
 
+    /// Acquire an order from the pool
+    ///
+    /// Returns a RAII wrapper that automatically returns the order when dropped.
+    /// The order is pre-initialized with default values and ready for use.
+    ///
+    /// # Returns
+    /// - `Some(PoolRef<Order>)` if an order is available
+    /// - `None` if the pool is exhausted
+    ///
+    /// # Performance
+    /// This is a lock-free operation with O(1) complexity
     #[inline(always)]
-    pub fn acquire(&self) -> Option<&mut Order> {
+    pub fn acquire(&self) -> Option<crate::memory::PoolRef<'_, Order>> {
         self.pool.acquire()
-    }
-
-    #[inline(always)]
-    pub fn release(&self, order: &mut Order) {
-        self.pool.release(order);
     }
 }
 
 /// Execution layer - handles order routing based on mode
 pub struct ExecutionLayer<V: VenueAdapter> {
-    config: Arc<EngineConfig>,
+    config: EngineConfig, // Copy type, no need for Arc
     venue: V,
     order_pool: OrderPool,
 
@@ -98,9 +120,9 @@ pub struct ExecutionLayer<V: VenueAdapter> {
 }
 
 impl<V: VenueAdapter> ExecutionLayer<V> {
-    pub fn new(config: Arc<EngineConfig>, venue: V) -> Self {
+    pub fn new(config: EngineConfig, venue: V) -> Self {
         Self {
-            config: config.clone(),
+            config,
             venue,
             order_pool: OrderPool::new(config.max_positions * 10),
             paper_fills: dashmap::DashMap::new(),
@@ -121,7 +143,7 @@ impl<V: VenueAdapter> ExecutionLayer<V> {
         price: Option<Px>,
     ) -> Result<(), u8> {
         // Get order from pool
-        let order = match self.order_pool.acquire() {
+        let mut order = match self.order_pool.acquire() {
             Some(order) => order,
             None => {
                 tracing::error!("Order pool exhausted");
@@ -155,7 +177,9 @@ impl<V: VenueAdapter> ExecutionLayer<V> {
 
         // Update order as filled
         order.status.store(2, Ordering::Release); // Filled
-        order.filled_qty.store(qty.raw() as u64, Ordering::Release);
+        order
+            .filled_qty
+            .store(u64::try_from(qty.raw()).unwrap_or(0), Ordering::Release);
 
         // Store fill
         self.paper_fills
@@ -163,9 +187,7 @@ impl<V: VenueAdapter> ExecutionLayer<V> {
             .or_insert_with(Vec::new)
             .push(fill);
 
-        // Return order to pool
-        self.order_pool.release(order);
-
+        // Order automatically returned to pool when dropped
         Ok(())
     }
 
@@ -180,7 +202,7 @@ impl<V: VenueAdapter> ExecutionLayer<V> {
         price: Option<Px>,
     ) -> Result<(), u8> {
         // Get order from pool for zero-allocation
-        let order = match self.order_pool.acquire() {
+        let mut order = match self.order_pool.acquire() {
             Some(order) => order,
             None => {
                 tracing::error!("Order pool exhausted");
@@ -207,14 +229,13 @@ impl<V: VenueAdapter> ExecutionLayer<V> {
                 // Store venue order ID mapping
                 tracing::debug!("Order {} sent to venue as {}", order_id, venue_order_id);
 
-                // Return order to pool when done
-                self.order_pool.release(order);
+                // Order automatically returned to pool when dropped
                 Ok(())
             }
             Err(e) => {
                 tracing::error!("Failed to send order: {}", e);
                 order.status.store(4, Ordering::Release); // Rejected
-                self.order_pool.release(order);
+                // Order automatically returned to pool when dropped
                 Err(1)
             }
         }
@@ -231,7 +252,7 @@ impl<V: VenueAdapter> ExecutionLayer<V> {
         price: Option<Px>,
     ) -> Result<(), u8> {
         // Get order from pool for zero-allocation
-        let order = match self.order_pool.acquire() {
+        let mut order = match self.order_pool.acquire() {
             Some(order) => order,
             None => {
                 tracing::error!("Order pool exhausted");
@@ -254,7 +275,9 @@ impl<V: VenueAdapter> ExecutionLayer<V> {
 
         // Update order status for backtest
         order.status.store(2, Ordering::Release); // Immediately filled in backtest
-        order.filled_qty.store(qty.raw() as u64, Ordering::Release);
+        order
+            .filled_qty
+            .store(u64::try_from(qty.raw()).unwrap_or(0), Ordering::Release);
 
         // Mock fill based on historical data
         let fill = Fill {
@@ -267,13 +290,13 @@ impl<V: VenueAdapter> ExecutionLayer<V> {
             venue_id: 0,
         };
 
+        // Store fill - pre-allocate with reasonable capacity to avoid reallocation
         self.backtest_fills
             .entry(order_id)
-            .or_insert_with(Vec::new)
+            .or_insert_with(|| Vec::with_capacity(8)) // Most orders have <8 partial fills
             .push(fill);
 
-        // Return order to pool
-        self.order_pool.release(order);
+        // Order automatically returned to pool when dropped
 
         Ok(())
     }

@@ -66,6 +66,7 @@ impl BinanceFeed {
                 Side::Bid,
                 Px::new(price),
                 Qty::new(qty),
+                // SAFETY: Cast is safe within expected range
                 i as u8,
             ));
         }
@@ -78,7 +79,9 @@ impl BinanceFeed {
             updates.push(L2Update::new(ts, symbol).with_level_data(
                 Side::Ask,
                 Px::new(price),
+                // SAFETY: Cast is safe within expected range
                 Qty::new(qty),
+                // SAFETY: Cast is safe within expected range
                 i as u8,
             ));
         }

@@ -294,15 +294,20 @@ impl ZerodhaWebSocketFeed {
         let mut updates = Vec::with_capacity(20); // Typical LOB depth
 
         if let Some(symbol) = self.symbol_map.get(&order.data.instrument_token) {
-            let ts = Ts::from_nanos(order.data.timestamp as u64 * 1_000_000);
+            // timestamp is i64 milliseconds, convert to nanoseconds
+            let ts = if order.data.timestamp >= 0 {
+                Ts::from_nanos(u64::try_from(order.data.timestamp).unwrap_or(0) * 1_000_000)
+            } else {
+                Ts::from_nanos(0) // Invalid negative timestamp
+            };
 
             // Parse bid levels
             for (i, level) in order.data.depth.buy.iter().enumerate() {
                 updates.push(L2Update::new(ts, *symbol).with_level_data(
                     Side::Bid,
                     Px::new(level.price),
-                    Qty::new(level.quantity as f64),
-                    i as u8,
+                    Qty::from_units(i64::from(level.quantity)),
+                    u8::try_from(i).unwrap_or(255),
                 ));
             }
 
@@ -311,8 +316,8 @@ impl ZerodhaWebSocketFeed {
                 updates.push(L2Update::new(ts, *symbol).with_level_data(
                     Side::Ask,
                     Px::new(level.price),
-                    Qty::new(level.quantity as f64),
-                    i as u8,
+                    Qty::from_units(i64::from(level.quantity)),
+                    u8::try_from(i).unwrap_or(255),
                 ));
             }
         }
@@ -329,7 +334,7 @@ impl ZerodhaWebSocketFeed {
         }
 
         // First 2 bytes = number of packets
-        let num_packets = u16::from_be_bytes([data[0], data[1]]) as usize;
+        let num_packets = usize::from(u16::from_be_bytes([data[0], data[1]]));
         let mut offset = 2;
 
         for _ in 0..num_packets {
@@ -338,7 +343,7 @@ impl ZerodhaWebSocketFeed {
             }
 
             // Next 2 bytes = packet length
-            let packet_len = u16::from_be_bytes([data[offset], data[offset + 1]]) as usize;
+            let packet_len = usize::from(u16::from_be_bytes([data[offset], data[offset + 1]]));
             offset += 2;
 
             if offset + packet_len > data.len() {
@@ -386,12 +391,17 @@ impl ZerodhaWebSocketFeed {
                                 ]);
 
                                 if price > 0 && qty > 0 {
-                                    updates.push(L2Update::new(ts, *symbol).with_level_data(
-                                        Side::Bid,
-                                        Px::new(price as f64 / 100.0),
-                                        Qty::new(qty as f64),
-                                        i as u8,
-                                    ));
+                                    // Safe conversion: u32 to i32 checked
+                                    if let (Ok(price_i32), Ok(qty_i32)) =
+                                        (i32::try_from(price), i32::try_from(qty))
+                                    {
+                                        updates.push(L2Update::new(ts, *symbol).with_level_data(
+                                            Side::Bid,
+                                            Px::from_price_i32(price_i32),
+                                            Qty::from_qty_i32(qty_i32),
+                                            u8::try_from(i).unwrap_or(255),
+                                        ));
+                                    }
                                 }
                             }
                         }
@@ -415,12 +425,17 @@ impl ZerodhaWebSocketFeed {
                                 ]);
 
                                 if price > 0 && qty > 0 {
-                                    updates.push(L2Update::new(ts, *symbol).with_level_data(
-                                        Side::Ask,
-                                        Px::new(price as f64 / 100.0),
-                                        Qty::new(qty as f64),
-                                        i as u8,
-                                    ));
+                                    // Safe conversion: u32 to i32 checked
+                                    if let (Ok(price_i32), Ok(qty_i32)) =
+                                        (i32::try_from(price), i32::try_from(qty))
+                                    {
+                                        updates.push(L2Update::new(ts, *symbol).with_level_data(
+                                            Side::Ask,
+                                            Px::from_price_i32(price_i32),
+                                            Qty::from_qty_i32(qty_i32),
+                                            u8::try_from(i).unwrap_or(255),
+                                        ));
+                                    }
                                 }
                             }
                         }
