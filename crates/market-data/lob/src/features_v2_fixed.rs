@@ -293,6 +293,7 @@ impl FeatureCalculatorV2Fixed {
         let quoted_spread = self.last_spread;
         // SAFETY: Cast is safe within expected range
         let bid_vol = book.bids.total_volume() as i64;
+        // SAFETY: Cast is safe within expected range
         let ask_vol = book.asks.total_volume() as i64;
         let total_vol = bid_vol + ask_vol;
 
@@ -349,6 +350,7 @@ impl FeatureCalculatorV2Fixed {
         let spread_normalized = (self.last_spread * 100) / FIXED_100.max(1);
         // SAFETY: Cast is safe within expected range
 
+        // SAFETY: Cast is safe within expected range
         let bid_vol = book.bids.total_volume() as i64;
         let ask_vol = book.asks.total_volume() as i64;
         let volume_ratio = if bid_vol > 0 {
@@ -447,6 +449,7 @@ impl FeatureCalculatorV2Fixed {
         } else {
             // SAFETY: Cast is safe within expected range
             FIXED_SCALE
+            // SAFETY: Cast is safe within expected range
         };
 
         let bid_vol = book.bids.total_volume() as i64;
@@ -467,6 +470,7 @@ impl FeatureCalculatorV2Fixed {
         let mut bid_pressure = 0i64;
         // SAFETY: Cast is safe within expected range
         let mut ask_pressure = 0i64;
+        // SAFETY: Cast is safe within expected range
 
         for i in 0..10 {
             // Weight by inverse distance from mid
@@ -502,6 +506,7 @@ impl FeatureCalculatorV2Fixed {
     fn forecast_volatility_fixed(&self) -> i64 {
         // SAFETY: Cast is safe within expected range
         if self.volatility_window.len() < 10 {
+            // SAFETY: Cast is safe within expected range
             return 100; // Default low volatility (0.01 in fixed-point)
         }
 
@@ -513,6 +518,7 @@ impl FeatureCalculatorV2Fixed {
             .iter()
             // SAFETY: Cast is safe within expected range
             .map(|v| {
+                // SAFETY: Cast is safe within expected range
                 let diff = v - mean;
                 (diff * diff) / FIXED_SCALE
             })

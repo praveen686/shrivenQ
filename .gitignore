@@ -60,3 +60,6 @@ data/
 
 # Python test scripts
 *.py
+
+# Compliance tools build artifacts
+tools/sq-compliance-tools/*/target/

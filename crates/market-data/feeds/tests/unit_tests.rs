@@ -76,6 +76,7 @@ fn test_lob_performance() {
             Side::Ask,
             // SAFETY: Cast is safe within expected range
             Px::new(100.5 + f64::from(i as u32) * 0.1),
+            // SAFETY: Cast is safe within expected range
             Qty::new(100.0 * f64::from((i + 1) as u32)),
             i as u8,
         );
@@ -248,6 +249,7 @@ fn test_feature_extraction() {
             &L2Update::new(Ts::from_nanos(i * 1000), symbol).with_level_data(
                 // SAFETY: Cast is safe within expected range
                 Side::Bid,
+                // SAFETY: Cast is safe within expected range
                 Px::new(99.5 - f64::from(i as u32) * 0.1),
                 Qty::new(100.0 + f64::from(i as u32) * 50.0),
                 i as u8,
@@ -261,7 +263,9 @@ fn test_feature_extraction() {
 
         // SAFETY: Cast is safe within expected range
         book.apply(
+            // SAFETY: Cast is safe within expected range
             &L2Update::new(Ts::from_nanos(i * 1000 + 500), symbol).with_level_data(
+                // SAFETY: Cast is safe within expected range
                 Side::Ask,
                 Px::new(100.5 + f64::from(i as u32) * 0.1),
                 Qty::new(100.0 + f64::from(i as u32) * 50.0),
@@ -310,12 +314,14 @@ fn test_sprint3_performance_targets() {
 
     for i in 0..updates {
         // SAFETY: Cast is safe within expected range
+        // SAFETY: Cast is safe within expected range
         let update = L2Update::new(Ts::from_nanos(i), symbol).with_level_data(
             if i % 2 == 0 { Side::Bid } else { Side::Ask },
             // SAFETY: Cast is safe within expected range
             Px::new(100.0 + (i % 10) as f64 * 0.1),
             Qty::new(100.0),
             (i % 10) as u8,
+            // SAFETY: Cast is safe within expected range
         );
         let _ = book.apply(&update);
     }

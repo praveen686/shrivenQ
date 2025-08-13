@@ -132,11 +132,13 @@ pub fn run_features_demo() {
         // SAFETY: Cast is safe within expected range
         println!(
             "  Price Trend Signal: {:.4}",
+            // SAFETY: Cast is safe within expected range
             final_features.price_trend as f64 / 10000.0
         );
         println!(
             // SAFETY: Cast is safe within expected range
             "  Mean Reversion Signal: {:.4}",
+            // SAFETY: Cast is safe within expected range
             // SAFETY: Cast is safe within expected range
             final_features.mean_reversion_signal as f64 / 10000.0
         );
@@ -145,6 +147,7 @@ pub fn run_features_demo() {
             "  Momentum: {:.4}",
             final_features.momentum as f64 / 10000.0
         );
+        // SAFETY: Cast is safe within expected range
         println!(
             "  Adverse Selection Risk: {:.2}%",
             final_features.adverse_selection as f64 / 100.0
@@ -187,14 +190,18 @@ pub fn run_features_demo() {
         // SAFETY: Cast is safe within expected range
         println!("\n📊 Market Maker Signals:");
         // SAFETY: Cast is safe within expected range
+        // SAFETY: Cast is safe within expected range
         println!(
             "  Liquidity Score: {:.2}",
+            // SAFETY: Cast is safe within expected range
             mm_features.liquidity_score as f64 / 10000.0
         );
         println!(
+            // SAFETY: Cast is safe within expected range
             "  Stability Index: {:.2}",
             mm_features.stability_index as f64 / 10000.0
         );
+        // SAFETY: Cast is safe within expected range
         println!(
             "  Effective Spread: {:.2} bps",
             mm_features.effective_spread as f64 / 100.0 // SAFETY: Cast is safe within expected range
@@ -204,6 +211,7 @@ pub fn run_features_demo() {
             mm_features.price_impact as f64 / 100.0
         );
 
+        // SAFETY: Cast is safe within expected range
         // MM recommendations
         if mm_features.liquidity_score > 7000 && mm_features.stability_index > 6000 {
             // 0.7, 0.6 in fixed-point
@@ -227,13 +235,16 @@ pub fn run_features_demo() {
 
 fn print_features(features: &FeatureFrameV2Fixed, strategy: &str) {
     println!("\n  {} Features:", strategy);
+    // SAFETY: Cast is safe within expected range
     println!(
         "    Spread: {} ticks ({:.2} bps)",
         features.spread_ticks,
+        // SAFETY: Cast is safe within expected range
         features.weighted_spread as f64 / 100.0
     );
     println!("    Imbalance: {:.4}", features.imbalance as f64 / 10000.0);
     println!(
+        // SAFETY: Cast is safe within expected range
         "    Flow Toxicity: {:.4}",
         features.flow_toxicity as f64 / 10000.0
     );

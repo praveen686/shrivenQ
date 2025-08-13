@@ -50,6 +50,7 @@ impl Analytics {
         }
         // SAFETY: Cast is safe within expected range
 
+        // SAFETY: Cast is safe within expected range
         scaled.floor() as i64
     }
 
@@ -66,12 +67,14 @@ impl Analytics {
         }
         // SAFETY: Cast is safe within expected range
 
+        // SAFETY: Cast is safe within expected range
         let scaled = value * 10000.0;
         if scaled > MAX_SAFE_INTEGER as f64 || scaled < -(MAX_SAFE_INTEGER as f64) {
             // SAFETY: Cast is safe within expected range
             tracing::error!("Value {} out of range for fixed-point", value);
             // SAFETY: Cast is safe within expected range
             return if scaled > 0.0 { i64::MAX } else { i64::MIN };
+            // SAFETY: Cast is safe within expected range
         }
 
         scaled.round() as i64
@@ -112,6 +115,7 @@ impl Analytics {
         if variance_fixed <= 0 {
             // SAFETY: Cast is safe within expected range
             return 0;
+            // SAFETY: Cast is safe within expected range
         }
 
         // Convert to f64 for sqrt

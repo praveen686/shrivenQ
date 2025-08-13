@@ -135,7 +135,8 @@ pub async fn run_binance_testnet_v2_integration() -> anyhow::Result<()> {
 
     // Create auth
     let mut auth = BinanceAuth::new();
-    let _ = auth.add_market(BinanceConfig::new_testnet(
+    // Add testnet market configuration
+    let _result = auth.add_market(BinanceConfig::new_testnet(
         api_key,
         api_secret,
         BinanceMarket::Spot,

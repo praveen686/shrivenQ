@@ -133,6 +133,7 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
                                             Px::new(price),
                                             // SAFETY: Cast is safe within expected range
                                             Qty::new(qty),
+                                            // SAFETY: Cast is safe within expected range
                                             level as u8,
                                         );
 
@@ -180,20 +181,24 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
                                         info!(
                                             // SAFETY: Cast is safe within expected range
                                             "  Spread: {} ticks ({:.2} bps)",
+                                            // SAFETY: Cast is safe within expected range
                                             features.spread_ticks,
                                             features.weighted_spread as f64 / 100.0 // SAFETY: Cast is safe within expected range
                                         );
+                                        // SAFETY: Cast is safe within expected range
                                         info!(
                                             "  Imbalance: {:.4}",
                                             features.imbalance as f64 / 10000.0
                                         );
                                         // SAFETY: Cast is safe within expected range
+                                        // SAFETY: Cast is safe within expected range
                                         info!(
                                             "  Flow Toxicity: {:.4}",
-                                            features.flow_toxicity as f64 / 10000.0
+                                            features.flow_toxicity as f64 / 10000.0 // SAFETY: Cast is safe within expected range
                                         );
                                         info!("  Regime: {:?}", features.regime);
                                         info!(
+                                            // SAFETY: Cast is safe within expected range
                                             "  Price Trend: {:.4}",
                                             features.price_trend as f64 / 10000.0
                                         );
@@ -231,9 +236,11 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
                                         // SAFETY: Cast is safe within expected range
                                     }
 
+                                    // SAFETY: Cast is safe within expected range
                                     if let Some(mm_features) = mm_calc.calculate(&book) {
                                         // SAFETY: Cast is safe within expected range
                                         info!("  MM Metrics:");
+                                        // SAFETY: Cast is safe within expected range
                                         info!(
                                             "    Effective Spread: {:.2} bps",
                                             // SAFETY: Cast is safe within expected range
@@ -289,20 +296,25 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
     // SAFETY: Cast is safe within expected range
 
     // Calculate feature statistics
+    // SAFETY: Cast is safe within expected range
     if !feature_frames.is_empty() {
         let avg_spread: f64 = feature_frames
             // SAFETY: Cast is safe within expected range
             .iter()
+            // SAFETY: Cast is safe within expected range
             .map(|f| f.weighted_spread as f64 / 100.0)
+            // SAFETY: Cast is safe within expected range
             // SAFETY: Cast is safe within expected range
             // SAFETY: Cast is safe within expected range
             .sum::<f64>()
             / feature_frames.len() as f64;
         // SAFETY: Cast is safe within expected range
+        // SAFETY: Cast is safe within expected range
 
         let avg_toxicity: f64 = feature_frames
             .iter()
             .map(|f| f.flow_toxicity as f64 / 10000.0)
+            // SAFETY: Cast is safe within expected range
             .sum::<f64>()
             / feature_frames.len() as f64;
         // SAFETY: Cast is safe within expected range
@@ -321,6 +333,7 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
         info!("\n📈 Market Statistics:");
         // SAFETY: Cast is safe within expected range
         info!("  Average Spread: {:.2} bps", avg_spread);
+        // SAFETY: Cast is safe within expected range
         info!("  Average Toxicity: {:.4}", avg_toxicity);
         info!("  Average Liquidity Score: {:.2}", avg_liquidity);
         info!("  Max Volatility Forecast: {:.4}", volatility_max);

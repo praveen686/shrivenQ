@@ -59,8 +59,8 @@ repos:
       - id: sq-compliance
         name: "🤖 ShrivenQuant Compliance Check"
         description: "Comprehensive code quality and compliance validation"
-        entry: /home/praveen/sq-compliance-tools/sq-compliance/target/release/sq-compliance
-        args: [/home/praveen/ShrivenQuant, --no-build, --details]
+        entry: tools/sq-compliance-tools/sq-compliance/target/release/sq-compliance
+        args: [., --no-build, --details]
         language: system
         files: \.rs$
         pass_filenames: false

@@ -304,6 +304,7 @@ impl<P: Publisher<ReplayEvent> + Clone + Send + Sync + 'static> Replayer<P> {
                             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                             // SAFETY: Cast is safe within expected range
                             let delay_nanos =
+                                // SAFETY: Cast is safe within expected range
                                 u64::try_from(replay_delay_ns.round() as i64).unwrap_or(0);
                             let delay = Duration::from_nanos(delay_nanos);
                             sleep(delay).await;

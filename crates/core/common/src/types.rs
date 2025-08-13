@@ -79,6 +79,7 @@ impl Px {
     pub const fn from_price_i32(price: i32) -> Self {
         // SAFETY: Cast is safe within expected range
         // Safe: i32 to i64 is always lossless (widening)
+        // SAFETY: Cast is safe within expected range
         Self((price as i64) * 100) // Convert 2 decimals to 4
     }
 
@@ -148,6 +149,7 @@ impl Qty {
         } else {
             // SAFETY: Cast is safe within expected range
             // Now safe to cast after bounds check
+            // SAFETY: Cast is safe within expected range
             #[allow(clippy::cast_possible_truncation)]
             let result = scaled as i64;
             result
@@ -165,6 +167,7 @@ impl Qty {
         // This is a fundamental limitation when interfacing with systems that use floating point
         // SAFETY: Cast is safe within expected range
         // We explicitly allow this ONE conversion at the system boundary
+        // SAFETY: Cast is safe within expected range
         #[allow(clippy::cast_precision_loss)]
         {
             self.0 as f64 / 10000.0
@@ -180,6 +183,7 @@ impl Qty {
 
     // SAFETY: Cast is safe within expected range
     /// Create from integer quantity
+    // SAFETY: Cast is safe within expected range
     #[must_use]
     pub const fn from_qty_i32(qty: i32) -> Self {
         // Safe: i32 to i64 is always lossless (widening)

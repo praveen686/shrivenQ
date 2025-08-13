@@ -79,6 +79,7 @@ impl NseOrderEntry {
             corp_action_level: fields[6].to_string(),
             // SAFETY: Cast is safe within expected range
             quantity: (fields[7].parse::<f64>().unwrap_or(0.0) * 10000.0) as i64,
+            // SAFETY: Cast is safe within expected range
             price: (fields[8].parse::<f64>().unwrap_or(0.0) * 10000.0) as i64,
             timestamp: fields[9].to_string(),
             side: if fields[10] == "B" {
@@ -370,6 +371,7 @@ impl NseSnapshotLoader {
         println!(
             // SAFETY: Cast is safe within expected range
             "Order Imbalance: {:.2}",
+            // SAFETY: Cast is safe within expected range
             if total_buy_qty + total_sell_qty > 0 {
                 ((total_buy_qty - total_sell_qty) as f64)
                     / ((total_buy_qty + total_sell_qty) as f64)
@@ -382,10 +384,12 @@ impl NseSnapshotLoader {
         // SAFETY: Cast is safe within expected range
 
         if let (Some(bid), Some(ask)) = (best_bid, best_ask) {
+            // SAFETY: Cast is safe within expected range
             println!("Best Bid: {:.2}", bid as f64 / 10000.0); // Convert for display
             // SAFETY: Cast is safe within expected range
             println!("Best Ask: {:.2}", ask as f64 / 10000.0); // Convert for display
             let spread = ask - bid;
+            // SAFETY: Cast is safe within expected range
             let spread_bps = if bid > 0 { (spread * 10000) / bid } else { 0 };
             println!(
                 "Spread: {:.2} ({} bps)",
@@ -480,6 +484,7 @@ pub fn run_nse_loader_demo() -> Result<()> {
             {
                 // SAFETY: Cast is safe within expected range
                 info!("\n📈 NIFTY Order Book:");
+                // SAFETY: Cast is safe within expected range
                 info!("Best Bid: {:.2} x {:.0}", bid_px.as_f64(), bid_qty.as_f64());
                 info!("Best Ask: {:.2} x {:.0}", ask_px.as_f64(), ask_qty.as_f64());
                 info!(

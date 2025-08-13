@@ -53,21 +53,25 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Get project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
 # Set tool paths
-REMEDIATOR="/home/praveen/sq-compliance-tools/sq-remediator/target/release/sq-remediator"
-CHECKER="/home/praveen/sq-compliance-tools/sq-compliance/target/release/sq-compliance"
-PROJECT_PATH="/home/praveen/ShrivenQuant"
+REMEDIATOR="$PROJECT_ROOT/tools/sq-compliance-tools/sq-remediator/target/release/sq-remediator"
+CHECKER="$PROJECT_ROOT/tools/sq-compliance-tools/sq-compliance/target/release/sq-compliance"
+PROJECT_PATH="$PROJECT_ROOT"
 
 # Build remediator if needed
 if [ ! -f "$REMEDIATOR" ]; then
     echo -e "${YELLOW}Building remediator...${NC}"
-    (cd /home/praveen/sq-compliance-tools/sq-remediator && cargo build --release --quiet)
+    (cd "$PROJECT_ROOT/tools/sq-compliance-tools/sq-remediator" && cargo build --release --quiet)
 fi
 
 # Build compliance checker if needed
 if [ ! -f "$CHECKER" ]; then
     echo -e "${YELLOW}Building compliance checker...${NC}"
-    (cd /home/praveen/sq-compliance-tools/sq-compliance && cargo build --release --quiet)
+    (cd "$PROJECT_ROOT/tools/sq-compliance-tools/sq-compliance" && cargo build --release --quiet)
 fi
 
 # Run initial compliance check

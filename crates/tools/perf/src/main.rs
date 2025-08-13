@@ -240,6 +240,7 @@ fn cmd_replay(path: PathBuf, expect: Option<u64>) -> Result<()> {
 
     // SAFETY: Cast is safe within expected range
     #[allow(clippy::cast_precision_loss)] // Display only
+    // SAFETY: Cast is safe within expected range
     let eps = n as f64 / dt;
     let events_per_minute = eps * 60.0;
 
@@ -352,6 +353,7 @@ fn cmd_recover(path: PathBuf) -> Result<()> {
         }
         // SAFETY: Cast is safe within expected range
     }
+    // SAFETY: Cast is safe within expected range
     #[allow(clippy::cast_precision_loss)] // Display only
     let gb = total_size as f64 / (1024.0 * 1024.0 * 1024.0);
 

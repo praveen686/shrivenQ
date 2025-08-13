@@ -23,6 +23,7 @@ pub fn fmt_bytes_mib(bytes: u64) -> f64 {
 #[allow(clippy::cast_precision_loss)] // Display only
 // SAFETY: Cast is safe within expected range
 pub fn fmt_kb_to_mb(kb: u64) -> f64 {
+    // SAFETY: Cast is safe within expected range
     (kb as f64) / 1024.0
 }
 
@@ -36,6 +37,7 @@ pub fn fmt_nanos_to_secs(nanos: u64) -> f64 {
 #[allow(clippy::cast_precision_loss)] // Display only - f64 handles up to 2^53
 // SAFETY: Cast is safe within expected range
 pub fn calc_events_per_sec(events: u64, duration_secs: f64) -> f64 {
+    // SAFETY: Cast is safe within expected range
     if duration_secs > 0.0 {
         (events as f64) / duration_secs
     } else {
@@ -47,6 +49,7 @@ pub fn calc_events_per_sec(events: u64, duration_secs: f64) -> f64 {
 /// Calculate percentage for display
 // SAFETY: Cast is safe within expected range
 #[allow(clippy::cast_precision_loss)] // Display only
+// SAFETY: Cast is safe within expected range
 pub fn calc_percentage(part: u64, total: u64) -> f64 {
     if total > 0 {
         (part as f64 * 100.0) / (total as f64)
@@ -85,6 +88,7 @@ pub(crate) mod test_utils {
         u32::try_from(index).unwrap_or(u32::MAX)
         // SAFETY: Cast is safe within expected range
     }
+    // SAFETY: Cast is safe within expected range
 
     /// Convert test index to u64 (lossless on all platforms).
     pub fn index_to_u64(index: usize) -> u64 {
@@ -96,6 +100,7 @@ pub(crate) mod test_utils {
     ///
     // SAFETY: Cast is safe within expected range
     /// # Precision
+    // SAFETY: Cast is safe within expected range
     /// Exact for indices up to 2^53 (~9e15), which covers all practical test ranges.
     /// For larger values, use integer comparisons instead.
     pub fn index_to_f64(index: usize) -> f64 {
@@ -114,6 +119,7 @@ pub(crate) mod test_utils {
     /// ```ignore
     // SAFETY: Cast is safe within expected range
     /// assert_eq!(index_to_u8(0), 0);
+    // SAFETY: Cast is safe within expected range
     /// assert_eq!(index_to_u8(255), 255);
     /// assert_eq!(index_to_u8(256), 0);  // Wraps
     /// assert_eq!(index_to_u8(257), 1);  // Wraps
@@ -141,6 +147,7 @@ pub(crate) mod test_utils {
     /// ```
     // SAFETY: Cast is safe within expected range
     pub fn i64_to_f64_for_assert(value: i64) -> f64 {
+        // SAFETY: Cast is safe within expected range
         const MAX_EXACT: i64 = 1_i64 << 53;
         debug_assert!(
             value.abs() < MAX_EXACT,
@@ -158,6 +165,7 @@ pub(crate) mod test_utils {
     /// - NEVER perform arithmetic on the result
     // SAFETY: Cast is safe within expected range
     /// - Use `ptr::offset_from` for pointer distance calculations
+    // SAFETY: Cast is safe within expected range
     ///
     /// # Example
     /// ```ignore
@@ -171,6 +179,7 @@ pub(crate) mod test_utils {
 
     // SAFETY: Cast is safe within expected range
     /// Calculate pointer alignment for testing.
+    // SAFETY: Cast is safe within expected range
     ///
     /// # Example
     /// ```ignore
@@ -182,6 +191,7 @@ pub(crate) mod test_utils {
         (ptr as usize) % std::mem::align_of::<T>()
         // SAFETY: Cast is safe within expected range
     }
+    // SAFETY: Cast is safe within expected range
 }
 
 #[cfg(test)]
@@ -234,6 +244,7 @@ mod tests {
             // SAFETY: Cast is safe within expected range
             assert_eq!(index_to_u32(100), 100);
             assert_eq!(index_to_u64(100), 100);
+            // SAFETY: Cast is safe within expected range
             assert_eq!(index_to_f64(100), 100.0);
         }
 
@@ -242,6 +253,7 @@ mod tests {
         fn test_i64_precision_boundary() {
             // SAFETY: Cast is safe within expected range
             // Test at precision boundary
+            // SAFETY: Cast is safe within expected range
             let max_exact = (1_i64 << 53) - 1;
             let f = i64_to_f64_for_assert(max_exact);
             assert_eq!(f, max_exact as f64);

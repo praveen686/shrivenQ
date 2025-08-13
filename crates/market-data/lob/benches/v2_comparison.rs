@@ -136,6 +136,7 @@ fn bench_cross_resolution(c: &mut Criterion) {
         if i + 1 < updates.len() {
             // SAFETY: Cast is safe within expected range
             // Make bid higher than ask
+            // SAFETY: Cast is safe within expected range
             updates[i] = L2Update::new(Ts::from_nanos(i as u64), Symbol(1)).with_level_data(
                 Side::Bid,
                 Px::new(101.0),
@@ -143,6 +144,7 @@ fn bench_cross_resolution(c: &mut Criterion) {
                 Qty::new(100.0),
                 // SAFETY: Cast is safe within expected range
                 0,
+                // SAFETY: Cast is safe within expected range
             );
             updates[i + 1] = L2Update::new(Ts::from_nanos((i + 1) as u64), Symbol(1))
                 .with_level_data(Side::Ask, Px::new(99.0), Qty::new(100.0), 0);

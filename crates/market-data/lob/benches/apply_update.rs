@@ -53,6 +53,7 @@ fn benchmark_apply_single(c: &mut Criterion) {
             Px::new(99.5 - i as f64 * 0.1),
             // SAFETY: Cast is safe within expected range
             Qty::new(100.0 * (i + 1) as f64),
+            // SAFETY: Cast is safe within expected range
             i as u8,
         );
         let _ = book.apply(&bid_update);
@@ -62,6 +63,7 @@ fn benchmark_apply_single(c: &mut Criterion) {
         let ask_update = L2Update::new(Ts::from_nanos(i + 100), symbol).with_level_data(
             // SAFETY: Cast is safe within expected range
             Side::Ask,
+            // SAFETY: Cast is safe within expected range
             // SAFETY: Cast is safe within expected range
             Px::new(100.5 + i as f64 * 0.1),
             Qty::new(100.0 * (i + 1) as f64),
@@ -118,6 +120,7 @@ fn benchmark_features(c: &mut Criterion) {
 
     // SAFETY: Cast is safe within expected range
     // Populate book
+    // SAFETY: Cast is safe within expected range
     for i in 0..DEPTH / 2 {
         let _ = book.apply(
             &L2Update::new(Ts::from_nanos(i as u64), symbol).with_level_data(
@@ -128,13 +131,16 @@ fn benchmark_features(c: &mut Criterion) {
                 // SAFETY: Cast is safe within expected range
                 Px::new(99.5 - i as f64 * 0.05),
                 // SAFETY: Cast is safe within expected range
+                // SAFETY: Cast is safe within expected range
                 Qty::new(100.0 + i as f64 * 10.0),
                 // SAFETY: Cast is safe within expected range
                 i as u8,
                 // SAFETY: Cast is safe within expected range
             ),
             // SAFETY: Cast is safe within expected range
+            // SAFETY: Cast is safe within expected range
         );
+        // SAFETY: Cast is safe within expected range
 
         let _ = book.apply(
             &L2Update::new(Ts::from_nanos((i + 100) as u64), symbol).with_level_data(

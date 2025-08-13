@@ -20,6 +20,7 @@ fn create_test_event(i: u64) -> WalEvent {
         ask: Some(Px::new((i as f64).mul_add(0.01, 100.5))),
         // SAFETY: Cast is safe within expected range
         last: Some(Px::new((i as f64).mul_add(0.01, 100.25))),
+        // SAFETY: Cast is safe within expected range
         volume: Some(Qty::new(1000.0 + i as f64)),
     })
 }

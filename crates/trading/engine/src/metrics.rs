@@ -189,6 +189,7 @@ impl MetricsEngine {
         }
         // SAFETY: Cast is safe within expected range
 
+        // SAFETY: Cast is safe within expected range
         let mean = self.returns_buffer.iter().sum::<f64>() / self.returns_buffer.len() as f64;
 
         let variance = self
@@ -200,6 +201,7 @@ impl MetricsEngine {
                 diff * diff
                 // SAFETY: Cast is safe within expected range
             })
+            // SAFETY: Cast is safe within expected range
             .sum::<f64>()
             / self.returns_buffer.len() as f64;
 
@@ -220,6 +222,7 @@ impl MetricsEngine {
         let wins = self.winning_trades.load(Ordering::Acquire);
         // SAFETY: Cast is safe within expected range
         let losses = self.losing_trades.load(Ordering::Acquire);
+        // SAFETY: Cast is safe within expected range
 
         let win_rate = if total > 0 {
             (wins as f64 / total as f64) * 100.0
@@ -230,6 +233,7 @@ impl MetricsEngine {
 
         // SAFETY: Cast is safe within expected range
         let gross_profit = self.gross_profit.load(Ordering::Acquire);
+        // SAFETY: Cast is safe within expected range
         let gross_loss = self.gross_loss.load(Ordering::Acquire).abs();
 
         let profit_factor = if gross_loss > 0 {

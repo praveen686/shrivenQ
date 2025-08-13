@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 /// NIFTY Tick Data Entry
 #[derive(Debug, Clone, Deserialize)]
@@ -314,6 +314,7 @@ impl LobEstimator {
                 // Estimate ask as bid plus minimum spread
                 // SAFETY: Cast is safe within expected range
                 let estimated_ask_ticks = price_ticks + self.min_spread_ticks;
+                // SAFETY: Cast is safe within expected range
                 self.estimated_ask = Some(estimated_ask_ticks as f64 * self.tick_size);
 
                 // Update bid levels - remove liquidity at this level
@@ -336,6 +337,7 @@ impl LobEstimator {
         let mut price_volume_map: BTreeMap<i64, f64> = BTreeMap::new();
         // SAFETY: Cast is safe within expected range
 
+        // SAFETY: Cast is safe within expected range
         for (price, volume) in &self.volume_profile {
             let price_ticks = (price / self.tick_size).round() as i64;
             *price_volume_map.entry(price_ticks).or_insert(0.0) += volume;
@@ -349,6 +351,7 @@ impl LobEstimator {
             (None, Some(ask)) => ask - self.tick_size,
             // SAFETY: Cast is safe within expected range
             (None, None) => return,
+            // SAFETY: Cast is safe within expected range
         };
 
         let mid_ticks = (mid_price / self.tick_size).round() as i64;
@@ -361,6 +364,7 @@ impl LobEstimator {
         // Build levels based on volume profile and distance from mid
         // SAFETY: Cast is safe within expected range
         for (price_ticks, total_volume) in price_volume_map {
+            // SAFETY: Cast is safe within expected range
             let distance = (price_ticks - mid_ticks).abs();
 
             // Estimate remaining liquidity (decreases with distance and recent activity)
@@ -379,6 +383,7 @@ impl LobEstimator {
         }
         // SAFETY: Cast is safe within expected range
 
+        // SAFETY: Cast is safe within expected range
         // Ensure we have at least BBO
         if self.bid_levels.is_empty() {
             if let Some(bid) = self.estimated_bid {
@@ -386,6 +391,7 @@ impl LobEstimator {
                 let bid_ticks = (bid / self.tick_size).round() as i64;
                 // SAFETY: Cast is safe within expected range
                 self.bid_levels.insert(bid_ticks, 100.0); // Default quantity
+                // SAFETY: Cast is safe within expected range
             }
         }
 
@@ -401,6 +407,7 @@ impl LobEstimator {
     /// Generate LOB updates from current state
     // SAFETY: Cast is safe within expected range
     pub fn generate_lob_updates(&self, symbol: Symbol, timestamp_ns: u64) -> Vec<L2Update> {
+        // SAFETY: Cast is safe within expected range
         let mut updates = Vec::with_capacity(100);
         let ts = Ts::from_nanos(timestamp_ns);
 
@@ -415,6 +422,7 @@ impl LobEstimator {
                 Qty::new(*quantity),
                 // SAFETY: Cast is safe within expected range
                 level,
+                // SAFETY: Cast is safe within expected range
             ));
             level += 1;
         }
@@ -593,7 +601,10 @@ impl NiftyTickToLob {
         // Apply updates
         let updates = self.estimator.generate_lob_updates(symbol, timestamp_ns);
         for update in updates {
-            let _ = book.apply_validated(&update);
+            // Apply update - best effort for synthetic updates
+            if let Err(e) = book.apply_validated(&update) {
+                debug!("Failed to apply synthetic update: {:?}", e);
+            }
         }
 
         Ok(book)

@@ -237,12 +237,12 @@ impl OrderBookV2 {
     #[inline]
     pub fn apply_fast(&mut self, update: &L2Update) {
         if update.side == Side::Bid {
-            let _ = self
-                .bids
+            // Fast update - result ignored for performance in hot path
+            self.bids
                 .update_fast(update.price, update.qty, update.level);
         } else if update.side == Side::Ask {
-            let _ = self
-                .asks
+            // Fast update - result ignored for performance in hot path
+            self.asks
                 .update_fast(update.price, update.qty, update.level);
         }
 

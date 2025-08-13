@@ -72,6 +72,7 @@ fn unpack_index(tagged: usize) -> u32 {
         reason = "Extracting packed u32 from lower bits"
     // SAFETY: Cast is safe within expected range
     )]
+    // SAFETY: Cast is safe within expected range
     ((tagged & INDEX_MASK) as u32)
 }
 
@@ -83,6 +84,7 @@ const MAX_POOL_SIZE: usize = usize::MAX;
 #[cfg(not(target_pointer_width = "64"))]
 // SAFETY: Cast is safe within expected range
 #[inline(always)]
+// SAFETY: Cast is safe within expected range
 fn pack_tagged(_generation: u32, index: u32) -> usize {
     index as usize
 }
@@ -100,6 +102,7 @@ fn unpack_index(tagged: usize) -> u32 {
     #[expect(
     // SAFETY: Cast is safe within expected range
         clippy::cast_possible_truncation,
+    // SAFETY: Cast is safe within expected range
         reason = "32-bit system, no truncation"
     )]
     (tagged as u32)
@@ -194,6 +197,7 @@ impl<T> ObjectPool<T> {
         loop {
             // SAFETY: Cast is safe within expected range
             let head_tagged = self.free_list.load(Ordering::Acquire);
+            // SAFETY: Cast is safe within expected range
 
             // Store current head as our next
             let head_index = unpack_index(head_tagged);
@@ -205,11 +209,13 @@ impl<T> ObjectPool<T> {
             // SAFETY: Cast is safe within expected range
             #[expect(
                 clippy::cast_possible_truncation,
+            // SAFETY: Cast is safe within expected range
                     // SAFETY: Cast is safe within expected range
                 reason = "Index validated < capacity <= u32::MAX"
             )]
             // SAFETY: Cast is safe within expected range
             let new_tagged = pack_tagged(new_generation, known_index as u32);
+            // SAFETY: Cast is safe within expected range
 
             // Try to update head to point to us
             if self
@@ -319,6 +325,7 @@ impl<T: Default> ObjectPool<T> {
     ///
     // SAFETY: Cast is safe within expected range
     /// # Performance
+    // SAFETY: Cast is safe within expected range
     /// O(1) with potential retry loop under contention
     pub fn acquire(&self) -> Option<PoolRef<'_, T>> {
         loop {
@@ -340,12 +347,14 @@ impl<T: Default> ObjectPool<T> {
             // SAFETY: Cast is safe within expected range
 
             // Create new tagged value with incremented generation
+            // SAFETY: Cast is safe within expected range
             let new_generation = unpack_generation(head_tagged).wrapping_add(1);
             // SAFETY: Cast is safe within expected range
             #[expect(
                 clippy::cast_possible_truncation,
                     // SAFETY: Cast is safe within expected range
                 reason = "Next index from atomic load"
+                    // SAFETY: Cast is safe within expected range
             )]
             let next_index = unpack_index(next_tagged as usize);
             let new_tagged = pack_tagged(new_generation, next_index);

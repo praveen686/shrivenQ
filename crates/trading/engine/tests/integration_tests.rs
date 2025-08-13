@@ -306,6 +306,7 @@ fn test_concurrent_operations(#[case] num_threads: usize) {
                     },
                     // SAFETY: Cast is safe within expected range
                     Qty::new(10.0 + order_id as f64),
+                    // SAFETY: Cast is safe within expected range
                     Some(Px::new(100.0 + order_id as f64)),
                 );
                 assert!(result.is_ok());

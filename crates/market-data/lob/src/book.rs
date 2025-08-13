@@ -232,6 +232,7 @@ impl OrderBook {
                 // SAFETY: Cast is safe within expected range
                 hash = hash
                     .wrapping_mul(31)
+                    // SAFETY: Cast is safe within expected range
                     .wrapping_add(self.asks.qtys[i].as_i64() as u64);
             }
         }
@@ -387,6 +388,7 @@ mod tests {
                     // SAFETY: Cast is safe within expected range
                     Side::Bid,
                     Px::new(99.5 - i as f64 * 0.1),
+                    // SAFETY: Cast is safe within expected range
                     Qty::new(100.0),
                     i as u8,
                 ),

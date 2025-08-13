@@ -218,7 +218,7 @@ impl FeedAdapter for BinanceFeed {
             let params = format!("listenKey={}&timestamp={}", key, timestamp);
             let signature = self.auth.sign_query(self.market, &params)?;
 
-            let _ = client
+            if let Err(e) = client
                 .delete(&url)
                 .header("X-MBX-APIKEY", self.auth.get_api_key(self.market)?)
                 .query(&[
@@ -227,7 +227,11 @@ impl FeedAdapter for BinanceFeed {
                     ("signature", signature),
                 ])
                 .send()
-                .await;
+                .await
+            {
+                // Log but don't fail disconnect - best effort cleanup
+                warn!("Failed to delete listen key during disconnect: {}", e);
+            }
         }
 
         Ok(())

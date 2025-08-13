@@ -526,6 +526,7 @@ mod position_tests {
             };
             // SAFETY: Cast is safe within expected range
             assert_eq!(actual_qty, expected_qty);
+            // SAFETY: Cast is safe within expected range
             assert_eq!(actual_price as i64, expected_price_raw);
         }
     }
@@ -622,7 +623,9 @@ mod position_tests {
             let symbol = Symbol(100 + i as u32);
             // SAFETY: Cast is safe within expected range
             let side = if i % 2 == 0 { Side::Bid } else { Side::Ask };
+            // SAFETY: Cast is safe within expected range
             let qty = 10.0 + i as f64;
+            // SAFETY: Cast is safe within expected range
             let price = 100.0 + (i as f64 * 10.0);
 
             tracker.add_pending(i as u64, symbol, side, Qty::new(qty));
@@ -634,6 +637,7 @@ mod position_tests {
         // SAFETY: Cast is safe within expected range
         let positions = tracker.get_all_positions();
         assert_eq!(positions.len(), positions_to_add);
+        // SAFETY: Cast is safe within expected range
 
         // Check positions exist
         for i in 0..positions_to_add {

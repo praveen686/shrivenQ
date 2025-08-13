@@ -311,6 +311,7 @@ impl MarketDataPipeline {
                                     #[allow(clippy::cast_possible_truncation)]
                                     // SAFETY: Cast is safe within expected range
                                     // Bounds checked above
+                                    // SAFETY: Cast is safe within expected range
                                     let val = strike_rounded as i64;
                                     val
                                 } else {
@@ -326,6 +327,7 @@ impl MarketDataPipeline {
                                 let strike_rounded = strike.round();
                                 // SAFETY: Cast is safe within expected range
                                 #[allow(clippy::cast_precision_loss)] // Boundary check constants
+                                // SAFETY: Cast is safe within expected range
                                 let strike_i64 = if strike_rounded >= i64::MIN as f64
                                     && strike_rounded <= i64::MAX as f64
                                 // SAFETY: Cast is safe within expected range
