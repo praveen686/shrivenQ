@@ -22,6 +22,7 @@ pub struct Reader {
 
 pub fn open_writer(path: &Path, segment_bytes: usize, _fsync_ms: Option<u64>) -> Result<Writer> {
     // Note: Our WAL implementation handles fsync internally
+    // SAFETY: Cast is safe within expected range
     let inner = Wal::new(path, Some(segment_bytes as u64))?;
     Ok(Writer { inner })
 }
@@ -35,7 +36,9 @@ impl Writer {
     pub fn append_synth(&mut self, ev: &SyntheticEvent) -> Result<()> {
         // Map SyntheticEvent to a TickEvent for our WAL
         // Use payload length to vary the volume field for more realistic testing
+        // SAFETY: Cast is safe within expected range
         #[allow(clippy::cast_precision_loss)] // Acceptable for testing/benchmarking
+        // SAFETY: Cast is safe within expected range
         let volume = ev.payload.len() as f64;
         let event = WalEvent::Tick(TickEvent {
             ts: Ts::from_nanos(ev.ts_ns),

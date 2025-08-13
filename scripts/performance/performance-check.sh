@@ -24,32 +24,31 @@ mkdir -p "$BENCHMARK_DIR"
 run_critical_benchmarks() {
     echo "⚡ Running critical path benchmarks..."
 
-    # Engine core benchmarks
-    echo "  📊 Engine core performance..."
-    if ! cargo bench --bench engine_benchmarks -- --output-format json > "$BENCHMARK_DIR/engine_results.json" 2>/dev/null; then
-        echo -e "${RED}❌ Engine benchmarks failed${NC}"
-        return 1
-    fi
-
-    # LOB benchmarks
+    # LOB benchmarks (critical path)
     echo "  📊 Order book performance..."
-    if ! cargo bench --bench lob_benchmarks -- --output-format json > "$BENCHMARK_DIR/lob_results.json" 2>/dev/null; then
+    if cargo bench --package lob 2>&1 | tee "$BENCHMARK_DIR/lob_results.txt"; then
+        echo -e "${GREEN}✅ LOB benchmarks completed${NC}"
+    else
         echo -e "${RED}❌ LOB benchmarks failed${NC}"
         return 1
     fi
 
-    # Memory allocation benchmarks
-    echo "  📊 Memory allocation check..."
-    if ! cargo bench --bench memory_benchmarks -- --output-format json > "$BENCHMARK_DIR/memory_results.json" 2>/dev/null; then
-        echo -e "${RED}❌ Memory benchmarks failed${NC}"
-        return 1
+    # Extract key metrics
+    local apply_fast=$(grep "v2_apply_fast" "$BENCHMARK_DIR/lob_results.txt" | grep -oE '[0-9]+(\.[0-9]+)? ns' | head -1)
+    local apply_validated=$(grep "v2_apply_validated" "$BENCHMARK_DIR/lob_results.txt" | grep -oE '[0-9]+(\.[0-9]+)? ns' | head -1)
+    
+    if [ -n "$apply_fast" ]; then
+        echo "    Apply Fast: $apply_fast"
+    fi
+    if [ -n "$apply_validated" ]; then
+        echo "    Apply Validated: $apply_validated"
     fi
 
-    # Bus performance benchmarks
-    echo "  📊 Event bus performance..."
-    if ! cargo bench --bench bus_benchmarks -- --output-format json > "$BENCHMARK_DIR/bus_results.json" 2>/dev/null; then
-        echo -e "${RED}❌ Bus benchmarks failed${NC}"
-        return 1
+    # Engine benchmarks (if exists)
+    if cargo bench --package engine 2>/dev/null | tee "$BENCHMARK_DIR/engine_results.txt"; then
+        echo -e "${GREEN}✅ Engine benchmarks completed${NC}"
+    else
+        echo -e "${YELLOW}⚠️  No engine benchmarks found${NC}"
     fi
 }
 

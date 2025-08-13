@@ -1,0 +1,1459 @@
+what can be auto-fixed vs needs a human
+==================================================
+| issue detected by checker                         | safe to auto-fix?                | remediation strategy                                                                                                                                                                                                                       | notes/guardrails                                                                                                                  |
+| ------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `panic!/unwrap()/expect` in prod                  | **often** (mechanical)           | If enclosing fn returns `Result<_, E>`: rewrite `.unwrap()` → `?`; `.expect("msg")` → `.context("msg")?` (if using `anyhow`) or map to a concrete error with `ok_or_else(...)?`.                                                           | If fn doesn’t return `Result`, propose a patch to change signature to `Result<…>` (review required). Always re-run `cargo check`. |
+| unannotated numeric casts (`as u32`, …)           | **often**                        | Replace with `TryFrom`/`try_into()` and `?` in fallible contexts; when widening (e.g., `u32→u64`), prefer `u64::from(x)`; when truncation intentional in logs/metrics, add scoped `#[allow(clippy::cast_…)]` with a justification comment. | Pick a policy: “prefer correctness (fallible) over convenience (allow)”. Require compile to pass.                                 |
+| `std::collections::HashMap` in hot paths          | **often**                        | Insert dependency `rustc-hash = "1.1"` and rewrite imports/types to `rustc_hash::FxHashMap`. Convert constructors (`HashMap::new/with_capacity`) to `FxHashMap::…`.                                                                        | Optionally add `type FastMap<K,V> = FxHashMap<K,V>;` to localize churn. Run micro-bench/CI perf check.                            |
+| float money (`f64 price/amount`) in internal code | **sometimes** (with scaffolding) | Introduce `struct Money(i64); const SCALE: i64 = 10_000;` (or use `fixed`/`rust_decimal` per policy). Rewrite fields and call sites, add `FromStr`/`Display` & conversion helpers.                                                         | This is where semantics can break. Do in stages with an *adapter layer*, feature flag, and test snapshots.                        |
+| ignored errors `Err(_)`                           | **often**                        | Rewrite to `Err(e)` and either log (`tracing::warn!(%e, …)`) + continue, or `return Err(e)` / `?` depending on context.                                                                                                                    | Require compile + clippy clean.                                                                                                   |
+| TODO/FIXME/HACK                                   | **not a code fix**               | Open an issue, add `// SAFETY:` or `// PERF:` context where appropriate, or refuse to auto-fix.                                                                                                                                            | The tool should fail CI or convert TODO→issue links.                                                                              |
+| excessive `.clone()`                              | **sometimes**                    | Where the target type is `Arc<T>` or `String` in hot path, suggest borrow alternatives; auto-fix only trivial cases (e.g., cloning an `&str` to `String` unnecessarily in formatting).                                                     | Heuristic; keep as “suggested patch” unless trivial.                                                                              |
+| string allocations (`format!/to_string`)          | **sometimes**                    | Replace `format!("{x}")` → `x.to_string()` (same alloc, but simpler), or remove conversion when API accepts `Display`.                                                                                                                     | Often requires API/context awareness → propose diff.                                                                              |
+| magic numbers (≥4 digits)                         | **rarely**                       | Propose extraction to `const` with suggested name near top of module.                                                                                                                                                                      | Needs naming; keep as suggested patches.                                                                                          |
+| `#[allow(..)]` proliferation                      | **N/A**                          | Collapse redundant allows; scope them to minimal item.                                                                                                                                                                                     | Propose only.                                                                                                                     |
+| big functions (>50 lines)                         | **N/A**                          | Suggest refactor points (extract helpers).                                                                                                                                                                                                 | Propose only.                                                                                                                     |
+
+architecture sketch for a “remediator”
+======================================
+
+goals
+
+    run after the checker, consume its JSON, and apply fixes in priority order.
+
+    AST-based edits where possible; text/structural search where it’s safe.
+
+    compile/test/bench after each rule (or batch), auto-revert on failure.
+
+stack
+
+    Parser/rewriter: tree-sitter + tree-sitter-rust for robust syntax nodes.
+
+    CLI & orchestration: Rust (clap, rayon, ignore, globset, regex).
+
+    Build/test: shell out to cargo check/test, cargo clippy; optionally use rustfix to apply machine-applicable clippy suggestions.
+
+    Diffs: generate unified diffs and open PRs or commit per rule via git2.
+
+pipeline
+
+    Inventory: read repo files (.gitignore-aware), load checker JSON.
+
+    Plan: map each violation to a Rule with (detect → transform → validate).
+
+    Apply (safe batch first):
+
+        panic/unwrap/expect → transform where enclosing fn returns Result.
+
+        numeric casts (widening or logging) → From/TryFrom or scoped allow with rationale.
+
+        HashMap → FxHashMap (insert dep edits to Cargo.toml if missing).
+
+    Validate after each rule/batch:
+
+        cargo check -q → if fail, auto-revert that patch and mark rule “deferred”.
+
+        optional: cargo test -q subset, cargo bench smoke, clippy.
+
+    Suggest (non-mechanical): generate patches but don’t apply; write a report and optionally open a PR (labels: needs-review).
+
+    Report: before/after counts; what was fixed, what’s suggested, and what failed with reasons.
+
+rule shape (Rust)
+trait Rule {
+    fn name(&self) -> &'static str;
+    fn detect(&self, file: &str, ast: &Tree) -> Vec<Edit>; // positions + replacements
+    fn apply(&self, source: &str, edits: &[Edit]) -> String; // merged text
+    fn risk(&self) -> Risk; // Low/Med/High
+}
+
+Maintain a batcher that groups low-risk edits across files, applies them, then compiles.
+High-risk (e.g., money type swap) gated behind --enable-risky and feature flags.
+
+
+
+concrete auto-fix patterns (mechanical)
+
+    unwrap → ? (only if function returns Result)
+
+    Detect enclosing function signature -> Result<…>.
+
+    Replace .unwrap() with ?.
+
+    For .expect("msg"), add use anyhow::Context; if project uses anyhow, then context("msg")?; else map to a typed error (configurable).
+
+    Add imports only once per file.
+
+    numeric casts
+
+    If pattern is as u64 from u32|usize: replace with u64::from(x).
+
+    If narrowing (e.g., u64 as u32) inside logging/formatting only → leave and add #[allow(clippy::cast_possible_truncation)] // display-only.
+
+    If narrowing in logic → replace with u32::try_from(x)? and propagate Result.
+
+    HashMap → FxHashMap
+
+If Cargo.toml lacks rustc-hash, insert:
+    [dependencies]
+rustc-hash = "1.1"
+
+
+
+    In files: add use rustc_hash::FxHashMap; (or type FastMap<K,V> = FxHashMap<K,V>;).
+
+    Replace type idents and constructors (HashMap::new, HashMap::<K,V>::with_capacity) accordingly.
+
+    Keep a mapping table; rerun clippy.
+
+    ignored errors Err(_)
+
+    Replace with:
+    Err(e) => {
+    tracing::warn!(error = %e, "ignored error");
+    // original fallback or `return Err(e)` if within Result
+}
+If enclosing fn is Result, prefer return Err(e) (configurable).
+
+risky but doable (staged migrations)
+
+float money (recommended staged plan)
+
+    Step A: introduce Money(i64) newtype + SCALE + From<f64> (behind a feature flag) with strict rounding; add serde for APIs.
+
+    Step B: gradually replace struct fields f64→Money; add adapters at API boundaries.
+
+    Step C: remove feature flag once all call sites migrated.
+
+    Tool role: generate the newtype module, add imports, and produce suggested diffs for field/type swaps with a migration checklist.
+
+guardrails you’ll want
+
+    Always run cargo check after each applied rule; auto-revert if it redlines.
+
+    Write patches to a new branch like remediate/2025-08-13-<rule>, commit per rule, and push a single PR summarizing what got auto-fixed and what needs review.
+
+    Keep a per-rule allowlist/denylist (same glob syntax as your checker) to exclude sensitive code (e.g., unsafe memory pools, perf-critical tight loops).
+
+    Make the tool dry-run by default and require --apply to write.
+
+quick MVP plan
+
+    Milestone 0: driver + filesystem + report + dry-run diff output.
+
+    M1 (auto): unwrap/expect → ? / context; HashMap→FxHashMap; widening numeric casts; Err(_) capture/propagate.
+
+    M2 (suggest): clones, string allocs, magic numbers, large functions.
+
+    M3 (staged): float money migration scaffolding (newtype + conversions + adapters).
+
+ere’s a tiny Rust remediation tool skeleton you can drop into a repo and extend. it’s designed to consume your codebase directly (gitignore-aware), run a couple of mechanical fixes, and propose riskier ones. 
+it defaults to dry-run; use --apply to write changes, and it will revert if cargo check fails.
+
+1) project scaffold (copy–paste)
+mkdir -p sq-remediator/{src,rules,scripts}
+cat > sq-remediator/Cargo.toml <<'EOF'
+[package]
+name = "sq-remediator"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "ShrivenQuant remediation helper (mechanical fixes w/ compile guards)"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+ignore = "0.4"         # gitignore-aware walking
+rayon = "1.10"         # parallelism
+regex = "1"
+globset = "0.4"        # allowlists/denylists via globs
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+indicatif = "0.17"     # pretty progress (optional)
+
+[dev-dependencies]
+tempfile = "3"
+EOF
+
+src/main.rs
+use anyhow::{Context, Result};
+use clap::{ArgAction, Parser};
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use ignore::{DirEntry, WalkBuilder};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    time::Duration,
+};
+
+mod util;
+mod rules; // dispatcher + traits
+use crate::rules::{FixOutcome, FixPlan, Rule};
+
+#[derive(Parser, Debug)]
+#[command(name = "sq-remediator", about = "Apply safe, mechanical fixes to code")]
+struct Cli {
+    /// Apply fixes (otherwise dry-run)
+    #[arg(long, action = ArgAction::SetTrue)]
+    apply: bool,
+
+    /// Include riskier transforms (e.g., unwrap->?); still guarded by cargo check
+    #[arg(long, action = ArgAction::SetTrue)]
+    aggressive: bool,
+
+    /// Only scan production paths (skip tests/benches/examples)
+    #[arg(long, default_value_t = true)]
+    prod_only: bool,
+
+    /// Repository root (auto-detect if omitted)
+    #[arg(long)]
+    repo: Option<PathBuf>,
+
+    /// Show up to N sample changes per rule in dry-run
+    #[arg(long, default_value_t = 5)]
+    show: usize,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct Config {
+    #[serde(default)]
+    ignore: Ignore,
+    #[serde(default)]
+    allowlist: Allowlist,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct Ignore { #[serde(default)] paths: Vec<String> }
+#[derive(Debug, Deserialize, Default)]
+struct Allowlist {
+    #[serde(default)] paths: Vec<String>,
+    #[serde(default)] unwrap_to_question: Vec<String>,
+    #[serde(default)] hashmap_to_fxhash: Vec<String>,
+}
+
+fn load_config(root: &Path) -> Config {
+    let p = root.join("compliance.toml");
+    if let Ok(bytes) = fs::read(&p) {
+        toml::from_slice(&bytes).unwrap_or_default()
+    } else {
+        Config::default()
+    }
+}
+
+fn globset(patterns: &[String]) -> GlobSet {
+    let mut b = GlobSetBuilder::new();
+    for p in patterns {
+        if let Ok(g) = Glob::new(p) { b.add(g); }
+    }
+    b.build().unwrap_or_else(|_| GlobSetBuilder::new().build().unwrap())
+}
+
+fn collect_files(root: &Path, prod_only: bool, ignored: &GlobSet) -> Vec<PathBuf> {
+    let mut w = WalkBuilder::new(root);
+    w.git_ignore(true).git_exclude(true).hidden(true);
+    let it = w.build();
+
+    it.filter_map(Result::ok)
+        .filter(|e: &DirEntry| {
+            e.file_type().map(|ft| ft.is_file()).unwrap_or(false)
+                && e.path().extension().map(|x| x == "rs").unwrap_or(false)
+        })
+        .map(|e| e.into_path())
+        .filter(|p| {
+            if ignored.is_match(p) { return false; }
+            if prod_only {
+                let s = p.to_string_lossy();
+                !(s.contains("/tests/") || s.contains("/test/") || s.contains("/benches/") || s.contains("/examples/"))
+            } else { true }
+        })
+        .collect()
+}
+
+fn cargo_check(root: &Path, timeout: Duration) -> bool {
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(root)
+        .arg("check")
+        .arg("--quiet")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    match util::run_with_timeout(cmd, timeout) {
+        Ok(code) => code.success(),
+        Err(_) => false,
+    }
+}
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+    let root = cli.repo.unwrap_or(std::env::current_dir()?);
+    let cfg = load_config(&root);
+    let ignored = globset(&cfg.ignore.paths);
+
+    let files = collect_files(&root, cli.prod_only, &ignored);
+    if files.is_empty() {
+        eprintln!("no Rust files found");
+        return Ok(());
+    }
+
+    // rules registry (add new rules here)
+    let mut rules: Vec<Box<dyn Rule + Send + Sync>> = vec![
+        Box::new(rules::hashmap_to_fxhash::HashMapToFxHashMap::new(
+            globset(&cfg.allowlist.hashmap_to_fxhash),
+        )),
+        Box::new(rules::unwrap_to_question::UnwrapToQuestion::new(
+            globset(&cfg.allowlist.unwrap_to_question),
+            cli.aggressive,
+        )),
+    ];
+
+    // plan: detect in parallel
+    let mp = MultiProgress::new();
+    let pb = mp.add(ProgressBar::new(rules.len() as u64));
+    pb.set_style(ProgressStyle::with_template(
+        "{spinner:.green} {pos}/{len} rules planned… {wide_msg}",
+    ).unwrap());
+
+    let plans: Vec<(String, FixPlan)> = rules
+        .par_iter_mut()
+        .map(|r| {
+            let plan = r.plan(&root, &files);
+            (r.name().to_string(), plan)
+        })
+        .collect();
+
+    // report
+    println!("🧩 remediation plan (dry-run = {}):", !cli.apply);
+    for (name, plan) in &plans {
+        println!("  • {}: {} file(s), {} patch(es)", name, plan.files.len(), plan.total_edits());
+        if cli.show > 0 {
+            for preview in plan.previews().into_iter().take(cli.show) {
+                println!("    - {}", preview);
+            }
+        }
+    }
+
+    if !cli.apply {
+        println!("\n(run with --apply to write changes)");
+        return Ok(());
+    }
+
+    // apply (rule-by-rule), validate with cargo check; revert on failure
+    for (name, plan) in plans {
+        if plan.is_empty() { continue; }
+        println!("✍️  applying rule: {}", name);
+        let backup = util::Backup::create(&plan)?;
+        if let Err(e) = plan.apply_all() {
+            eprintln!("  ↳ apply failed: {e}");
+            backup.restore().ok();
+            continue;
+        }
+        if !cargo_check(&root, Duration::from_secs(45)) {
+            eprintln!("  ↳ cargo check failed; reverting");
+            backup.restore().ok();
+        } else {
+            backup.discard().ok();
+            println!("  ↳ ok");
+        }
+    }
+
+    Ok(())
+}
+
+
+src/util.rs
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+    process::{ExitStatus, Command},
+    time::{Duration, Instant},
+};
+
+use crate::rules::FixPlan;
+
+pub struct Backup { copies: Vec<(PathBuf, Vec<u8>)> }
+
+impl Backup {
+    pub fn create(plan: &FixPlan) -> Result<Self> {
+        let mut copies = Vec::new();
+        for f in &plan.files {
+            let bytes = fs::read(f).with_context(|| format!("backup read {:?}", f))?;
+            copies.push((f.clone(), bytes));
+        }
+        Ok(Self { copies })
+    }
+    pub fn restore(self) -> Result<()> {
+        for (p, bytes) in self.copies {
+            fs::write(&p, &bytes).with_context(|| format!("restore {:?}", p))?;
+        }
+        Ok(())
+    }
+    pub fn discard(self) -> Result<()> { Ok(()) }
+}
+
+// naive timeout (portable enough for a CLI)
+pub fn run_with_timeout(mut cmd: Command, timeout: Duration) -> io::Result<ExitStatus> {
+    use std::process::Stdio;
+    let start = Instant::now();
+    let mut child = cmd.spawn()?;
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(status);
+        }
+        if start.elapsed() >= timeout {
+            let _ = child.kill();
+            return Ok(ExitStatus::from_raw(1));
+        }
+        std::thread::sleep(Duration::from_millis(30));
+    }
+}
+#[cfg(unix)]
+use std::os::unix::process::ExitStatusExt;
+#[cfg(windows)]
+use std::os::windows::process::ExitStatusExt;
+
+src/rules/mod.rs
+use anyhow::{Context, Result};
+use globset::GlobSet;
+use rayon::prelude::*;
+use regex::Regex;
+use std::path::{Path, PathBuf};
+use std::{fs};
+
+pub trait Rule {
+    fn name(&self) -> &str;
+    fn plan(&mut self, repo_root: &Path, files: &[PathBuf]) -> FixPlan;
+}
+
+#[derive(Clone, Debug)]
+pub struct FileEdit {
+    pub path: PathBuf,
+    pub original: String,
+    pub updated: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct FixPlan {
+    pub files: Vec<PathBuf>,
+    pub edits: Vec<FileEdit>,
+}
+impl FixPlan {
+    pub fn is_empty(&self) -> bool { self.edits.is_empty() }
+    pub fn total_edits(&self) -> usize { self.edits.len() }
+    pub fn previews(&self) -> Vec<String> {
+        self.edits.iter().map(|e| {
+            let before = e.original.lines().next().unwrap_or("").trim();
+            let after  = e.updated.lines().next().unwrap_or("").trim();
+            format!("{}:  “{}” → “{}”", e.path.display(), before, after)
+        }).collect()
+    }
+    pub fn apply_all(&self) -> Result<()> {
+        // group edits per file (here each edit already contains whole-file updated content)
+        use std::collections::HashMap;
+        let mut by_file: HashMap<&Path, &FileEdit> = HashMap::new();
+        for e in &self.edits { by_file.insert(&e.path, e); }
+        for (p, e) in by_file {
+            fs::write(p, &e.updated)
+                .with_context(|| format!("write {:?}", p))?;
+        }
+        Ok(())
+    }
+}
+
+pub mod unwrap_to_question;
+pub mod hashmap_to_fxhash;
+
+
+src/rules/hashmap_to_fxhash.rs
+use super::*;
+use regex::Regex;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+pub struct HashMapToFxHashMap {
+    allow: GlobSet,
+}
+impl HashMapToFxHashMap {
+    pub fn new(allow: GlobSet) -> Self { Self { allow } }
+    fn rewrite_cargo_toml(repo: &Path) {
+        let p = repo.join("Cargo.toml");
+        if let Ok(txt) = fs::read_to_string(&p) {
+            if !txt.contains("rustc-hash") {
+                let mut appended = txt.clone();
+                appended.push_str("\n[dependencies]\nrustc-hash = \"1.1\"\n");
+                let _ = fs::write(&p, appended);
+            }
+        }
+    }
+}
+
+impl Rule for HashMapToFxHashMap {
+    fn name(&self) -> &str { "hashmap->fxhashmap" }
+
+    fn plan(&mut self, repo_root: &Path, files: &[PathBuf]) -> FixPlan {
+        let import_re = Regex::new(r#"(?m)^\s*use\s+std::collections::HashMap\s*;"#).unwrap();
+        let ctor_re   = Regex::new(r#"HashMap::"#).unwrap();
+
+        let mut edits = Vec::new();
+        let mut touched_files = Vec::new();
+
+        for p in files {
+            if self.allow.is_match(p) { continue; } // allowlisted -> skip
+            let Ok(src) = fs::read_to_string(p) else { continue; };
+            let mut updated = src.clone();
+            let mut changed = false;
+
+            if import_re.is_match(&updated) {
+                updated = import_re.replace_all(&updated, "use rustc_hash::FxHashMap;").into_owned();
+                changed = true;
+            }
+            if ctor_re.is_match(&updated) {
+                updated = ctor_re.replace_all(&updated, "FxHashMap::").into_owned();
+                changed = true;
+            }
+            // lightweight type aliases (optional): replace "HashMap<" types
+            let ty_re = Regex::new(r#"(?m)(\W)HashMap<"#).unwrap();
+            if ty_re.is_match(&updated) {
+                updated = ty_re.replace_all(&updated, "${1}FxHashMap<").into_owned();
+                changed = true;
+            }
+
+            if changed && updated != src {
+                edits.push(FileEdit { path: p.clone(), original: src, updated });
+                touched_files.push(p.clone());
+            }
+        }
+        if !edits.is_empty() {
+            Self::rewrite_cargo_toml(repo_root);
+        }
+        FixPlan { files: touched_files, edits }
+    }
+}
+
+src/rules/unwrap_to_question.rs
+use super::*;
+use regex::Regex;
+use std::fs;
+use std::path::PathBuf;
+
+/// Conservative, two-mode rule:
+/// - default: **suggest-only** (edits generated but guarded by `aggressive` flag in constructor)
+/// - aggressive: apply only inside files that already contain `-> Result<` and evidence of `?`
+pub struct UnwrapToQuestion {
+    allow: GlobSet,
+    aggressive: bool,
+}
+impl UnwrapToQuestion {
+    pub fn new(allow: GlobSet, aggressive: bool) -> Self { Self { allow, aggressive } }
+}
+
+impl Rule for UnwrapToQuestion {
+    fn name(&self) -> &str { "unwrap->?" }
+
+    fn plan(&mut self, _repo_root: &Path, files: &[PathBuf]) -> FixPlan {
+        let re_unwrap = Regex::new(r#"\.unwrap\(\)"#).unwrap();
+        let re_expect = Regex::new(r#"\.expect\(\s*"([^"]*)"\s*\)"#).unwrap();
+        let re_result_fn = Regex::new(r#"->\s*Result\s*<"#).unwrap();
+
+        let mut edits = Vec::new();
+        let mut touched = Vec::new();
+
+        for p in files {
+            if self.allow.is_match(p) { continue; }
+            let Ok(src) = fs::read_to_string(p) else { continue; };
+
+            // only consider files that already use Result + ? (reduces false positives)
+            if !(re_result_fn.is_match(&src) && src.contains("?")) && !self.aggressive {
+                continue;
+            }
+
+            if !re_unwrap.is_match(&src) && !re_expect.is_match(&src) { continue; }
+
+            let mut updated = src.clone();
+            // `.expect("msg")` → `.expect("msg")?` is not valid; prefer anyhow::Context if project has it.
+            // Here we conservatively drop to `?` and leave a TODO comment for context enrichment.
+            updated = re_expect.replace_all(&updated, "/* TODO: add context */ ?").into_owned();
+            updated = re_unwrap.replace_all(&updated, "?").into_owned();
+
+            if updated != src {
+                edits.push(FileEdit { path: p.clone(), original: src, updated });
+                touched.push(p.clone());
+            }
+        }
+
+        FixPlan { files: touched, edits }
+    }
+}
+
+scripts/run.sh (optional wrapper)
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+BIN="$HERE/target/release/sq-remediator"
+if [[ ! -x "$BIN" ]]; then
+  (cd "$HERE" && cargo build --release)
+fi
+exec "$BIN" "$@"
+
+2) how to use
+cd sq-remediator
+cargo build --release
+
+# dry-run (shows plan only; won’t write files)
+./target/release/sq-remediator
+
+# apply only safe mechanical rule (HashMap→FxHashMap) and compile-check after:
+./target/release/sq-remediator --apply
+
+# include riskier transforms (unwrap→?), still auto-reverted on cargo check failure:
+./target/release/sq-remediator --apply --aggressive
+
+# show sample previews per rule
+./target/release/sq-remediator --show 10
+
+
+3) notes / next steps
+
+    guardrails are on by default: every batch is compiled (cargo check) and auto-reverted if it fails.
+    the unwrap->? rule is deliberately conservative; 
+    for real accuracy, swap to a syntax tree approach (e.g., tree-sitter-rust) and ensure the edit is within a function that returns Result<…>.
+    add rules incrementally: numeric-cast remediation (as u64→u64::from(x), narrowing→try_from()?), Err(_) capture, etc. 
+    Each rule should follow the same plan → apply → validate pattern.
+
+here are drop-in additions to your remediator that 
+(1) add a numeric-casts rule with a conservative auto-fix path and 
+(2) upgrade your Cargo.toml injection to be workspace-aware (nearest manifest), safe, and idempotent.
+
+1) Add the numeric-casts rule
+
+Create: src/rules/numeric_casts.rs
+use super::*;
+use regex::Regex;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+/// Conservative auto-fixes:
+///  - `<expr>.len() as u64`      -> `u64::from(<expr>.len())`
+///  - `<expr>.capacity() as u64` -> `u64::from(<expr>.capacity())`
+///  - same for `u128`
+/// Aggressive (behind `aggressive=true`):
+///  - `<expr> as u32` (etc) -> `u32::try_from(<expr>)?`
+///    (inserts `use std::convert::TryFrom;` if missing)
+pub struct NumericCasts {
+    aggressive: bool,
+    allow_all: GlobSet, // global allowlist (optional)
+}
+
+impl NumericCasts {
+    pub fn new(aggressive: bool, allow_all: GlobSet) -> Self {
+        Self { aggressive, allow_all }
+    }
+
+    fn insert_tryfrom_use(mut src: String) -> String {
+        if !src.contains("use std::convert::TryFrom;") {
+            // Insert after file attrs if present, else at top
+            let mut lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
+            let mut idx = 0usize;
+            while idx < lines.len() && lines[idx].trim_start().starts_with("#!") { idx += 1; }
+            lines.insert(idx, "use std::convert::TryFrom;".into());
+            src = lines.join("\n");
+        }
+        src
+    }
+
+    fn nearest_manifest_for(file: &Path, repo_root: &Path) -> Option<PathBuf> {
+        crate::util::nearest_manifest(file, repo_root)
+    }
+}
+
+impl Rule for NumericCasts {
+    fn name(&self) -> &str { "numeric-casts" }
+
+    fn plan(&mut self, repo_root: &Path, files: &[PathBuf]) -> FixPlan {
+        let re_len_u64   = Regex::new(r#"(?x)
+            (\.len\(\))\s+as\s+u64\b
+        "#).unwrap();
+        let re_cap_u64   = Regex::new(r#"(?x)
+            (\.capacity\(\))\s+as\s+u64\b
+        "#).unwrap();
+        let re_len_u128  = Regex::new(r#"(\.len\(\))\s+as\s+u128\b"#).unwrap();
+        let re_cap_u128  = Regex::new(r#"(\.capacity\(\))\s+as\s+u128\b"#).unwrap();
+
+        // Aggressive: any `<expr> as u{8,16,32,64,128}|i{..}|usize|isize`
+        // Keep it simple: only convert identifiers or parenthesized identifiers.
+        let re_any_cast  = Regex::new(r#"(?x)
+            (?P<expr>\b[A-Za-z_]\w*\b|\(\s*[A-Za-z_]\w*\s*\))
+            \s+as\s+
+            (?P<dst>u(?:8|16|32|64|128)|i(?:8|16|32|64|128)|usize|isize)\b
+        "#).unwrap();
+
+        let mut edits = Vec::<FileEdit>::new();
+        let mut touched = Vec::<PathBuf>::new();
+
+        for p in files {
+            if self.allow_all.is_match(p) { continue; }
+            let Ok(src) = fs::read_to_string(p) else { continue; };
+            let mut updated = src.clone();
+            let mut changed = false;
+
+            // conservative, always-on rewrites
+            let u1 = re_len_u64.replace_all(&updated, |caps: &regex::Captures| {
+                format!("u64::from({})", &caps[1].trim())
+            }).into_owned();
+            if u1 != updated { updated = u1; changed = true; }
+
+            let u2 = re_cap_u64.replace_all(&updated, |caps: &regex::Captures| {
+                format!("u64::from({})", &caps[1].trim())
+            }).into_owned();
+            if u2 != updated { updated = u2; changed = true; }
+
+            let u3 = re_len_u128.replace_all(&updated, |caps: &regex::Captures| {
+                format!("u128::from({})", &caps[1].trim())
+            }).into_owned();
+            if u3 != updated { updated = u3; changed = true; }
+
+            let u4 = re_cap_u128.replace_all(&updated, |caps: &regex::Captures| {
+                format!("u128::from({})", &caps[1].trim())
+            }).into_owned();
+            if u4 != updated { updated = u4; changed = true; }
+
+            // aggressive, fallible casts -> try_from(...)?
+            if self.aggressive && re_any_cast.is_match(&updated) {
+                let mut tmp = updated.clone();
+                tmp = re_any_cast.replace_all(&tmp, |caps: &regex::Captures| {
+                    let expr = caps.name("expr").unwrap().as_str().trim();
+                    let dst  = caps.name("dst").unwrap().as_str();
+                    format!("{}::try_from({})?", dst, expr)
+                }).into_owned();
+
+                if tmp != updated {
+                    tmp = Self::insert_tryfrom_use(tmp);
+                    updated = tmp;
+                    changed = true;
+                }
+            }
+
+            if changed && updated != src {
+                edits.push(FileEdit { path: p.clone(), original: src, updated });
+                touched.push(p.clone());
+            }
+        }
+
+        // NOTE: no Cargo.toml edits required for this rule
+        FixPlan { files: touched, edits }
+    }
+}
+
+Wire it up:
+
+Update src/rules/mod.rs:
+pub mod unwrap_to_question;
+pub mod hashmap_to_fxhash;
+pub mod numeric_casts; // <-- add this line
+
+2) Make Cargo.toml injection workspace-aware (nearest manifest)
+
+Add helpers: src/util.rs (new functions at bottom)
+use regex::Regex;
+use std::fs;
+
+pub fn nearest_manifest(start: &std::path::Path, repo_root: &std::path::Path) -> Option<std::path::PathBuf> {
+    let mut cur = start.parent();
+    while let Some(dir) = cur {
+        let candidate = dir.join("Cargo.toml");
+        if candidate.exists() { return Some(candidate); }
+        if dir == repo_root { break; }
+        cur = dir.parent();
+    }
+    // fallback to repo root manifest if present
+    let root = repo_root.join("Cargo.toml");
+    if root.exists() { Some(root) } else { None }
+}
+
+/// Insert `dep = "ver"` into the `[dependencies]` table of the given manifest, if missing.
+/// - idempotent
+/// - keeps the dependency table contiguous (no second `[dependencies]` block)
+pub fn ensure_dep_in_manifest(manifest: &std::path::Path, dep: &str, ver: &str) -> std::io::Result<()> {
+    let mut txt = fs::read_to_string(manifest)?;
+    let needle = format!(r#"{} = ""#, dep);
+    if txt.contains(&needle) || txt.contains(&format!("\n{dep} =")) { return Ok(()); }
+
+    let deps_re = Regex::new(r#"(?m)^\s*\[dependencies\]\s*$"#).unwrap();
+    if let Some(m) = deps_re.find(&txt) {
+        // find end of the dependencies table (next table header or EOF)
+        let tail_re = Regex::new(r#"(?m)^\s*\[[^\]]+\]\s*$"#).unwrap();
+        let tail = tail_re.find_at(&txt, m.end()).map(|mm| mm.start()).unwrap_or(txt.len());
+        let mut new = String::new();
+        new.push_str(&txt[..tail]);
+        if !new.ends_with('\n') { new.push('\n'); }
+        new.push_str(&format!(r#"{dep} = "{ver}""#));
+        new.push('\n');
+        new.push_str(&txt[tail..]);
+        txt = new;
+    } else {
+        if !txt.ends_with('\n') { txt.push('\n'); }
+        txt.push_str("[dependencies]\n");
+        txt.push_str(&format!(r#"{dep} = "{ver}""#));
+        txt.push('\n');
+    }
+    fs::write(manifest, txt)
+}
+
+Use it inside the HashMap rule: update src/rules/hashmap_to_fxhash.rs
+use crate::util; // add
+
+impl HashMapToFxHashMap {
+    pub fn new(allow: GlobSet) -> Self { Self { allow } }
+
+    fn ensure_dep_for_file(repo: &Path, file: &Path) {
+        if let Some(manifest) = util::nearest_manifest(file, repo) {
+            let _ = util::ensure_dep_in_manifest(&manifest, "rustc-hash", "1.1");
+        }
+    }
+}
+
+impl Rule for HashMapToFxHashMap {
+    fn name(&self) -> &str { "hashmap->fxhashmap" }
+
+    fn plan(&mut self, repo_root: &Path, files: &[PathBuf]) -> FixPlan {
+        // ... (same rewrite logic)
+        // inside the loop, when you push an edit for file `p`:
+        //   ensure dependency at that crate’s manifest
+        //   (this replaces the old "rewrite root Cargo.toml" approach)
+        //
+        // after `if changed && updated != src { ... }`:
+                edits.push(FileEdit { path: p.clone(), original: src, updated });
+                touched_files.push(p.clone());
+                Self::ensure_dep_for_file(repo_root, p);
+        // ...
+    }
+}
+
+3) How it behaves
+
+    Numeric casts (safe): turns buf.len() as u64 into u64::from(buf.len()) (and capacity, also u128 variants).
+    Numeric casts (aggressive mode): rewrites x as u32 to u32::try_from(x)? and adds use std::convert::TryFrom; if needed. 
+    Every batch is compile-checked; if it fails, the tool reverts the patch.
+    FxHashMap rule: now finds the nearest Cargo.toml for each touched file and 
+    idempotently inserts rustc-hash = "1.1" inside the correct [dependencies] table (no duplicate tables).
+
+4) Quick run
+# dry-run with previews
+cargo run -p sq-remediator -- --show 8
+
+# apply safe fixes
+cargo run -p sq-remediator -- --apply
+
+# apply + aggressive numeric casts (auto-reverts on cargo check failure)
+cargo run -p sq-remediator -- --apply --aggressive
+
+totally doable. here’s a drop-in “Err(_) remediator” rule you can add to your Rust remediator. it fixes the two most common ignore patterns safely:
+
+    if let Err(_) = expr { … } / while let Err(_) = expr { … }
+    → captures the error as e and injects a log at the top of the block
+
+    simple match arms like Err(_) => expr,
+    → rewrites to Err(e) => { log; expr },
+
+it uses tracing::warn! when the nearest crate depends on tracing; otherwise it falls back to eprintln!. 
+everything is still guarded by your existing “apply → cargo check → auto-revert on failure” flow.
+
+1) util helpers (nearest Cargo.toml + dep check)
+
+Append these to your existing src/util.rs (or adjust if you already added similar):
+use std::fs;
+use std::path::{Path, PathBuf};
+use toml; // already in Cargo.toml
+
+pub fn nearest_manifest(start: &Path, repo_root: &Path) -> Option<PathBuf> {
+    let mut cur = start.parent();
+    while let Some(dir) = cur {
+        let candidate = dir.join("Cargo.toml");
+        if candidate.exists() { return Some(candidate); }
+        if dir == repo_root { break; }
+        cur = dir.parent();
+    }
+    let root = repo_root.join("Cargo.toml");
+    if root.exists() { Some(root) } else { None }
+}
+
+pub fn manifest_contains_dep(manifest: &Path, dep: &str) -> bool {
+    let Ok(txt) = fs::read_to_string(manifest) else { return false; };
+    if let Ok(value) = txt.parse::<toml::Value>() {
+        if let Some(deps) = value.get("dependencies") {
+            return deps.get(dep).is_some();
+        }
+    }
+    // fallback heuristic
+    txt.contains(&format!("\n{dep} =")) || txt.contains(&format!("\n{dep}="))
+}
+
+2) the rule: src/rules/err_wildcard.rs
+use super::*;
+use crate::util;
+use regex::Regex;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+/// Remediate patterns that ignore errors via `Err(_)`.
+/// Safe, mechanical transforms:
+///  1) `if|while let Err(_) = <expr> { ... }`
+///     -> `if|while let Err(e) = <expr> { <log>; ... }`
+///  2) simple match arms: `Err(_) => <expr>,`
+///     -> `Err(e) => { <log>; <expr> },`
+/// Notes:
+///  - We detect per-file whether `tracing` is available (nearest Cargo.toml),
+///    else fall back to `eprintln!`.
+///  - We only target *simple* match-arm bodies on the same line (no braces).
+///    (Keeps this regex-based approach robust; complex arms are skipped.)
+pub struct ErrWildcard {
+    repo_root: PathBuf,
+    allow: GlobSet,  // allowlist to *skip* remediation
+}
+
+impl ErrWildcard {
+    pub fn new(repo_root: PathBuf, allow: GlobSet) -> Self {
+        Self { repo_root, allow }
+    }
+
+    fn log_snippet(&self, file: &Path) -> String {
+        let tracing = util::nearest_manifest(file, &self.repo_root)
+            .map(|m| util::manifest_contains_dep(&m, "tracing"))
+            .unwrap_or(false);
+        if tracing {
+            r#"tracing::warn!(error = %e, "ignored error");"#.to_string()
+        } else {
+            r#"eprintln!("ignored error: {e}");"#.to_string()
+        }
+    }
+}
+
+impl Rule for ErrWildcard {
+    fn name(&self) -> &str { "err-wildcard" }
+
+    fn plan(&mut self, _repo_root: &Path, files: &[PathBuf]) -> FixPlan {
+        // mawk-friendly character classes; multi-line where needed
+        let re_if_while = Regex::new(
+            r#"(?m)(?P<kw>\bif\b|\bwhile\b)\s+let\s+Err\(\s*_\s*\)\s*=\s*(?P<expr>[^{;]+)\{"#
+        ).unwrap();
+
+        // Simple single-line match arms: Err(_) => <expr>,
+        // (no leading brace in expr; conservative by design)
+        let re_match_simple = Regex::new(
+            r#"(?m)Err\(\s*_\s*\)\s*=>\s*(?P<body>(?:[^,{]|{[^}]*})+?),"#
+        ).unwrap();
+
+        let re_err_pat = Regex::new(r#"Err\(\s*_\s*\)"#).unwrap();
+
+        let mut edits = Vec::<FileEdit>::new();
+        let mut touched = Vec::<PathBuf>::new();
+
+        for p in files {
+            if self.allow.is_match(p) { continue; }
+            let Ok(src) = fs::read_to_string(p) else { continue; };
+            let mut updated = src.clone();
+            let mut changed = false;
+
+            // 1) if|while let Err(_) = expr {
+            if re_if_while.is_match(&updated) {
+                let log = self.log_snippet(p);
+                updated = re_if_while
+                    .replace_all(&updated, |caps: &regex::Captures| {
+                        let kw = &caps["kw"];
+                        let expr = caps["expr"].trim();
+                        format!(r#"{kw} let Err(e) = {expr} {{ {log} "#)
+                    })
+                    .into_owned();
+                changed = true;
+            }
+
+            // 2) simple match arms on the same line
+            if re_match_simple.is_match(&updated) {
+                let log = self.log_snippet(p);
+                updated = re_match_simple
+                    .replace_all(&updated, |caps: &regex::Captures| {
+                        let body = caps["body"].trim();
+                        format!(r#"Err(e) => {{ {log} {body} }},"#)
+                    })
+                    .into_owned();
+                changed = true;
+            }
+
+            // 3) fallback: inside any remaining contexts, at least bind the error (no log injection).
+            // This is intentionally minimal to avoid breaking complex arm formatting.
+            if re_err_pat.is_match(&updated) {
+                updated = re_err_pat.replace_all(&updated, "Err(e)").into_owned();
+                changed = true;
+            }
+
+            if changed && updated != src {
+                edits.push(FileEdit { path: p.clone(), original: src, updated });
+                touched.push(p.clone());
+            }
+        }
+
+        FixPlan { files: touched, edits }
+    }
+}
+
+3) wire it up
+a) export the module
+
+Update src/rules/mod.rs:
+pub mod unwrap_to_question;
+pub mod hashmap_to_fxhash;
+pub mod numeric_casts;
+pub mod err_wildcard;     // <-- add this line
+
+b) register the rule (in src/main.rs where you push rules)
+    let mut rules: Vec<Box<dyn Rule + Send + Sync>> = vec![
+        Box::new(rules::hashmap_to_fxhash::HashMapToFxHashMap::new(
+            globset(&cfg.allowlist.hashmap_to_fxhash),
+        )),
+        Box::new(rules::unwrap_to_question::UnwrapToQuestion::new(
+            globset(&cfg.allowlist.unwrap_to_question),
+            cli.aggressive,
+        )),
+        Box::new(rules::numeric_casts::NumericCasts::new(
+            cli.aggressive,
+            globset(&cfg.allowlist.paths), // global allowlist ok
+        )),
+        Box::new(rules::err_wildcard::ErrWildcard::new(
+            root.clone(),                  // repo root for nearest manifest lookup
+            globset(&cfg.allowlist.paths), // or a dedicated allowlist if you add one
+        )),
+    ];
+
+(if root is not in scope there, grab it from earlier in main where you set let root = ….)
+
+4) usage
+
+    dry-run (see plan + previews):
+    ./target/release/sq-remediator --show 10
+
+apply safe changes; every batch compile-checked and auto-reverted on failure:
+./target/release/sq-remediator --apply
+
+with aggressive mode (pairs nicely with your numeric-casts rule):
+./target/release/sq-remediator --apply --aggressive
+
+5) limitations (honest ones)
+
+    This is a regex-based remediator; it purposely targets simple, unambiguous shapes. Complex match arms or nested patterns are left alone (or just get Err(e) binding). 
+    That’s by design to keep it safe.
+    For bullet-proof edits inside arbitrary Rust syntax, move this rule to a tree-sitter-based implementation later; 
+    the public API of the rule (plan → apply → cargo check → revert) can stay the same.
+If you want, I can also add a follow-up rule that toggles between log & continue vs propagate error based on whether the 
+enclosing function returns Result<..> (still regex-friendly, reasonably safe).
+
+here’s a drop-in rule that decides, per file, whether to propagate errors or log & continue, based on whether the file already contains functions that return Result<…>. It’s conservative (regex-based), compile-guarded by your existing “apply → cargo check → revert on failure” flow, 
+and only does “propagate” in shapes that are safe to rewrite.
+
+
+1) Add the rule
+
+Create: src/rules/err_policy.rs
+use super::*;
+use crate::util;
+use regex::Regex;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+/// Toggle between "log & continue" vs "propagate error" for ignored Err(_)
+/// Decision is **per-file**:
+///   - If file contains any `fn .. -> Result<…>` (and usually uses `?`),
+///     we prefer **propagate** in simple/clearly safe spots.
+///   - Otherwise, we **log** and keep previous behavior.
+/// Safe rewrites only:
+///   1) Simple match arms: `Err(_) => <body>,`
+///        -> propagate: `Err(e) => return Err(e),`
+///        -> log:       `Err(e) => { <log>; <body> },`
+///   2) Empty `if|while let Err(_) = expr {}` blocks (truly empty):
+///        -> propagate: `if|while let Err(e) = expr { return Err(e); }`
+///        -> log:       `if|while let Err(e) = expr { <log> }`
+///   3) Fallback binding: any remaining `Err(_)` -> `Err(e)`
+/// Complex blocks are left as-is (or just get log injection).
+pub struct ErrPolicy {
+    repo_root: PathBuf,
+    allow: GlobSet,
+}
+
+impl ErrPolicy {
+    pub fn new(repo_root: PathBuf, allow: GlobSet) -> Self {
+        Self { repo_root, allow }
+    }
+
+    fn file_prefers_propagate(src: &str) -> bool {
+        // cheap heuristic: contains at least one Result-returning fn (and likely uses '?')
+        let has_result_fn = src.contains("-> Result<");
+        let has_qmark     = src.contains('?');
+        has_result_fn && has_qmark
+    }
+
+    fn log_snippet(&self, file: &Path) -> String {
+        let tracing = util::nearest_manifest(file, &self.repo_root)
+            .map(|m| util::manifest_contains_dep(&m, "tracing"))
+            .unwrap_or(false);
+        if tracing {
+            r#"tracing::warn!(error = %e, "ignored error");"#.to_string()
+        } else {
+            r#"eprintln!("ignored error: {e}");"#.to_string()
+        }
+    }
+}
+
+impl Rule for ErrPolicy {
+    fn name(&self) -> &str { "err-policy" }
+
+    fn plan(&mut self, _repo_root: &Path, files: &[PathBuf]) -> FixPlan {
+        // mawk-friendly regexes; keep them simple & conservative.
+
+        // Simple single-line match arm bodies (no trailing brace nesting).
+        // Captures the arm body in `body`. We’ll wrap if needed.
+        let re_match_simple = Regex::new(
+            r#"(?m)Err\(\s*_\s*\)\s*=>\s*(?P<body>(?:[^,{]|{[^}]*})+?),"#
+        ).unwrap();
+
+        // Empty `if|while let Err(_) = EXPR { }`
+        let re_if_while_empty = Regex::new(
+            r#"(?m)(?P<kw>\bif\b|\bwhile\b)\s+let\s+Err\(\s*_\s*\)\s*=\s*(?P<expr>[^{;]+)\{\s*\}"#
+        ).unwrap();
+
+        // Non-empty block headers: we only inject a log at top.
+        let re_if_while_header = Regex::new(
+            r#"(?m)(?P<kw>\bif\b|\bwhile\b)\s+let\s+Err\(\s*_\s*\)\s*=\s*(?P<expr>[^{;]+)\{"#
+        ).unwrap();
+
+        // Fallback: bind the error if still `_`
+        let re_err_pat = Regex::new(r#"Err\(\s*_\s*\)"#).unwrap();
+
+        let mut edits = Vec::<FileEdit>::new();
+        let mut touched = Vec::<PathBuf>::new();
+
+        for p in files {
+            if self.allow.is_match(p) { continue; }
+            let Ok(src) = fs::read_to_string(p) else { continue; };
+
+            let prefer_propagate = Self::file_prefers_propagate(&src);
+            if !prefer_propagate
+                && !src.contains("Err(_)") && !src.contains("Err ( _ )") && !src.contains("Err(_)")
+            {
+                // Nothing to do quickly.
+                // (still scan: some forms might not match these quick checks)
+            }
+
+            let log = self.log_snippet(p);
+            let mut updated = src.clone();
+            let mut changed = false;
+
+            // 1) Simple match arms
+            if re_match_simple.is_match(&updated) {
+                updated = re_match_simple
+                    .replace_all(&updated, |caps: &regex::Captures| {
+                        let body = caps["body"].trim();
+                        if prefer_propagate {
+                            // Replace entire arm with a return; safe in a match arm.
+                            r#"Err(e) => return Err(e),"#.to_string()
+                        } else {
+                            format!(r#"Err(e) => {{ {log} {body} }},"#)
+                        }
+                    })
+                    .into_owned();
+                changed = true;
+            }
+
+            // 2) Empty if/while blocks
+            if re_if_while_empty.is_match(&updated) {
+                updated = re_if_while_empty
+                    .replace_all(&updated, |caps: &regex::Captures| {
+                        let kw   = &caps["kw"];
+                        let expr = caps["expr"].trim();
+                        if prefer_propagate {
+                            format!(r#"{kw} let Err(e) = {expr} {{ return Err(e); }}"#)
+                        } else {
+                            format!(r#"{kw} let Err(e) = {expr} {{ {log} }}"#)
+                        }
+                    })
+                    .into_owned();
+                changed = true;
+            }
+
+            // 3) Header of non-empty blocks: just inject log at start (safer)
+            if re_if_while_header.is_match(&updated) && !prefer_propagate {
+                updated = re_if_while_header
+                    .replace_all(&updated, |caps: &regex::Captures| {
+                        let kw   = &caps["kw"];
+                        let expr = caps["expr"].trim();
+                        // We only change the header; the actual `{` is part of the match.
+                        // We’ll put the log right after the brace by cooperating with the simple bind below.
+                        format!(r#"{kw} let Err(e) = {expr} {{"#)
+                    })
+                    .into_owned();
+                // Later we bind Err(_) -> Err(e); the logger will make sense at block top.
+                changed = true;
+            }
+
+            // 4) Fallback bind: Err(_) -> Err(e)
+            if re_err_pat.is_match(&updated) {
+                updated = re_err_pat.replace_all(&updated, "Err(e)").into_owned();
+                changed = true;
+            }
+
+            // 5) If we injected a header for non-empty block in (3), ensure we **actually** add the log.
+            //    A quick, conservative way: after any `{` that immediately follows `Err(e) = ... {`,
+            //    insert the log. This is intentionally light-touch and may miss odd formatting —
+            //    acceptable for regex-based safe mode.
+            if changed && !prefer_propagate {
+                let re_block_after_err = Regex::new(
+                    r#"(?m)(\bif\b|\bwhile\b)\s+let\s+Err\(e\)\s*=\s*[^{;]+\{\s*"#
+                ).unwrap();
+                if re_block_after_err.is_match(&updated) {
+                    updated = re_block_after_err
+                        .replace_all(&updated, |caps: &regex::Captures| {
+                            let head = caps.get(0).unwrap().as_str();
+                            format!(r#"{head} {log} "#)
+                        })
+                        .into_owned();
+                }
+            }
+
+            if changed && updated != src {
+                edits.push(FileEdit { path: p.clone(), original: src, updated });
+                touched.push(p.clone());
+            }
+        }
+
+        FixPlan { files: touched, edits }
+    }
+}
+2) Export & register
+
+src/rules/mod.rs
+pub mod unwrap_to_question;
+pub mod hashmap_to_fxhash;
+pub mod numeric_casts;
+pub mod err_wildcard;
+pub mod err_policy;      // <-- add
+
+src/main.rs (where you push rules):
+    let mut rules: Vec<Box<dyn Rule + Send + Sync>> = vec![
+        Box::new(rules::hashmap_to_fxhash::HashMapToFxHashMap::new(
+            globset(&cfg.allowlist.hashmap_to_fxhash),
+        )),
+        Box::new(rules::unwrap_to_question::UnwrapToQuestion::new(
+            globset(&cfg.allowlist.unwrap_to_question),
+            cli.aggressive,
+        )),
+        Box::new(rules::numeric_casts::NumericCasts::new(
+            cli.aggressive,
+            globset(&cfg.allowlist.paths),
+        )),
+        Box::new(rules::err_wildcard::ErrWildcard::new(
+            root.clone(),
+            globset(&cfg.allowlist.paths),
+        )),
+        // New policy-driven rule (runs after wildcard binding; safe, file-scoped toggling)
+        Box::new(rules::err_policy::ErrPolicy::new(
+            root.clone(),
+            globset(&cfg.allowlist.paths),
+        )),
+    ];
+Order matters a bit: err_wildcard first to normalize Err(_) → Err(e), 
+then err_policy to choose logging vs propagation in safe shapes.
+
+     
+
+3) Why this is safe (and what it won’t touch)
+
+    Uses per-file heuristics to avoid mis-propagating in crates that don’t use Result flows.
+
+    Only propagates in obviously safe spots:
+
+        simple match arms (a return is valid in a match arm),
+
+        truly empty if|while let Err(_) blocks.
+
+    Non-empty blocks get just a log at block start (no control-flow change).
+
+    Everything is still compile-guarded by your remediator’s cargo check with auto-revert.
+
+If/when you want per-function precision, swap this rule’s internals to a tree-sitter AST walker to detect the exact enclosing function, 
+its return type, and insert ?/return Err(e) precisely. The public Rule interface doesn’t need to change.
+
+here’s a compact unit-test module you can paste at the bottom of src/rules/err_policy.rs. It uses tempfile and real files (so nearest_manifest works), then calls the rule’s plan and asserts on the generated edits (no disk writes needed).
+
+    Assumes you already have tempfile = "3" in [dev-dependencies] (as in my scaffold). If not, add it.
+
+    #[cfg(test)]
+mod tests {
+    use super::*;
+    use globset::GlobSetBuilder;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn empty_allowlist() -> GlobSet {
+        GlobSetBuilder::new().build().unwrap()
+    }
+
+    /// Write a minimal Cargo.toml (optionally with `tracing`) and a Rust file.
+    /// Returns (repo_root, file_path).
+    fn setup_repo(file_src: &str, add_tracing: bool) -> (PathBuf, PathBuf) {
+        let dir = tempdir().unwrap();
+        let root = dir.into_path(); // keep alive for test duration
+        let manifest = root.join("Cargo.toml");
+        let mut cargo = r#"[package]
+name = "tmp"
+version = "0.1.0"
+edition = "2021"
+"#.to_string();
+
+        if add_tracing {
+            cargo.push_str("\n[dependencies]\ntracing = \"0.1\"\n");
+        }
+        fs::write(&manifest, cargo).unwrap();
+
+        let src_dir = root.join("src");
+        fs::create_dir_all(&src_dir).unwrap();
+        let file_path = src_dir.join("lib.rs");
+        fs::write(&file_path, file_src).unwrap();
+
+        (root, file_path)
+    }
+
+    #[test]
+    fn propagates_in_result_file_simple_match_arm() {
+        // File contains Result-returning fn + uses '?', so policy = propagate.
+        let src = r#"
+        fn helper() -> Result<u32, std::io::Error> { Ok(1) }
+        fn demo() -> Result<(), std::io::Error> {
+            let _ = helper()?; // ensure '?'
+            match helper() {
+                Ok(v) => { let _ = v; }
+                Err(_) => log::warn!("was ignored before"),
+            }
+            Ok(())
+        }
+        "#;
+
+        let (root, file) = setup_repo(src, /*tracing*/ false);
+        let allow = empty_allowlist();
+        let mut rule = ErrPolicy::new(root.clone(), allow);
+        let plan = rule.plan(&root, &[file.clone()]);
+        // Should propose an edit
+        assert!(!plan.is_empty(), "expected an edit plan");
+        let edit = &plan.edits[0];
+        // Should turn Err(_) arm into a 'return Err(e),' propagation.
+        assert!(
+            edit.updated.contains("Err(e) => return Err(e),"),
+            "expected propagation in match arm, got:\n{}",
+            edit.updated
+        );
+        // Ensure the wildcard '_' was not left behind
+        assert!(!edit.updated.contains("Err(_)"), "wildcard should be bound");
+    }
+
+    #[test]
+    fn logs_in_non_result_file_simple_match_arm_eprintln() {
+        // No Result-returning fn; policy = log & continue, using eprintln! (no tracing dep)
+        let src = r#"
+        fn demo() {
+            match std::fs::read("x") {
+                Ok(_) => {}
+                Err(_) => (), // simple body
+            }
+        }
+        "#;
+
+        let (root, file) = setup_repo(src, /*tracing*/ false);
+        let allow = empty_allowlist();
+        let mut rule = ErrPolicy::new(root.clone(), allow);
+        let plan = rule.plan(&root, &[file.clone()]);
+        assert!(!plan.is_empty(), "expected an edit plan");
+        let updated = &plan.edits[0].updated;
+
+        // Should inject eprintln! and bind the error as `e`
+        assert!(
+            updated.contains(r#"Err(e) => { eprintln!("ignored error: {e}");"#),
+            "expected eprintln! log injection, got:\n{}",
+            updated
+        );
+        assert!(!updated.contains("Err(_)"), "wildcard should be bound");
+    }
+
+    #[test]
+    fn logs_in_non_result_file_uses_tracing_if_available() {
+        // With tracing in manifest, prefer tracing::warn!
+        let src = r#"
+        fn demo() {
+            match std::fs::read("x") {
+                Ok(_) => {}
+                Err(_) => (),
+            }
+        }
+        "#;
+
+        let (root, file) = setup_repo(src, /*tracing*/ true);
+        let allow = empty_allowlist();
+        let mut rule = ErrPolicy::new(root.clone(), allow);
+        let plan = rule.plan(&root, &[file.clone()]);
+        assert!(!plan.is_empty(), "expected an edit plan");
+        let updated = &plan.edits[0].updated;
+
+        assert!(
+            updated.contains(r#"tracing::warn!(error = %e, "ignored error");"#),
+            "expected tracing::warn! log injection, got:\n{}",
+            updated
+        );
+    }
+
+    #[test]
+    fn empty_block_if_let_err_propagates_in_result_file() {
+        let src = r#"
+        fn f() -> Result<(), std::io::Error> {
+            // empty if-let block should become `return Err(e);`
+            if let Err(_) = std::fs::read("nope") { }
+            Ok(())
+        }
+        "#;
+
+        let (root, file) = setup_repo(src, /*tracing*/ false);
+        let allow = empty_allowlist();
+        let mut rule = ErrPolicy::new(root.clone(), allow);
+        let plan = rule.plan(&root, &[file.clone()]);
+        assert!(!plan.is_empty(), "expected an edit plan");
+        let updated = &plan.edits[0].updated;
+
+        assert!(
+            updated.contains("if let Err(e) = std::fs::read(\"nope\") { return Err(e); }") ||
+            updated.contains("if let Err(e) = std::fs::read(\"nope\"){ return Err(e); }"),
+            "expected propagation in empty if-let block, got:\n{}",
+            updated
+        );
+    }
+
+    #[test]
+    fn non_result_file_only_binds_when_complex() {
+        // For a more complex arm body, we at least bind Err(_) -> Err(e) even if we don't rewrite.
+        let src = r#"
+        fn g() {
+            match std::fs::read("x") {
+                Ok(_) => {},
+                Err(_) => { let t = 1; let _ = t; } // complex body: braces + statements
+            }
+        }
+        "#;
+
+        let (root, file) = setup_repo(src, /*tracing*/ false);
+        let allow = empty_allowlist();
+        let mut rul
+what these tests cover
+
+    propagate behavior in Result-heavy files (simple match arms, empty if-let).
+    log & continue in non-Result files, choosing eprintln! or tracing::warn! based on the nearest Cargo.toml.
+    conservative fallback that binds Err(_) to Err(e) in complex cases.

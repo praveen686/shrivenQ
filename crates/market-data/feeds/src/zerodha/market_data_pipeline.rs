@@ -9,11 +9,11 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use common::{
-    Qty, Symbol, Ts,
+    Px, Qty, Symbol, Ts,
     instrument::{Instrument, InstrumentStore, OptionType},
     market::{L2Update, Side},
 };
-use lob::{FeatureCalculatorV2, OrderBookV2};
+use lob::{FeatureCalculatorV2Fixed, OrderBookV2};
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -109,7 +109,7 @@ pub struct MarketDataPipeline {
     order_books: Arc<RwLock<FxHashMap<Symbol, OrderBookV2>>>,
 
     /// Feature calculators
-    feature_calcs: Arc<RwLock<FxHashMap<Symbol, FeatureCalculatorV2>>>,
+    feature_calcs: Arc<RwLock<FxHashMap<Symbol, FeatureCalculatorV2Fixed>>>,
 
     /// Metrics
     metrics: Arc<RwLock<PipelineMetrics>>,
@@ -210,14 +210,14 @@ impl MarketDataPipeline {
                     symbol,
                     OrderBookV2::new_with_roi(
                         symbol,
-                        tick_size,
-                        lot_size as f64,
-                        spot.last_price.unwrap_or(25000.0), // ROI center
-                        1000.0,                             // ROI width
+                        Px::new(tick_size),
+                        Qty::from_units(i64::from(lot_size)),
+                        Px::new(spot.last_price.unwrap_or(25000.0)), // ROI center
+                        Px::new(1000.0),                             // ROI width
                     ),
                 );
 
-                feature_calcs.insert(symbol, FeatureCalculatorV2::new(symbol));
+                feature_calcs.insert(symbol, FeatureCalculatorV2Fixed::new(symbol));
             }
 
             subscriptions.insert(Symbol::new(spot.instrument_token), subscription);
@@ -289,21 +289,56 @@ impl MarketDataPipeline {
                 (spot_price / self.config.strike_interval).round() * self.config.strike_interval;
 
             // Select strikes within range
-            let min_strike =
-                atm_strike - (self.config.option_strike_range as f64 * self.config.strike_interval);
-            let max_strike =
-                atm_strike + (self.config.option_strike_range as f64 * self.config.strike_interval);
+            let min_strike = atm_strike
+                - (f64::from(self.config.option_strike_range) * self.config.strike_interval);
+            let max_strike = atm_strike
+                + (f64::from(self.config.option_strike_range) * self.config.strike_interval);
 
             for option in options {
                 if let Some(strike) = option.strike {
                     if strike >= min_strike && strike <= max_strike {
                         match option.option_type {
                             Some(OptionType::Call) => {
-                                subscription.calls.insert(strike as i64, option.clone());
+                                // Convert strike price to integer representation
+                                // Strike prices are already validated to be in reasonable range
+                                let strike_rounded = strike.round();
+                                #[allow(clippy::cast_precision_loss)] // Boundary check constants
+                                // SAFETY: Cast is safe within expected range
+                                let strike_i64 = if strike_rounded >= i64::MIN as f64
+                                    // SAFETY: Cast is safe within expected range
+                                    && strike_rounded <= i64::MAX as f64
+                                {
+                                    #[allow(clippy::cast_possible_truncation)]
+                                    // SAFETY: Cast is safe within expected range
+                                    // Bounds checked above
+                                    let val = strike_rounded as i64;
+                                    val
+                                } else {
+                                    continue; // Skip invalid strike
+                                };
+                                subscription.calls.insert(strike_i64, option.clone());
                                 subscription.tokens.insert(option.instrument_token);
                             }
                             Some(OptionType::Put) => {
-                                subscription.puts.insert(strike as i64, option.clone());
+                                // Convert strike price to integer representation
+                                // Strike prices are already validated to be in reasonable range
+                                // SAFETY: Cast is safe within expected range
+                                let strike_rounded = strike.round();
+                                // SAFETY: Cast is safe within expected range
+                                #[allow(clippy::cast_precision_loss)] // Boundary check constants
+                                let strike_i64 = if strike_rounded >= i64::MIN as f64
+                                    && strike_rounded <= i64::MAX as f64
+                                // SAFETY: Cast is safe within expected range
+                                {
+                                    // SAFETY: Cast is safe within expected range
+                                    #[allow(clippy::cast_possible_truncation)]
+                                    // Bounds checked above
+                                    let val = strike_rounded as i64;
+                                    val
+                                } else {
+                                    continue; // Skip invalid strike
+                                };
+                                subscription.puts.insert(strike_i64, option.clone());
                                 subscription.tokens.insert(option.instrument_token);
                             }
                             None => {}
@@ -415,8 +450,11 @@ impl MarketDataPipeline {
         let tick_size = 0.05; // Get from instrument
         let lot_size = 1.0; // Get from instrument
         let mut book = OrderBookV2::new_with_roi(
-            symbol, tick_size, lot_size, 25000.0, // Center price
-            1000.0,  // ROI width
+            symbol,
+            Px::new(tick_size),
+            Qty::new(lot_size),
+            Px::new(25000.0), // Center price
+            Px::new(1000.0),  // ROI width
         );
 
         // Read tick events from WAL

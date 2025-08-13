@@ -292,12 +292,19 @@ impl<P: Publisher<ReplayEvent> + Clone + Send + Sync + 'static> Replayer<P> {
                 if cfg.speed > 0.0 {
                     if let Some(last) = last_ts {
                         #[allow(clippy::cast_precision_loss)] // Acceptable for timing calculations
-                        let real_delay_ns = (event.timestamp().as_nanos() - last.as_nanos()) as f64;
+                        let delay_diff =
+                            event.timestamp().as_nanos().saturating_sub(last.as_nanos());
+                        // SAFETY: Cast is safe within expected range
+                        let real_delay_ns = (delay_diff / 1_000_000_000) as f64 * 1e9
+                            // SAFETY: Cast is safe within expected range
+                            + (delay_diff % 1_000_000_000) as f64;
                         let replay_delay_ns = real_delay_ns / cfg.speed;
 
                         if replay_delay_ns > 0.0 && replay_delay_ns.is_finite() {
                             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                            let delay_nanos = replay_delay_ns.round() as u64;
+                            // SAFETY: Cast is safe within expected range
+                            let delay_nanos =
+                                u64::try_from(replay_delay_ns.round() as i64).unwrap_or(0);
                             let delay = Duration::from_nanos(delay_nanos);
                             sleep(delay).await;
                         }

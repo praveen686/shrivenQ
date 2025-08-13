@@ -51,42 +51,20 @@ repos:
         args: ['--fix=lf']
 
   # ============================================================================
-  # AGENT COMPLIANCE - MUST BE FIRST
+  # CODE COMPLIANCE - MUST BE FIRST
   # ============================================================================
   - repo: local
     hooks:
-      # Initialize agent environment
-      - id: initialize-agent
-        name: "🚀 Initialize Agent Environment"
-        description: "Set up agent environment for compliance checks"
-        entry: bash
-        args: [-c, './scripts/compliance/initialize-agent.sh']
-        language: system
-        pass_filenames: false
-        stages: [pre-commit]
-        always_run: true
-
-      # Agent compliance check (blocks everything else if failed)
-      - id: agent-compliance
-        name: "🤖 Agent Compliance Check"
-        description: "Ensure agent follows quantitative development best practices"
-        entry: bash
-        args: [-c, './scripts/compliance/agent-compliance-check.sh']
+      # Comprehensive compliance check
+      - id: sq-compliance
+        name: "🤖 ShrivenQuant Compliance Check"
+        description: "Comprehensive code quality and compliance validation"
+        entry: /home/praveen/sq-compliance-tools/sq-compliance/target/release/sq-compliance
+        args: [/home/praveen/ShrivenQuant, --no-build, --details]
         language: system
         files: \.rs$
         pass_filenames: false
         stages: [pre-commit]
-
-      # Generate compliance summary report
-      - id: compliance-summary
-        name: "📊 Generate Compliance Summary Report"
-        description: "Generate and save comprehensive compliance report"
-        entry: bash
-        args: [-c, './scripts/compliance/compliance-summary.sh']
-        language: system
-        pass_filenames: false
-        stages: [pre-commit]
-        always_run: true
 
   # ============================================================================
   # RUST CODE QUALITY - Core Language Checks
@@ -178,10 +156,11 @@ repos:
         name: "⚡ Performance Regression Check"
         description: "Ensure no performance regressions in critical paths"
         entry: bash
-        args: [-c, './scripts/performance/performance-check.sh']
+        args: [-c, './scripts/performance/validate-performance.sh']
         language: system
         files: \.rs$
         pass_filenames: false
+        stages: [pre-commit]
 
       # Memory allocation detection in hot paths
       - id: no-allocations-hot-path
@@ -237,11 +216,12 @@ repos:
       - id: rust-test
         name: "🧪 Unit Tests"
         description: "All unit tests must pass"
-        entry: cargo
-        args: [test, --all-features, --all-targets]
+        entry: bash
+        args: [-c, './scripts/testing/validate-tests.sh']
         language: system
         files: \.rs$
         pass_filenames: false
+        always_run: true  # Always run tests, even if no Rust files changed
 
       # Integration tests for critical components (disabled for now)
       # - id: integration-tests
@@ -299,8 +279,9 @@ repos:
         name: "📈 Benchmark Baseline Update"
         description: "Update performance baselines if needed"
         entry: bash
-        args: [-c, './scripts/performance/update-benchmarks.sh']
+        args: [-c, './scripts/performance/run-benchmarks.sh']
         language: system
         files: \.rs$
         pass_filenames: false
         stages: [pre-push]
+        always_run: true  # Always verify performance before push

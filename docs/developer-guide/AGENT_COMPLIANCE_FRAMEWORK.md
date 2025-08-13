@@ -115,7 +115,7 @@ echo "$(date): Agent compliance setup completed" >> .agent_compliance.log
 
 echo "✅ Agent setup complete"
 echo "📖 Quick reference: docs/developer-guide/QUANTITATIVE_DEVELOPMENT_BEST_PRACTICES.md"
-echo "🔍 Run './scripts/strict-check.sh' before any commit"
+echo "🔍 Run './scripts/compliance/run-compliance.sh' before any commit"
 ```
 
 ---

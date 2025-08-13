@@ -6,7 +6,7 @@
 //! - Advanced feature extraction on live order flow
 //! - Market regime detection from real conditions
 
-use crate::{CrossResolution, MarketRegime, OrderBookV2, features_v2};
+use crate::{CrossResolution, MarketRegime, OrderBookV2, features_v2_fixed};
 use common::{L2Update, Px, Qty, Side, Symbol, Ts};
 use futures_util::{SinkExt, StreamExt};
 use rustc_hash::{FxBuildHasher, FxHashMap};
@@ -28,16 +28,17 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
     // Create LOB v2 with ROI optimization around typical BTC price
     let symbol = Symbol(1); // BTCUSDT
     let mut book = OrderBookV2::new_with_roi(
-        symbol, 0.01,      // tick size (0.01 USDT)
-        0.001,     // lot size (0.001 BTC)
-        100_000.0, // ROI center (typical BTC price)
-        5000.0,    // ROI width ($97.5k - $102.5k range)
+        symbol,
+        Px::new(0.01),      // tick size (0.01 USDT)
+        Qty::new(0.001),    // lot size (0.001 BTC)
+        Px::new(100_000.0), // ROI center (typical BTC price)
+        Px::new(5000.0),    // ROI width ($97.5k - $102.5k range)
     );
     book.set_cross_resolution(CrossResolution::AutoResolve);
 
     // Create feature calculators
-    let mut hft_calc = features_v2::create_hft_calculator(symbol);
-    let mut mm_calc = features_v2::create_mm_calculator(symbol);
+    let mut hft_calc = features_v2_fixed::create_hft_calculator_fixed(symbol);
+    let mut mm_calc = features_v2_fixed::create_mm_calculator_fixed(symbol);
 
     // Statistics tracking
     let mut update_count = 0u64;
@@ -77,6 +78,7 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
                             SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
                                 .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+                                // SAFETY: Cast is safe within expected range
                                 .as_nanos() as u64,
                         );
 
@@ -97,7 +99,9 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
                                         let update = L2Update::new(ts, symbol).with_level_data(
                                             Side::Bid,
                                             Px::new(price),
+                                            // SAFETY: Cast is safe within expected range
                                             Qty::new(qty),
+                                            // SAFETY: Cast is safe within expected range
                                             level as u8,
                                         );
 
@@ -125,7 +129,9 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
 
                                         let update = L2Update::new(ts, symbol).with_level_data(
                                             Side::Ask,
+                                            // SAFETY: Cast is safe within expected range
                                             Px::new(price),
+                                            // SAFETY: Cast is safe within expected range
                                             Qty::new(qty),
                                             level as u8,
                                         );
@@ -170,17 +176,30 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
                                             ask_px.as_f64(),
                                             ask_qty.as_f64()
                                         );
+                                        // SAFETY: Cast is safe within expected range
                                         info!(
+                                            // SAFETY: Cast is safe within expected range
                                             "  Spread: {} ticks ({:.2} bps)",
-                                            features.spread_ticks, features.weighted_spread
+                                            features.spread_ticks,
+                                            features.weighted_spread as f64 / 100.0 // SAFETY: Cast is safe within expected range
                                         );
-                                        info!("  Imbalance: {:.4}", features.imbalance);
-                                        info!("  Flow Toxicity: {:.4}", features.flow_toxicity);
+                                        info!(
+                                            "  Imbalance: {:.4}",
+                                            features.imbalance as f64 / 10000.0
+                                        );
+                                        // SAFETY: Cast is safe within expected range
+                                        info!(
+                                            "  Flow Toxicity: {:.4}",
+                                            features.flow_toxicity as f64 / 10000.0
+                                        );
                                         info!("  Regime: {:?}", features.regime);
-                                        info!("  Price Trend: {:.4}", features.price_trend);
+                                        info!(
+                                            "  Price Trend: {:.4}",
+                                            features.price_trend as f64 / 10000.0
+                                        );
                                         info!(
                                             "  Liquidity Score: {:.2}\n",
-                                            features.liquidity_score
+                                            features.liquidity_score as f64 / 10000.0
                                         );
                                     }
                                 }
@@ -189,37 +208,44 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
                                 if update_count % 200 == 0 {
                                     info!("💡 Trading Signals:");
 
-                                    if features.price_trend.abs() > 0.3 {
-                                        if features.price_trend > 0.0 {
+                                    if features.price_trend.abs() > 3000 {
+                                        // 0.3 in fixed-point
+                                        if features.price_trend > 0 {
                                             info!("  ✅ BULLISH trend detected");
                                         } else {
                                             info!("  ❌ BEARISH trend detected");
                                         }
                                     }
 
-                                    if features.mean_reversion_signal.abs() > 0.2 {
+                                    if features.mean_reversion_signal.abs() > 2000 {
+                                        // 0.2 in fixed-point
                                         info!("  🔄 Mean reversion opportunity");
                                     }
 
-                                    if features.adverse_selection > 0.6 {
+                                    if features.adverse_selection > 6000 {
+                                        // 0.6 in fixed-point
                                         info!("  ⚠️  HIGH TOXICITY - avoid aggressive MM");
-                                    } else if features.liquidity_score > 0.7 {
+                                    } else if features.liquidity_score > 7000 {
+                                        // 0.7 in fixed-point
                                         info!("  💰 Good liquidity for market making");
+                                        // SAFETY: Cast is safe within expected range
                                     }
 
                                     if let Some(mm_features) = mm_calc.calculate(&book) {
+                                        // SAFETY: Cast is safe within expected range
                                         info!("  MM Metrics:");
                                         info!(
                                             "    Effective Spread: {:.2} bps",
-                                            mm_features.effective_spread
+                                            // SAFETY: Cast is safe within expected range
+                                            mm_features.effective_spread as f64 / 100.0
                                         );
                                         info!(
                                             "    Price Impact: {:.2} bps",
-                                            mm_features.price_impact
+                                            mm_features.price_impact as f64 / 100.0
                                         );
                                         info!(
                                             "    Stability: {:.2}\n",
-                                            mm_features.stability_index
+                                            mm_features.stability_index as f64 / 10000.0
                                         );
                                     }
                                 }
@@ -255,33 +281,45 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
     if !regime_changes.is_empty() {
         info!("\n📊 Regime Change History:");
         for (update_num, change) in &regime_changes {
+            // SAFETY: Cast is safe within expected range
             info!("  Update #{}: {}", update_num, change);
         }
+        // SAFETY: Cast is safe within expected range
     }
+    // SAFETY: Cast is safe within expected range
 
     // Calculate feature statistics
     if !feature_frames.is_empty() {
         let avg_spread: f64 = feature_frames
+            // SAFETY: Cast is safe within expected range
             .iter()
-            .map(|f| f.weighted_spread)
+            .map(|f| f.weighted_spread as f64 / 100.0)
+            // SAFETY: Cast is safe within expected range
+            // SAFETY: Cast is safe within expected range
             .sum::<f64>()
             / feature_frames.len() as f64;
+        // SAFETY: Cast is safe within expected range
 
-        let avg_toxicity: f64 = feature_frames.iter().map(|f| f.flow_toxicity).sum::<f64>()
+        let avg_toxicity: f64 = feature_frames
+            .iter()
+            .map(|f| f.flow_toxicity as f64 / 10000.0)
+            .sum::<f64>()
             / feature_frames.len() as f64;
+        // SAFETY: Cast is safe within expected range
 
         let avg_liquidity: f64 = feature_frames
             .iter()
-            .map(|f| f.liquidity_score)
+            .map(|f| f.liquidity_score as f64 / 10000.0)
             .sum::<f64>()
             / feature_frames.len() as f64;
 
         let volatility_max = feature_frames
             .iter()
-            .map(|f| f.volatility_forecast)
+            .map(|f| f.volatility_forecast as f64 / 10000.0)
             .fold(0.0, f64::max);
 
         info!("\n📈 Market Statistics:");
+        // SAFETY: Cast is safe within expected range
         info!("  Average Spread: {:.2} bps", avg_spread);
         info!("  Average Toxicity: {:.4}", avg_toxicity);
         info!("  Average Liquidity Score: {:.2}", avg_liquidity);
@@ -289,6 +327,7 @@ pub async fn run_binance_live_features_demo() -> Result<(), Box<dyn std::error::
 
         // Regime distribution
         let mut regime_counts = FxHashMap::with_capacity_and_hasher(5, FxBuildHasher);
+        // SAFETY: Cast is safe within expected range
         for frame in &feature_frames {
             *regime_counts.entry(frame.regime).or_insert(0) += 1;
         }

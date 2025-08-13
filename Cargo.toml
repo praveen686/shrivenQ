@@ -21,6 +21,7 @@ members = [
     "crates/tools/perf",
 ]
 resolver = "2"
+exclude = ["scripts/compliance/sq-compliance", "scripts/compliance/sq-remediator"]
 
 [workspace.package]
 version = "0.1.0"

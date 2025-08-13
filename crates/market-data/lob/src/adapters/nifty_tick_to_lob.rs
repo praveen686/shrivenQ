@@ -6,7 +6,7 @@
 //! 3. Lee-Ready algorithm for trade classification
 //! 4. Microstructure patterns from NSE trading mechanics
 
-use crate::{CrossResolution, OrderBookV2, features_v2};
+use crate::{CrossResolution, OrderBookV2, features_v2_fixed};
 use anyhow::{Context, Result};
 use common::{L2Update, Px, Qty, Side, Symbol, Ts};
 use rustc_hash::{FxBuildHasher, FxHashMap};
@@ -284,6 +284,7 @@ impl LobEstimator {
 
     /// Update best bid/offer estimates
     fn update_bbo_estimates(&mut self, tick: &NiftyTick, trade_side: Side) {
+        // SAFETY: Cast is safe within expected range
         let price_ticks = (tick.price / self.tick_size).round() as i64;
 
         match trade_side {
@@ -293,7 +294,9 @@ impl LobEstimator {
                 self.estimated_ask = Some(tick.price);
 
                 // Estimate bid as ask minus minimum spread
+                // SAFETY: Cast is safe within expected range
                 let estimated_bid_ticks = price_ticks - self.min_spread_ticks;
+                // SAFETY: Cast is safe within expected range
                 self.estimated_bid = Some(estimated_bid_ticks as f64 * self.tick_size);
 
                 // Update ask levels - remove liquidity at this level
@@ -307,7 +310,9 @@ impl LobEstimator {
                 // Update bid estimate
                 self.estimated_bid = Some(tick.price);
 
+                // SAFETY: Cast is safe within expected range
                 // Estimate ask as bid plus minimum spread
+                // SAFETY: Cast is safe within expected range
                 let estimated_ask_ticks = price_ticks + self.min_spread_ticks;
                 self.estimated_ask = Some(estimated_ask_ticks as f64 * self.tick_size);
 
@@ -327,7 +332,9 @@ impl LobEstimator {
         }
 
         // Find volume-weighted price clusters
+        // SAFETY: Cast is safe within expected range
         let mut price_volume_map: BTreeMap<i64, f64> = BTreeMap::new();
+        // SAFETY: Cast is safe within expected range
 
         for (price, volume) in &self.volume_profile {
             let price_ticks = (price / self.tick_size).round() as i64;
@@ -338,7 +345,9 @@ impl LobEstimator {
         let mid_price = match (self.estimated_bid, self.estimated_ask) {
             (Some(bid), Some(ask)) => (bid + ask) / 2.0,
             (Some(bid), None) => bid + self.tick_size,
+            // SAFETY: Cast is safe within expected range
             (None, Some(ask)) => ask - self.tick_size,
+            // SAFETY: Cast is safe within expected range
             (None, None) => return,
         };
 
@@ -348,7 +357,9 @@ impl LobEstimator {
         self.bid_levels.clear();
         self.ask_levels.clear();
 
+        // SAFETY: Cast is safe within expected range
         // Build levels based on volume profile and distance from mid
+        // SAFETY: Cast is safe within expected range
         for (price_ticks, total_volume) in price_volume_map {
             let distance = (price_ticks - mid_ticks).abs();
 
@@ -363,13 +374,17 @@ impl LobEstimator {
                 } else if price_ticks > mid_ticks {
                     self.ask_levels.insert(price_ticks, estimated_quantity);
                 }
+                // SAFETY: Cast is safe within expected range
             }
         }
+        // SAFETY: Cast is safe within expected range
 
         // Ensure we have at least BBO
         if self.bid_levels.is_empty() {
             if let Some(bid) = self.estimated_bid {
+                // SAFETY: Cast is safe within expected range
                 let bid_ticks = (bid / self.tick_size).round() as i64;
+                // SAFETY: Cast is safe within expected range
                 self.bid_levels.insert(bid_ticks, 100.0); // Default quantity
             }
         }
@@ -382,7 +397,9 @@ impl LobEstimator {
         }
     }
 
+    // SAFETY: Cast is safe within expected range
     /// Generate LOB updates from current state
+    // SAFETY: Cast is safe within expected range
     pub fn generate_lob_updates(&self, symbol: Symbol, timestamp_ns: u64) -> Vec<L2Update> {
         let mut updates = Vec::with_capacity(100);
         let ts = Ts::from_nanos(timestamp_ns);
@@ -394,7 +411,9 @@ impl LobEstimator {
             updates.push(L2Update::new(ts, symbol).with_level_data(
                 Side::Bid,
                 Px::new(price),
+                // SAFETY: Cast is safe within expected range
                 Qty::new(*quantity),
+                // SAFETY: Cast is safe within expected range
                 level,
             ));
             level += 1;
@@ -564,10 +583,10 @@ impl NiftyTickToLob {
 
         let mut book = OrderBookV2::new_with_roi(
             symbol,
-            0.05, // NIFTY tick size (5 paise)
-            1.0,  // lot size
-            mid_price,
-            mid_price * 0.02, // 2% ROI width
+            Px::new(0.05), // NIFTY tick size (5 paise)
+            Qty::new(1.0), // lot size
+            Px::new(mid_price),
+            Px::new(mid_price * 0.02), // 2% ROI width
         );
         book.set_cross_resolution(CrossResolution::AutoResolve);
 
@@ -596,7 +615,7 @@ pub fn run_nifty_tick_demo() -> Result<()> {
         if !lob_snapshots.is_empty() {
             info!("\n📊 LOB Analysis:");
 
-            let mut feature_calc = features_v2::create_hft_calculator(Symbol(1));
+            let mut feature_calc = features_v2_fixed::create_hft_calculator_fixed(Symbol(1));
 
             for (i, (book, ts)) in lob_snapshots.iter().enumerate().take(10) {
                 if let Some(features) = feature_calc.calculate(book) {

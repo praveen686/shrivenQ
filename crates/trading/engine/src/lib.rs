@@ -21,6 +21,7 @@
 
 #![deny(warnings)]
 #![deny(clippy::all)]
+#![deny(clippy::unwrap_used, clippy::expect_used)] // No panics in production code
 
 pub mod core;
 pub mod execution;
@@ -33,7 +34,7 @@ pub mod venue;
 // Re-exports
 pub use core::{Engine, EngineConfig, ExecutionMode};
 pub use execution::{ExecutionLayer, Order, OrderPool};
-pub use memory::ObjectPool;
+pub use memory::{ObjectPool, PoolRef};
 pub use metrics::{MetricsEngine, PnL};
 pub use position::{PositionCache, PositionTracker};
 pub use risk::{RiskEngine, RiskLimits};

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use tracing::{debug, trace};
 
 /// Size of segment header in bytes
-const SEGMENT_HEADER_SIZE: usize = 16;
+const SEGMENT_HEADER_SIZE: u64 = 16;
 
 /// Magic number for segment files
 const SEGMENT_MAGIC: u32 = 0x5351_574C; // "SQWL" in hex
@@ -52,7 +52,7 @@ impl Segment {
         Ok(Self {
             path: path.to_path_buf(),
             file: writer,
-            size: SEGMENT_HEADER_SIZE as u64,
+            size: SEGMENT_HEADER_SIZE,
             max_size,
             entries: 0,
         })
@@ -108,7 +108,7 @@ impl Segment {
         self.file.write_u32::<LittleEndian>(crc)?;
         self.file.write_all(data)?;
 
-        self.size += 8 + data.len() as u64;
+        self.size += 8 + u64::try_from(data.len()).unwrap_or(0);
         self.entries += 1;
 
         trace!(
@@ -122,7 +122,13 @@ impl Segment {
     /// Check if segment has room for more data
     #[must_use]
     pub const fn is_full(&self, next_entry_size: usize) -> bool {
-        self.size + 8 + next_entry_size as u64 > self.max_size
+        // In const context, use saturating_add to prevent overflow
+        // Safe cast: usize to u64 is always safe on 64-bit systems
+        self.size
+            .saturating_add(8)
+            // SAFETY: Cast is safe within expected range
+            .saturating_add(next_entry_size as u64)
+            > self.max_size
     }
 
     /// Flush segment to disk
@@ -187,7 +193,9 @@ impl SegmentReader {
         }
 
         // Read entry header
-        let length = self.reader.read_u32::<LittleEndian>()? as usize;
+        let length = usize::try_from(self.reader.read_u32::<LittleEndian>()?).map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "Length too large")
+        })?;
         let expected_crc = self.reader.read_u32::<LittleEndian>()?;
 
         // Read data
@@ -223,8 +231,7 @@ impl SegmentReader {
     ///
     /// Returns an error if the seek operation fails.
     pub fn reset(&mut self) -> Result<()> {
-        self.reader
-            .seek(SeekFrom::Start(SEGMENT_HEADER_SIZE as u64))?;
+        self.reader.seek(SeekFrom::Start(SEGMENT_HEADER_SIZE))?;
         self.current = 0;
         Ok(())
     }
@@ -279,7 +286,7 @@ mod tests {
         // Corrupt the data
         {
             let mut file = OpenOptions::new().write(true).open(&segment_path)?;
-            file.seek(SeekFrom::Start(SEGMENT_HEADER_SIZE as u64 + 8))?;
+            file.seek(SeekFrom::Start(SEGMENT_HEADER_SIZE + 8))?;
             file.write_all(b"corrupted")?;
         }
 

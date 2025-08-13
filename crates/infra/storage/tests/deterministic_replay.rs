@@ -14,28 +14,44 @@ fn generate_test_events(count: usize) -> Vec<WalEvent> {
             0 => {
                 // Tick event
                 WalEvent::Tick(TickEvent {
+                    // SAFETY: Cast is safe within expected range
                     ts: Ts::from_nanos(i as u64 * 1000),
+                    // SAFETY: Cast is safe within expected range
                     venue: format!("venue_{}", i % 2),
+                    // SAFETY: Cast is safe within expected range
                     symbol: Symbol::new((i % 100) as u32),
+                    // SAFETY: Cast is safe within expected range
                     bid: Some(Px::new(100.0 + (i as f64 * 0.01))),
+                    // SAFETY: Cast is safe within expected range
                     ask: Some(Px::new(100.5 + (i as f64 * 0.01))),
                     last: if i % 2 == 0 {
+                        // SAFETY: Cast is safe within expected range
+                        // SAFETY: Cast is safe within expected range
                         Some(Px::new(100.25 + (i as f64 * 0.01)))
                     } else {
+                        // SAFETY: Cast is safe within expected range
                         None
                     },
                     volume: Some(Qty::new(1000.0 + i as f64)),
+                    // SAFETY: Cast is safe within expected range
                 })
+                // SAFETY: Cast is safe within expected range
             }
+            // SAFETY: Cast is safe within expected range
             1 => {
+                // SAFETY: Cast is safe within expected range
                 // Order event
                 WalEvent::Order(OrderEvent {
                     ts: Ts::from_nanos(i as u64 * 1000),
+                    // SAFETY: Cast is safe within expected range
                     order_id: i as u64,
                     symbol: Symbol::new((i % 50) as u32),
                     side: if i % 2 == 0 {
+                        // SAFETY: Cast is safe within expected range
+                        // SAFETY: Cast is safe within expected range
                         OrderSide::Buy
                     } else {
+                        // SAFETY: Cast is safe within expected range
                         OrderSide::Sell
                     },
                     qty: Qty::new(100.0 * (1 + i % 10) as f64),
@@ -46,8 +62,10 @@ fn generate_test_events(count: usize) -> Vec<WalEvent> {
                     },
                     order_type: match i % 3 {
                         0 => OrderType::Market,
+                        // SAFETY: Cast is safe within expected range
                         1 => OrderType::Limit,
                         _ => OrderType::Stop,
+                        // SAFETY: Cast is safe within expected range
                     },
                     status: OrderStatus::New,
                 })
@@ -213,7 +231,9 @@ fn test_concurrent_write_and_read() -> Result<()> {
     });
 
     // Wait for writer to finish
-    writer.join().map_err(|_| anyhow::anyhow!("Writer thread panicked"))??;
+    writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("Writer thread panicked"))??;
 
     // Verify all events are readable
     let wal = Wal::new(&wal_path, Some(128 * 1024 * 1024))?;

@@ -29,7 +29,7 @@ pub enum VenueType {
 
 /// Engine configuration - POD type for cache efficiency
 #[repr(C, align(64))]
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct EngineConfig {
     pub mode: ExecutionMode,
     pub venue: VenueType,
@@ -60,7 +60,7 @@ impl Default for EngineConfig {
 #[repr(C, align(64))]
 pub struct Engine<V: VenueAdapter> {
     // Configuration (read-only after init)
-    config: Arc<EngineConfig>,
+    config: EngineConfig, // Copy type, stored by value
 
     // Core components - all lock-free
     venue: V,
@@ -91,13 +91,11 @@ pub struct Engine<V: VenueAdapter> {
 impl<V: VenueAdapter + Clone> Engine<V> {
     /// Create new engine with pre-allocated memory
     pub fn new(config: EngineConfig, venue: V, bus: Arc<EventBus>) -> Self {
-        let config = Arc::new(config);
-
-        // Pre-allocate all components
-        let execution = ExecutionLayer::new(config.clone(), venue.clone());
+        // Pre-allocate all components - pass config by value (it's Copy)
+        let execution = ExecutionLayer::new(config, venue.clone());
         let positions = PositionTracker::new(config.max_positions);
         let metrics = MetricsEngine::new();
-        let risk = RiskEngine::new(config.clone());
+        let risk = RiskEngine::new(config);
 
         Self {
             config,

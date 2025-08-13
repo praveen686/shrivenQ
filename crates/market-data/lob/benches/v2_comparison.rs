@@ -30,9 +30,12 @@ fn generate_updates(n: usize, spread_bps: f64) -> Vec<L2Update> {
             10.0 + rng.r#gen::<f64>() * 990.0
         };
 
+        // SAFETY: Cast is safe within expected range
         let level = (rng.r#gen::<f64>() * 10.0) as u8;
 
+        // SAFETY: Cast is safe within expected range
         updates.push(
+            // SAFETY: Cast is safe within expected range
             L2Update::new(Ts::from_nanos(i as u64), Symbol(1)).with_level_data(
                 side,
                 Px::new(price),
@@ -63,7 +66,7 @@ fn bench_v2_updates(c: &mut Criterion) {
 
     c.bench_function("v2_apply_fast", |b| {
         b.iter(|| {
-            let mut book = OrderBookV2::new(Symbol(1), 0.01, 1.0);
+            let mut book = OrderBookV2::new(Symbol(1), Px::new(0.01), Qty::new(1.0));
             for update in &updates[..100] {
                 black_box(book.apply_fast(update));
             }
@@ -72,7 +75,7 @@ fn bench_v2_updates(c: &mut Criterion) {
 
     c.bench_function("v2_apply_validated", |b| {
         b.iter(|| {
-            let mut book = OrderBookV2::new(Symbol(1), 0.01, 1.0);
+            let mut book = OrderBookV2::new(Symbol(1), Px::new(0.01), Qty::new(1.0));
             for update in &updates[..100] {
                 let _ = black_box(book.apply_validated(update));
             }
@@ -87,10 +90,10 @@ fn bench_v2_roi(c: &mut Criterion) {
         b.iter(|| {
             let mut book = OrderBookV2::new_with_roi(
                 Symbol(1),
-                0.01,
-                1.0,
-                100.0, // center
-                5.0,   // width
+                Px::new(0.01),
+                Qty::new(1.0),
+                Px::new(100.0), // center
+                Px::new(5.0),   // width
             );
 
             for update in &updates[..100] {
@@ -102,7 +105,7 @@ fn bench_v2_roi(c: &mut Criterion) {
 
 fn bench_bbo_access(c: &mut Criterion) {
     let mut book_v1 = OrderBook::new(Symbol(1));
-    let mut book_v2 = OrderBookV2::new(Symbol(1), 0.01, 1.0);
+    let mut book_v2 = OrderBookV2::new(Symbol(1), Px::new(0.01), Qty::new(1.0));
 
     // Populate books
     let updates = generate_updates(100, 5.0);
@@ -129,12 +132,16 @@ fn bench_cross_resolution(c: &mut Criterion) {
 
     // Create some crossed updates
     for i in (0..updates.len()).step_by(10) {
+        // SAFETY: Cast is safe within expected range
         if i + 1 < updates.len() {
+            // SAFETY: Cast is safe within expected range
             // Make bid higher than ask
             updates[i] = L2Update::new(Ts::from_nanos(i as u64), Symbol(1)).with_level_data(
                 Side::Bid,
                 Px::new(101.0),
+                // SAFETY: Cast is safe within expected range
                 Qty::new(100.0),
+                // SAFETY: Cast is safe within expected range
                 0,
             );
             updates[i + 1] = L2Update::new(Ts::from_nanos((i + 1) as u64), Symbol(1))
@@ -144,7 +151,7 @@ fn bench_cross_resolution(c: &mut Criterion) {
 
     c.bench_function("v2_auto_resolve_cross", |b| {
         b.iter(|| {
-            let mut book = OrderBookV2::new(Symbol(1), 0.01, 1.0);
+            let mut book = OrderBookV2::new(Symbol(1), Px::new(0.01), Qty::new(1.0));
             book.set_cross_resolution(CrossResolution::AutoResolve);
 
             for update in &updates[..100] {
@@ -156,7 +163,7 @@ fn bench_cross_resolution(c: &mut Criterion) {
 
 fn bench_imbalance_calculation(c: &mut Criterion) {
     let mut book_v1 = OrderBook::new(Symbol(1));
-    let mut book_v2 = OrderBookV2::new(Symbol(1), 0.01, 1.0);
+    let mut book_v2 = OrderBookV2::new(Symbol(1), Px::new(0.01), Qty::new(1.0));
 
     // Populate with realistic depth
     let updates = generate_updates(200, 5.0);

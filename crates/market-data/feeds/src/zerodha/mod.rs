@@ -15,7 +15,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Zerodha WebSocket feed
 pub struct ZerodhaFeed {
@@ -61,8 +61,8 @@ impl ZerodhaFeed {
                 updates.push(L2Update::new(ts, symbol).with_level_data(
                     Side::Bid,
                     Px::new(level.price),
-                    Qty::new(level.quantity as f64),
-                    i as u8,
+                    Qty::new(level.quantity),
+                    u8::try_from(i).unwrap_or(255),
                 ));
             }
         }
@@ -73,8 +73,8 @@ impl ZerodhaFeed {
                 updates.push(L2Update::new(ts, symbol).with_level_data(
                     Side::Ask,
                     Px::new(level.price),
-                    Qty::new(level.quantity as f64),
-                    i as u8,
+                    Qty::new(level.quantity),
+                    u8::try_from(i).unwrap_or(255),
                 ));
             }
         }

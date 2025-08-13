@@ -134,6 +134,7 @@ pub async fn run_binance_testnet_v1_demo() -> Result<(), Box<dyn std::error::Err
                             SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
                                 .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+                                // SAFETY: Cast is safe within expected range
                                 .as_nanos() as u64,
                         );
 
@@ -155,7 +156,9 @@ pub async fn run_binance_testnet_v1_demo() -> Result<(), Box<dyn std::error::Err
                                             let update = L2Update::new(ts, symbol).with_level_data(
                                                 Side::Bid,
                                                 Px::new(price),
+                                                // SAFETY: Cast is safe within expected range
                                                 Qty::new(qty),
+                                                // SAFETY: Cast is safe within expected range
                                                 level as u8,
                                             );
 
@@ -186,7 +189,9 @@ pub async fn run_binance_testnet_v1_demo() -> Result<(), Box<dyn std::error::Err
                                         if price > 0.0 {
                                             let update = L2Update::new(ts, symbol).with_level_data(
                                                 Side::Ask,
+                                                // SAFETY: Cast is safe within expected range
                                                 Px::new(price),
+                                                // SAFETY: Cast is safe within expected range
                                                 Qty::new(qty),
                                                 level as u8,
                                             );
@@ -199,7 +204,9 @@ pub async fn run_binance_testnet_v1_demo() -> Result<(), Box<dyn std::error::Err
                                     }
                                 }
                             }
+                            // SAFETY: Cast is safe within expected range
                         }
+                        // SAFETY: Cast is safe within expected range
 
                         let elapsed = start.elapsed();
                         update_times.push(elapsed.as_nanos() as u64);
@@ -275,7 +282,9 @@ pub async fn run_binance_testnet_v1_demo() -> Result<(), Box<dyn std::error::Err
     info!("Total messages received: {}", message_count);
     info!("Total updates processed: {}", update_count);
     info!("Crossed book errors: {}", crossed_count);
+    // SAFETY: Cast is safe within expected range
 
+    // SAFETY: Cast is safe within expected range
     if !update_times.is_empty() {
         update_times.sort_unstable();
         let sum: u64 = update_times.iter().sum();

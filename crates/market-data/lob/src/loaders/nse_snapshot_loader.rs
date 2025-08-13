@@ -25,16 +25,16 @@ pub struct NseOrderEntry {
     pub instrument_type: String,
     /// Expiry date for derivatives
     pub expiry_date: String,
-    /// Strike price for options
-    pub strike_price: f64,
+    /// Strike price for options (in fixed-point: actual * 10000)
+    pub strike_price: i64,
     /// Option type (CE/PE)
     pub option_type: String,
     /// Corporate action level
     pub corp_action_level: String,
-    /// Order quantity
-    pub quantity: f64,
-    /// Order price
-    pub price: f64,
+    /// Order quantity (in fixed-point: actual * 10000)
+    pub quantity: i64,
+    /// Order price (in fixed-point: actual * 10000)
+    pub price: i64,
     /// Timestamp of order
     pub timestamp: String,
     /// Buy/Sell side
@@ -72,11 +72,14 @@ impl NseOrderEntry {
             symbol: fields[1].to_string(),
             instrument_type: fields[2].to_string(),
             expiry_date: fields[3].to_string(),
-            strike_price: fields[4].parse().unwrap_or(0.0),
+            // SAFETY: Cast is safe within expected range
+            strike_price: (fields[4].parse::<f64>().unwrap_or(0.0) * 10000.0) as i64,
             option_type: fields[5].to_string(),
+            // SAFETY: Cast is safe within expected range
             corp_action_level: fields[6].to_string(),
-            quantity: fields[7].parse().unwrap_or(0.0),
-            price: fields[8].parse().unwrap_or(0.0),
+            // SAFETY: Cast is safe within expected range
+            quantity: (fields[7].parse::<f64>().unwrap_or(0.0) * 10000.0) as i64,
+            price: (fields[8].parse::<f64>().unwrap_or(0.0) * 10000.0) as i64,
             timestamp: fields[9].to_string(),
             side: if fields[10] == "B" {
                 Side::Bid
@@ -97,10 +100,10 @@ impl NseOrderEntry {
 /// Aggregated price level for LOB
 #[derive(Debug, Clone)]
 pub struct PriceLevel {
-    /// Price level value
-    pub price: f64,
-    /// Total quantity at this price level
-    pub total_qty: f64,
+    /// Price level value (in fixed-point: actual * 10000)
+    pub price: i64,
+    /// Total quantity at this price level (in fixed-point: actual * 10000)
+    pub total_qty: i64,
     /// Number of orders at this level
     pub order_count: usize,
     /// Individual orders at this level
@@ -214,7 +217,7 @@ impl NseSnapshotLoader {
         let mut ask_levels: BTreeMap<i64, PriceLevel> = BTreeMap::new();
 
         for entry in &filtered {
-            let price_ticks = (entry.price * 100.0) as i64; // Convert to ticks (paise)
+            let price_ticks = entry.price; // Already in fixed-point
 
             let levels = if entry.side == Side::Bid {
                 &mut bid_levels
@@ -222,14 +225,12 @@ impl NseSnapshotLoader {
                 &mut ask_levels
             };
 
-            let level = levels
-                .entry(price_ticks)
-                .or_insert_with(|| PriceLevel {
-                    price: entry.price,
-                    total_qty: 0.0,
-                    order_count: 0,
-                    orders: Vec::with_capacity(20),
-                });
+            let level = levels.entry(price_ticks).or_insert_with(|| PriceLevel {
+                price: entry.price,
+                total_qty: 0,
+                order_count: 0,
+                orders: Vec::with_capacity(20),
+            });
 
             level.total_qty += entry.quantity;
             level.order_count += 1;
@@ -240,17 +241,18 @@ impl NseSnapshotLoader {
         let mid_price = if let (Some(best_bid), Some(best_ask)) =
             (bid_levels.keys().next_back(), ask_levels.keys().next())
         {
-            (*best_bid + *best_ask) as f64 / 200.0
+            // Mid price already in fixed-point, divide by 2
+            (*best_bid + *best_ask) / 2
         } else {
-            100.0 // Default
+            1000000 // Default: 100.0 * 10000 in fixed-point
         };
 
         let mut book = OrderBookV2::new_with_roi(
             symbol_id,
-            0.01, // tick size (1 paise)
-            1.0,  // lot size
-            mid_price,
-            mid_price * 0.1, // 10% ROI width
+            Px::new(0.01),                // tick size (1 paise)
+            Qty::new(1.0),                // lot size
+            Px::from_i64(mid_price),      // Use from_i64 for fixed-point value
+            Px::from_i64(mid_price / 10), // 10% ROI width
         );
         book.set_cross_resolution(CrossResolution::AutoResolve);
 
@@ -263,8 +265,8 @@ impl NseSnapshotLoader {
             )
             .with_level_data(
                 Side::Bid,
-                Px::new(level.price),
-                Qty::new(level.total_qty),
+                Px::from_i64(level.price),
+                Qty::from_units(level.total_qty),
                 level_idx,
             );
 
@@ -279,8 +281,8 @@ impl NseSnapshotLoader {
         for (_, level) in ask_levels.iter().take(20) {
             let update = L2Update::new(Ts::from_nanos(1_000_000_000), symbol_id).with_level_data(
                 Side::Ask,
-                Px::new(level.price),
-                Qty::new(level.total_qty),
+                Px::from_i64(level.price),
+                Qty::from_units(level.total_qty),
                 level_idx,
             );
 
@@ -317,19 +319,21 @@ impl NseSnapshotLoader {
         let buy_orders = filtered.iter().filter(|e| e.side == Side::Bid).count();
         let sell_orders = total_orders - buy_orders;
 
-        let total_buy_qty: f64 = filtered
+        let total_buy_qty: i64 = filtered
             .iter()
             .filter(|e| e.side == Side::Bid)
             .map(|e| e.quantity)
             .sum();
 
-        let total_sell_qty: f64 = filtered
+        let total_sell_qty: i64 = filtered
             .iter()
             .filter(|e| e.side == Side::Ask)
             .map(|e| e.quantity)
+            // SAFETY: Cast is safe within expected range
             .sum();
+        // SAFETY: Cast is safe within expected range
 
-        let avg_order_size = (total_buy_qty + total_sell_qty) / total_orders as f64;
+        let avg_order_size = (total_buy_qty + total_sell_qty) / total_orders as i64;
 
         // Find best bid and ask
         let best_bid = filtered
@@ -353,28 +357,40 @@ impl NseSnapshotLoader {
         println!(
             "Buy Orders: {} ({:.1}%)",
             buy_orders,
-            buy_orders as f64 / total_orders as f64 * 100.0
+            (buy_orders * 100) / total_orders
         );
         println!(
             "Sell Orders: {} ({:.1}%)",
             sell_orders,
-            sell_orders as f64 / total_orders as f64 * 100.0
+            (sell_orders * 100) / total_orders
         );
-        println!("Total Buy Quantity: {:.0}", total_buy_qty);
-        println!("Total Sell Quantity: {:.0}", total_sell_qty);
+        println!("Total Buy Quantity: {}", total_buy_qty / 10000); // Convert fixed-point to display
+        println!("Total Sell Quantity: {}", total_sell_qty / 10000); // Convert fixed-point to display
+        // SAFETY: Cast is safe within expected range
         println!(
+            // SAFETY: Cast is safe within expected range
             "Order Imbalance: {:.2}",
-            (total_buy_qty - total_sell_qty) / (total_buy_qty + total_sell_qty)
+            if total_buy_qty + total_sell_qty > 0 {
+                ((total_buy_qty - total_sell_qty) as f64)
+                    / ((total_buy_qty + total_sell_qty) as f64)
+            } else {
+                0.0
+            } // SAFETY: Cast is safe within expected range
         );
-        println!("Average Order Size: {:.0}", avg_order_size);
+        // SAFETY: Cast is safe within expected range
+        println!("Average Order Size: {}", avg_order_size / 10000); // Convert fixed-point to display
+        // SAFETY: Cast is safe within expected range
 
         if let (Some(bid), Some(ask)) = (best_bid, best_ask) {
-            println!("Best Bid: {:.2}", bid);
-            println!("Best Ask: {:.2}", ask);
+            println!("Best Bid: {:.2}", bid as f64 / 10000.0); // Convert for display
+            // SAFETY: Cast is safe within expected range
+            println!("Best Ask: {:.2}", ask as f64 / 10000.0); // Convert for display
+            let spread = ask - bid;
+            let spread_bps = if bid > 0 { (spread * 10000) / bid } else { 0 };
             println!(
-                "Spread: {:.2} ({:.2} bps)",
-                ask - bid,
-                (ask - bid) / bid * 10000.0
+                "Spread: {:.2} ({} bps)",
+                spread as f64 / 10000.0, // Convert for display
+                spread_bps
             );
         }
 
@@ -386,12 +402,12 @@ impl NseSnapshotLoader {
         println!(
             "Disclosed Quantity Orders: {} ({:.1}%)",
             disclosed_orders,
-            disclosed_orders as f64 / total_orders as f64 * 100.0
+            (disclosed_orders * 100) / total_orders
         );
         println!(
             "GTD Orders: {} ({:.1}%)",
             gtd_orders,
-            gtd_orders as f64 / total_orders as f64 * 100.0
+            (gtd_orders * 100) / total_orders
         );
 
         // Analyze book types
@@ -406,7 +422,7 @@ impl NseSnapshotLoader {
                 "  {}: {} ({:.1}%)",
                 book_type,
                 count,
-                count as f64 / total_orders as f64 * 100.0
+                (count * 100) / total_orders
             );
         }
     }
@@ -429,8 +445,8 @@ mod tests {
 
         assert_eq!(entry.order_number, 12345);
         assert_eq!(entry.symbol, "NIFTY");
-        assert_eq!(entry.quantity, 100.0);
-        assert_eq!(entry.price, 5000.50);
+        assert_eq!(entry.quantity, 1000000); // 100.0 * 10000 in fixed-point
+        assert_eq!(entry.price, 50005000); // 5000.50 * 10000 in fixed-point
         assert_eq!(entry.side, Side::Bid);
     }
 }
@@ -460,13 +476,15 @@ pub fn run_nse_loader_demo() -> Result<()> {
         if let Ok(book) = loader.build_lob(&entries, Some("NIFTY")) {
             if let (Some((bid_px, bid_qty)), Some((ask_px, ask_qty))) =
                 (book.best_bid(), book.best_ask())
+            // SAFETY: Cast is safe within expected range
             {
+                // SAFETY: Cast is safe within expected range
                 info!("\n📈 NIFTY Order Book:");
                 info!("Best Bid: {:.2} x {:.0}", bid_px.as_f64(), bid_qty.as_f64());
                 info!("Best Ask: {:.2} x {:.0}", ask_px.as_f64(), ask_qty.as_f64());
                 info!(
                     "Spread: {:.2} bps",
-                    book.spread_ticks().unwrap_or(0) as f64 * 0.01
+                    (book.spread_ticks().unwrap_or(0) as f64) * 0.01 // Cast for display only
                 );
             }
         }

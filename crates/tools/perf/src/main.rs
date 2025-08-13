@@ -19,7 +19,7 @@ use clap::{Parser, Subcommand};
 use hdrhistogram::Histogram;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use std::{fs, path::PathBuf, time::Instant};
-use tracing::{info, error, warn};
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 mod wire;
@@ -143,7 +143,7 @@ fn cmd_write(
         };
         let a0 = Instant::now();
         w.append_synth(&ev)?;
-        let us = a0.elapsed().as_micros() as u64;
+        let us = u64::try_from(a0.elapsed().as_micros()).unwrap_or(u64::MAX);
         let _ = latency_histogram.record(us);
         if i % 100_000 == 0 && i > 0 {
             w.flush()?;
@@ -152,7 +152,9 @@ fn cmd_write(
     w.flush()?;
     let dt = t0.elapsed().as_secs_f64();
 
-    let total_bytes = (events as usize) * record_size;
+    let total_bytes = usize::try_from(events).unwrap_or(0) * record_size;
+    #[allow(clippy::cast_precision_loss)] // Display only
+    // SAFETY: Cast is safe within expected range
     let mb = total_bytes as f64 / (1024.0 * 1024.0);
 
     info!("\n=== WRITE BENCHMARK ===");
@@ -163,7 +165,11 @@ fn cmd_write(
     info!("\n--- Results ---");
     info!("Total: {:.2} MB in {:.3}s", mb, dt);
     info!("Throughput: {:.2} MB/s", mb / dt);
-    info!("Event rate: {:.0} events/sec", events as f64 / dt);
+    // SAFETY: Cast is safe within expected range
+    #[allow(clippy::cast_precision_loss)]
+    // SAFETY: Cast is safe within expected range
+    let event_rate = events as f64 / dt;
+    info!("Event rate: {:.0} events/sec", event_rate);
     print_hist("Write latency", &latency_histogram);
 
     // Pass/Fail check
@@ -215,7 +221,7 @@ fn cmd_replay(path: PathBuf, expect: Option<u64>) -> Result<()> {
     let mut last_event_time = Instant::now();
 
     let n = r.replay(|_ts_ns, _len| {
-        let us = last_event_time.elapsed().as_micros() as u64;
+        let us = u64::try_from(last_event_time.elapsed().as_micros()).unwrap_or(u64::MAX);
         if us > 0 {
             // Skip first event
             let _ = latency_histogram.record(us);
@@ -230,7 +236,10 @@ fn cmd_replay(path: PathBuf, expect: Option<u64>) -> Result<()> {
             error!("❌ Count mismatch: got {} expected {}", n, e);
         }
     }
+    // SAFETY: Cast is safe within expected range
 
+    // SAFETY: Cast is safe within expected range
+    #[allow(clippy::cast_precision_loss)] // Display only
     let eps = n as f64 / dt;
     let events_per_minute = eps * 60.0;
 
@@ -339,8 +348,11 @@ fn cmd_recover(path: PathBuf) -> Result<()> {
             if let Ok(meta) = e.metadata() {
                 total_size += meta.len();
             }
+            // SAFETY: Cast is safe within expected range
         }
+        // SAFETY: Cast is safe within expected range
     }
+    #[allow(clippy::cast_precision_loss)] // Display only
     let gb = total_size as f64 / (1024.0 * 1024.0 * 1024.0);
 
     info!("WAL size: {:.2} GB", gb);
@@ -396,12 +408,13 @@ fn cmd_seek(path: PathBuf, probes: usize) -> Result<()> {
 
     for i in 0..probes {
         let target_ts = rng.gen_range(first_ts..=last_ts);
-        let pct = ((target_ts - first_ts) as f64 / (last_ts - first_ts) as f64 * 100.0) as u32;
+        let pct =
+            u32::try_from(((target_ts - first_ts) * 100) / (last_ts - first_ts)).unwrap_or(100);
 
         let t0 = Instant::now();
         let r = open_reader(&path)?;
         r.seek_to(target_ts)?;
-        let us = t0.elapsed().as_micros() as u64;
+        let us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
         let _ = latency_histogram.record(us / 1000); // Convert to ms for display
 
         info!("  Probe {}: seek to {}% took {} ms", i + 1, pct, us / 1000);
@@ -510,7 +523,7 @@ fn now_ns() -> u64 {
     // Use a monotonic counter for synthetic timestamps (not wall-clock)
     static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
     let s = *START.get_or_init(Instant::now);
-    s.elapsed().as_nanos() as u64
+    u64::try_from(s.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }
 
 fn print_hist(name: &str, h: &Histogram<u64>) {

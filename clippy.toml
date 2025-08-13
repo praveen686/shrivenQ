@@ -1,11 +1,20 @@
 # Ultra-strict clippy configuration for ShrivenQ
 # Zero tolerance for code quality issues
 
+# CRITICAL: Error handling policy
+# Production code: NO unwrap/expect allowed
+# Tests/benches: Allowed (fail fast is desirable)
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+
+# Complexity limits
 cognitive-complexity-threshold = 20
 max-fn-params-bools = 2
 type-complexity-threshold = 250
 single-char-binding-names-threshold = 3
 too-many-arguments-threshold = 5
+
+# Size thresholds
 array-size-threshold = 512_000
 vec-box-size-threshold = 4096
 enum-variant-size-threshold = 200

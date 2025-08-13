@@ -8,7 +8,7 @@
 
 use crate::{BinanceWebSocketFeed, FeedAdapter, FeedConfig};
 use auth::{BinanceAuth, BinanceConfig, BinanceMarket};
-use common::{L2Update, Symbol};
+use common::{L2Update, Px, Qty, Symbol};
 use lob::{CrossResolution, OrderBookV2};
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::env;
@@ -51,6 +51,8 @@ impl Metrics {
         }
 
         latencies.sort_unstable();
+        #[allow(clippy::cast_possible_truncation)] // Test metrics, len() fits in u64
+        // SAFETY: Cast is safe within expected range
         let avg = latencies.iter().sum::<u64>() / latencies.len() as u64;
         let p50 = latencies[latencies.len() / 2];
         let p95 = latencies[latencies.len() * 95 / 100];
@@ -172,14 +174,13 @@ pub async fn run_binance_testnet_v2_integration() -> anyhow::Result<()> {
 
     // Metrics
     let metrics = Arc::new(Metrics::new());
-    let _metrics_clone = metrics.clone();
 
     // Shutdown flag
     let shutdown = Arc::new(AtomicBool::new(false));
     let shutdown_clone = shutdown.clone();
 
     // Run feed in background
-    let _feed_handle = tokio::spawn(async move {
+    let feed_handle = tokio::spawn(async move {
         if let Err(e) = feed.run(tx).await {
             error!("Feed error: {}", e);
         }
@@ -187,18 +188,20 @@ pub async fn run_binance_testnet_v2_integration() -> anyhow::Result<()> {
 
     // Create LOB v2 instances with different strategies
     let mut btc_book = OrderBookV2::new_with_roi(
-        btcusdt, 0.01,    // tick size
-        0.00001, // lot size
-        50000.0, // ROI center (approximate BTC price)
-        1000.0,  // ROI width ($1000 range)
+        btcusdt,
+        Px::new(0.01),     // tick size
+        Qty::new(0.00001), // lot size
+        Px::new(50000.0),  // ROI center (approximate BTC price)
+        Px::new(1000.0),   // ROI width ($1000 range)
     );
     btc_book.set_cross_resolution(CrossResolution::AutoResolve);
 
     let mut eth_book = OrderBookV2::new_with_roi(
-        ethusdt, 0.01,   // tick size
-        0.0001, // lot size
-        3000.0, // ROI center (approximate ETH price)
-        100.0,  // ROI width ($100 range)
+        ethusdt,
+        Px::new(0.01),    // tick size
+        Qty::new(0.0001), // lot size
+        Px::new(3000.0),  // ROI center (approximate ETH price)
+        Px::new(100.0),   // ROI width ($100 range)
     );
     eth_book.set_cross_resolution(CrossResolution::AutoResolve);
 
@@ -266,6 +269,10 @@ pub async fn run_binance_testnet_v2_integration() -> anyhow::Result<()> {
                     }
                 }
 
+                #[allow(clippy::cast_possible_truncation)]
+                // SAFETY: Cast is safe within expected range
+                // Nanoseconds fit in u64 for reasonable durations
+                // SAFETY: Cast is safe within expected range
                 let latency = start.elapsed().as_nanos() as u64;
                 latencies.push(latency);
 
@@ -332,6 +339,9 @@ pub async fn run_binance_testnet_v2_integration() -> anyhow::Result<()> {
     log_book_state("ETHUSDT", &eth_book);
     analyze_microstructure("BTCUSDT", &btc_book);
     analyze_microstructure("ETHUSDT", &eth_book);
+
+    // Clean up: abort the feed task
+    feed_handle.abort();
 
     info!("\n✅ Test completed successfully!");
 

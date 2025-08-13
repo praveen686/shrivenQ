@@ -86,8 +86,8 @@ pub struct StreamMessage {
 /// Order book manager for each symbol
 struct OrderBookManager {
     symbol: Symbol,
-    bids: Vec<(f64, f64)>, // (price, quantity)
-    asks: Vec<(f64, f64)>,
+    bids: Vec<(Px, Qty)>, // Using fixed-point types
+    asks: Vec<(Px, Qty)>,
     last_update_id: u64,
     snapshot_received: bool,
 }
@@ -112,7 +112,7 @@ impl OrderBookManager {
         for [price, qty] in snapshot.bids.iter().take(20) {
             if let (Ok(p), Ok(q)) = (price.parse::<f64>(), qty.parse::<f64>()) {
                 if q > 0.0 {
-                    self.bids.push((p, q));
+                    self.bids.push((Px::new(p), Qty::new(q)));
                 }
             }
         }
@@ -121,16 +121,14 @@ impl OrderBookManager {
         for [price, qty] in snapshot.asks.iter().take(20) {
             if let (Ok(p), Ok(q)) = (price.parse::<f64>(), qty.parse::<f64>()) {
                 if q > 0.0 {
-                    self.asks.push((p, q));
+                    self.asks.push((Px::new(p), Qty::new(q)));
                 }
             }
         }
 
-        // Sort books
-        self.bids
-            .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal)); // Descending
-        self.asks
-            .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)); // Ascending
+        // Sort books (Px implements Ord so we can use regular comparison)
+        self.bids.sort_by(|a, b| b.0.cmp(&a.0)); // Descending
+        self.asks.sort_by(|a, b| a.0.cmp(&b.0)); // Ascending
 
         self.last_update_id = snapshot.last_update_id;
         self.snapshot_received = true;
@@ -161,16 +159,22 @@ impl OrderBookManager {
         let ts = Ts::from_nanos(update.event_time * 1_000_000);
         let mut updates = Vec::with_capacity(20);
 
-        // Update bids
+        // Update bids - parse directly to Px/Qty
         for [price_str, qty_str] in &update.bids {
-            if let (Ok(price), Ok(qty)) = (price_str.parse::<f64>(), qty_str.parse::<f64>()) {
+            if let (Ok(price_f64), Ok(qty_f64)) = (price_str.parse::<f64>(), qty_str.parse::<f64>())
+            {
+                let price = Px::new(price_f64);
+                let qty = Qty::new(qty_f64);
                 Self::update_level(&mut self.bids, price, qty, false);
             }
         }
 
-        // Update asks
+        // Update asks - parse directly to Px/Qty
         for [price_str, qty_str] in &update.asks {
-            if let (Ok(price), Ok(qty)) = (price_str.parse::<f64>(), qty_str.parse::<f64>()) {
+            if let (Ok(price_f64), Ok(qty_f64)) = (price_str.parse::<f64>(), qty_str.parse::<f64>())
+            {
+                let price = Px::new(price_f64);
+                let qty = Qty::new(qty_f64);
                 Self::update_level(&mut self.asks, price, qty, true);
             }
         }
@@ -179,18 +183,18 @@ impl OrderBookManager {
         for (i, (price, qty)) in self.bids.iter().take(10).enumerate() {
             updates.push(L2Update::new(ts, self.symbol).with_level_data(
                 Side::Bid,
-                Px::new(*price),
-                Qty::new(*qty),
-                i as u8,
+                *price,
+                *qty,
+                u8::try_from(i).unwrap_or(0),
             ));
         }
 
         for (i, (price, qty)) in self.asks.iter().take(10).enumerate() {
             updates.push(L2Update::new(ts, self.symbol).with_level_data(
                 Side::Ask,
-                Px::new(*price),
-                Qty::new(*qty),
-                i as u8,
+                *price,
+                *qty,
+                u8::try_from(i).unwrap_or(0),
             ));
         }
 
@@ -199,22 +203,22 @@ impl OrderBookManager {
     }
 
     /// Update a price level
-    fn update_level(levels: &mut Vec<(f64, f64)>, price: f64, qty: f64, ascending: bool) {
+    fn update_level(levels: &mut Vec<(Px, Qty)>, price: Px, qty: Qty, ascending: bool) {
         // Find existing level
-        if let Some(pos) = levels.iter().position(|(p, _)| (*p - price).abs() < 1e-8) {
-            if qty == 0.0 {
+        if let Some(pos) = levels.iter().position(|(p, _)| *p == price) {
+            if qty == Qty::ZERO {
                 levels.remove(pos);
             } else {
                 levels[pos].1 = qty;
             }
-        } else if qty > 0.0 {
+        } else if qty > Qty::ZERO {
             // Add new level
             levels.push((price, qty));
-            // Re-sort
+            // Re-sort using Px's Ord implementation
             if ascending {
-                levels.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+                levels.sort_by_key(|&(p, _)| p);
             } else {
-                levels.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+                levels.sort_by_key(|&(p, _)| std::cmp::Reverse(p));
             }
             // Keep only top 20 levels
             levels.truncate(20);

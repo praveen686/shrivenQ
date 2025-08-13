@@ -1,0 +1,103 @@
+# ShrivenQuant Compliance Configuration
+# This file configures the sq-compliance checker thresholds and allowlists
+
+# ------- Thresholds -------
+# Maximum number of files with unannotated numeric casts
+max_unsafe_cast_files = 10
+
+# Maximum number of #[inline] attributes
+max_inline_attrs = 50
+
+# Maximum underscore variable abuse instances
+max_underscore_abuse = 0
+
+# Maximum TODO/FIXME/HACK/XXX markers
+max_todos = 0
+
+# Maximum ignored error patterns Err(_)
+max_err_ignore = 0
+
+# Maximum number of large functions (>50 lines)
+max_large_funcs = 0
+
+# Maximum #[allow(...)] warning suppressions
+max_warning_suppressions = 15
+
+# Maximum magic numbers (4+ digits outside const/static)
+max_magic_numbers = 10
+
+# Maximum identical doc line repetitions
+max_doc_dupe_linecount = 20
+
+# ------- Custom Ignore Patterns -------
+# These paths are excluded from ALL checks
+[ignore]
+paths = [
+    "target/**",
+    "**/generated/**",
+    "scripts/compliance/**",
+    "scripts/build/**"
+]
+
+# ------- Global Allowlist -------
+# These paths are allowed for ALL violation types
+[allowlist]
+paths = [
+    # Example: Allow all violations in experimental code
+    # "crates/experimental/**"
+]
+
+# ------- Per-Check Allowlists -------
+# Allow specific paths for individual checks
+
+[allowlist.numeric_casts]
+paths = [
+    "crates/market-data/feeds/**",
+    "crates/market-data/lob/src/loaders/**"
+]
+
+[allowlist.float_money]
+paths = [
+    "crates/market-data/feeds/src/apis/**",
+    "crates/market-data/lob/src/adapters/**",
+    "crates/market-data/lob/src/loaders/**",
+    "crates/market-data/lob/src/features*.rs"
+]
+
+[allowlist.std_hashmap]
+paths = [
+    "crates/tools/**",
+    "scripts/**"
+]
+
+[allowlist.panic_unwrap]
+paths = [
+    "scripts/**",
+    "**/tests/**",
+    "**/benches/**",
+    "**/build.rs"
+]
+
+[allowlist.todos]
+paths = [
+    "scripts/**"
+]
+
+[allowlist.ignored_errors]
+paths = [
+    "scripts/**"
+]
+
+# ------- CI Configuration -------
+[ci]
+# Minimum score required (0-100)
+min_score = 0
+
+# Fail on critical violations (default: true)
+fail_on_critical = true
+
+# Fail on high severity violations (default: false) 
+fail_on_high = false
+
+# Exit code for warnings when no failures (0 = disabled)
+warn_exit_code = 2
