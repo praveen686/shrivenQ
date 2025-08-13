@@ -179,7 +179,7 @@ jobs:
           echo "$CHECKSUM  shriven-quant-prod-${{ steps.version.outputs.version }}.tar.gz" > checksum.txt
       
       - name: Upload production artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: production-release
           path: |
@@ -195,7 +195,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Download production artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: production-release
       
@@ -228,7 +228,7 @@ jobs:
       url: https://shrivenquant.example.com
     steps:
       - name: Download production artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: production-release
       
@@ -296,7 +296,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: production-release
       

@@ -74,7 +74,7 @@ jobs:
           tar -czf shriven-quant-test-${{ steps.version.outputs.version }}.tar.gz deployment/
       
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-deployment-package
           path: shriven-quant-test-*.tar.gz
@@ -88,7 +88,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: test-deployment-package
       
@@ -201,7 +201,7 @@ jobs:
       url: https://test.shrivenquant.example.com
     steps:
       - name: Download deployment package
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: test-deployment-package
       
