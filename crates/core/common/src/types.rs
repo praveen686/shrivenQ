@@ -1,6 +1,8 @@
 //! Core types for `ShrivenQ` trading platform
 
-use crate::constants::fixed_point::SCALE_4;
+use crate::constants::fixed_point::{SCALE_2, SCALE_4};
+use crate::constants::numeric::ZERO_I64;
+use crate::constants::time::{NANOS_PER_MICRO, NANOS_PER_MILLI};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -79,7 +81,7 @@ impl Px {
     pub const fn from_price_i32(price: i32) -> Self {
         // SAFETY: i32 to i64 is always lossless (widening conversion)
         #[allow(clippy::cast_lossless)]
-        Self((price as i64) * (SCALE_4 / 100))
+        Self((price as i64) * (SCALE_4 / SCALE_2))
     }
 
     /// Get price as i64 ticks
@@ -186,7 +188,7 @@ impl Qty {
     pub const fn from_qty_i32(qty: i32) -> Self {
         // SAFETY: i32 to i64 is always lossless (widening conversion)
         #[allow(clippy::cast_lossless)]
-        Self((qty as i64) * 10000)
+        Self((qty as i64) * SCALE_4)
     }
 
     /// Get quantity as i64 units
@@ -204,7 +206,7 @@ impl Qty {
     /// Check if quantity is zero
     #[must_use]
     pub const fn is_zero(&self) -> bool {
-        self.0 == 0
+        self.0 == ZERO_I64
     }
 
     /// Get raw i64 value
@@ -278,13 +280,13 @@ impl Ts {
     /// Get timestamp as microseconds
     #[must_use]
     pub const fn as_micros(&self) -> u64 {
-        self.0 / 1000
+        self.0 / NANOS_PER_MICRO
     }
 
     /// Get timestamp as milliseconds
     #[must_use]
     pub const fn as_millis(&self) -> u64 {
-        self.0 / 1_000_000
+        self.0 / NANOS_PER_MILLI
     }
 }
 

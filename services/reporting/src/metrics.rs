@@ -86,7 +86,6 @@ impl SymbolMetrics {
     }
 
     /// Get average spread for this symbol
-    #[inline(always)]
     pub fn avg_spread(&self) -> f64 {
         if self.spread_count > 0 {
             self.spread_sum as f64 / self.spread_count as f64 / 10000.0
@@ -128,7 +127,6 @@ impl MetricsEngine {
     }
 
     /// Update market data for spread analysis
-    #[inline(always)]
     pub fn update_market(&self, symbol: Symbol, bid: Px, ask: Px, _ts: Ts) {
         let bid_raw = bid.as_i64() as u64;
         let ask_raw = ask.as_i64() as u64;
@@ -147,7 +145,6 @@ impl MetricsEngine {
     }
 
     /// Record fill and update metrics - HOT PATH
-    #[inline(always)]
     pub fn record_fill(&self, order_id: u64, symbol: Symbol, qty: Qty, price: Px, ts: Ts) {
         // Update trade count
         self.total_trades.fetch_add(1, Ordering::Relaxed);
@@ -176,6 +173,7 @@ impl MetricsEngine {
         self.last_trade_time.store(ts.nanos(), Ordering::Relaxed);
 
         // Set first trade time if this is the first trade
+        // We intentionally ignore the result as another thread may have set it first
         let _ = self.first_trade_time.compare_exchange(
             0,
             ts.nanos(),
@@ -208,7 +206,6 @@ impl MetricsEngine {
     }
 
     /// Add return to SIMD buffer - optimized for hot path
-    #[inline(always)]
     fn add_return_to_buffer(&self, return_value: i64) {
         let mut buffer = self.returns_buffer.write();
 
@@ -358,7 +355,6 @@ impl MetricsEngine {
     }
 
     /// Update PnL and drawdown metrics
-    #[inline(always)]
     pub fn update_pnl(&self, realized_pnl: i64, unrealized_pnl: i64) {
         let total_pnl = realized_pnl + unrealized_pnl;
 

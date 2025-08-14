@@ -125,7 +125,6 @@ impl Segment {
     }
 
     /// Check if segment has room for more data
-    #[inline(always)]
     pub const fn is_full(&self, next_entry_size: usize) -> bool {
         self.size
             .saturating_add(8)
@@ -157,13 +156,11 @@ impl Segment {
     }
 
     /// Get the number of entries in the segment
-    #[inline(always)]
     pub const fn entry_count(&self) -> u64 {
         self.entries
     }
 
     /// Get the current size of the segment
-    #[inline(always)]
     pub const fn size(&self) -> u64 {
         self.size
     }
@@ -214,13 +211,11 @@ impl SegmentReader {
     }
 
     /// Get the total number of entries
-    #[inline(always)]
     pub const fn entry_count(&self) -> u64 {
         self.entries
     }
 
     /// Get the current position
-    #[inline(always)]
     pub const fn current_position(&self) -> u64 {
         self.current
     }

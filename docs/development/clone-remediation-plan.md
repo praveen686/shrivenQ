@@ -130,6 +130,24 @@ client_order_id: Cow::Borrowed(&request.client_order_id),
 + Arc::clone(&metrics)
 ```
 
+### 4. Gateway gRPC Clients (`services/gateway/src/handlers/*.rs`)
+
+**Important Note:** After analysis, the tonic gRPC client clones in the gateway handlers are actually correct and necessary:
+
+```rust
+// This pattern is CORRECT for tonic clients:
+let mut client = handlers.grpc_clients.market_data.clone();
+let mut client = handlers.grpc_clients.risk.clone();
+```
+
+**Reasoning:**
+1. Tonic gRPC clients are designed to be cheaply cloneable (they internally use Arc)
+2. Tonic client methods require `&mut self`, so we need ownership
+3. Since `grpc_clients` is behind an `Arc`, we can't get a mutable reference directly
+4. The clone() only clones the Arc pointer internally, not the actual connection
+
+**No changes needed for these specific cases.**
+
 ---
 
 ## 🎯 Implementation Priority

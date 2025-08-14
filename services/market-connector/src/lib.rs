@@ -102,8 +102,7 @@ pub trait MarketConnector: Send + Sync {
 pub struct MarketConnectorService {
     /// Active connectors
     connectors: FxHashMap<String, Box<dyn MarketConnector>>,
-    /// Event channel sender  
-    #[allow(dead_code)] // Event pipeline - reserved for streaming market data events
+    /// Event channel sender for streaming market data events
     event_sender: tokio::sync::mpsc::Sender<MarketDataEvent>,
 }
 
@@ -137,6 +136,26 @@ impl MarketConnectorService {
             connector.disconnect().await?;
         }
         Ok(())
+    }
+
+    /// Send market data event to subscribers
+    pub async fn send_event(&self, event: MarketDataEvent) -> Result<()> {
+        self.event_sender
+            .send(event)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to send market data event: {}", e))?;
+        Ok(())
+    }
+
+    /// Process and forward market data from connectors
+    pub async fn process_market_data(
+        &self,
+        exchange: &str,
+        symbol: &str,
+        data: MarketDataEvent,
+    ) -> Result<()> {
+        tracing::debug!("Processing market data from {} for {}", exchange, symbol);
+        self.send_event(data).await
     }
 }
 

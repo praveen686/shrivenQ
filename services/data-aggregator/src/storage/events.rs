@@ -49,7 +49,6 @@ pub struct CandleEvent {
 }
 
 impl WalEntry for CandleEvent {
-    #[inline(always)]
     fn timestamp(&self) -> Ts {
         self.ts
     }
@@ -67,7 +66,6 @@ pub struct TradeEvent {
 }
 
 impl WalEntry for TradeEvent {
-    #[inline(always)]
     fn timestamp(&self) -> Ts {
         self.ts
     }
@@ -85,7 +83,6 @@ pub struct VolumeProfileEvent {
 }
 
 impl WalEntry for VolumeProfileEvent {
-    #[inline(always)]
     fn timestamp(&self) -> Ts {
         self.ts
     }
@@ -105,7 +102,6 @@ pub struct MicrostructureEvent {
 }
 
 impl WalEntry for MicrostructureEvent {
-    #[inline(always)]
     fn timestamp(&self) -> Ts {
         self.ts
     }
@@ -120,7 +116,6 @@ pub struct SystemEvent {
 }
 
 impl WalEntry for SystemEvent {
-    #[inline(always)]
     fn timestamp(&self) -> Ts {
         self.ts
     }

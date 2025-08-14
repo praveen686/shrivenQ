@@ -1,5 +1,6 @@
 //! Market data service gRPC client wrapper with production-grade streaming support
 
+use crate::constants::*;
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use rustc_hash::FxHashMap;
@@ -38,12 +39,12 @@ impl Default for MarketDataClientConfig {
     fn default() -> Self {
         Self {
             endpoint: "http://localhost:50051".to_string(),
-            connect_timeout: 10,
-            request_timeout: 30,
-            max_reconnect_attempts: 5,
-            reconnect_backoff_ms: 1000,
-            event_buffer_size: 10000,
-            heartbeat_interval: 30,
+            connect_timeout: DEFAULT_CONNECT_TIMEOUT_SECS,
+            request_timeout: DEFAULT_REQUEST_TIMEOUT_SECS,
+            max_reconnect_attempts: MAX_RECONNECT_ATTEMPTS,
+            reconnect_backoff_ms: RECONNECT_BACKOFF_MS,
+            event_buffer_size: EVENT_BUFFER_SIZE,
+            heartbeat_interval: DEFAULT_HEARTBEAT_INTERVAL_SECS,
         }
     }
 }
@@ -234,7 +235,7 @@ impl MarketDataClient {
             }
 
             sleep(Duration::from_millis(backoff)).await;
-            backoff = (backoff * 2).min(30000); // Cap at 30 seconds
+            backoff = (backoff * 2).min(MAX_BACKOFF_MS); // Cap at 30 seconds
         }
 
         error!(

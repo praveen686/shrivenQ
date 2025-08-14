@@ -286,66 +286,86 @@ pub enum BookError {
 mod tests {
     use super::*;
 
+    // Test constants for order book testing
+    const TEST_SYMBOL_ID: u32 = 1;
+    const TEST_TIMESTAMP_1: u64 = 1000;
+    const TEST_TIMESTAMP_2: u64 = 2000;
+    const TEST_BID_PRICE: i64 = 995000; // 99.50 in fixed-point
+    const TEST_ASK_PRICE: i64 = 1005000; // 100.50 in fixed-point
+    const TEST_QUANTITY: i64 = 1000000; // 100.0 in fixed-point
+    const TEST_MICROPRICE_EXPECTED: i64 = 998333; // Expected microprice value
+    const TEST_PRICE_INCREMENT: i64 = 1000; // Price increment for multi-level tests
+    const TEST_LEVELS_COUNT: usize = 5; // Number of levels to test
+    const TEST_SPREAD: i64 = 10000; // Expected spread in test (1.0)
+    const TEST_LARGE_QUANTITY: i64 = 1500000; // Large quantity for tests (150.0)
+    const TEST_SMALL_QUANTITY: i64 = 500000; // Small quantity for tests (50.0)
+    const TEST_CROSSED_BID_PRICE: i64 = 1010000; // Price that would cross the book (101.0)
+    const TEST_MID_ASK_PRICE: i64 = 1000000; // Middle ask price (100.0)
+    const TEST_LARGER_QUANTITY: i64 = 2000000; // Larger quantity for microprice test (200.0)
+
     #[test]
     fn test_order_book_basic() {
-        let mut book = OrderBook::new(Symbol::new(1));
+        let mut book = OrderBook::new(Symbol::new(TEST_SYMBOL_ID));
 
         // Add bid levels
         let update = L2Update {
-            ts: Ts::from_nanos(1000),
-            symbol: Symbol::new(1),
+            ts: Ts::from_nanos(TEST_TIMESTAMP_1),
+            symbol: Symbol::new(TEST_SYMBOL_ID),
             side: Side::Bid,
-            price: Px::from_i64(995000), // 99.50
-            qty: Qty::from_i64(1000000), // 100.0
+            price: Px::from_i64(TEST_BID_PRICE),
+            qty: Qty::from_i64(TEST_QUANTITY),
             level: 0,
         };
         book.apply(&update).unwrap();
 
         // Add ask levels
         let update = L2Update {
-            ts: Ts::from_nanos(2000),
-            symbol: Symbol::new(1),
+            ts: Ts::from_nanos(TEST_TIMESTAMP_2),
+            symbol: Symbol::new(TEST_SYMBOL_ID),
             side: Side::Ask,
-            price: Px::from_i64(1005000), // 100.50
-            qty: Qty::from_i64(1500000),  // 150.0
+            price: Px::from_i64(TEST_ASK_PRICE),
+            qty: Qty::from_i64(TEST_QUANTITY + 500000), // 150.0 = 100.0 + 50.0
             level: 0,
         };
         book.apply(&update).unwrap();
 
         assert_eq!(
             book.best_bid(),
-            Some((Px::from_i64(995000), Qty::from_i64(1000000)))
+            Some((Px::from_i64(TEST_BID_PRICE), Qty::from_i64(TEST_QUANTITY)))
         );
         assert_eq!(
             book.best_ask(),
-            Some((Px::from_i64(1005000), Qty::from_i64(1500000)))
+            Some((
+                Px::from_i64(TEST_ASK_PRICE),
+                Qty::from_i64(TEST_LARGE_QUANTITY)
+            ))
         );
-        assert_eq!(book.spread_ticks(), Some(10000)); // 1.0 * 10000
+        assert_eq!(book.spread_ticks(), Some(TEST_SPREAD));
         assert!(!book.is_crossed());
     }
 
     #[test]
     fn test_crossed_book_prevention() {
-        let mut book = OrderBook::new(Symbol::new(1));
+        let mut book = OrderBook::new(Symbol::new(TEST_SYMBOL_ID));
 
         // Add ask at 100
         let update = L2Update {
-            ts: Ts::from_nanos(1000),
-            symbol: Symbol::new(1),
+            ts: Ts::from_nanos(TEST_TIMESTAMP_1),
+            symbol: Symbol::new(TEST_SYMBOL_ID),
             side: Side::Ask,
-            price: Px::from_i64(1000000), // 100.0
-            qty: Qty::from_i64(1000000),
+            price: Px::from_i64(TEST_MID_ASK_PRICE), // 100.0
+            qty: Qty::from_i64(TEST_QUANTITY),
             level: 0,
         };
         book.apply(&update).unwrap();
 
         // Try to add bid at 101 (would cross)
         let update = L2Update {
-            ts: Ts::from_nanos(2000),
-            symbol: Symbol::new(1),
+            ts: Ts::from_nanos(TEST_TIMESTAMP_2),
+            symbol: Symbol::new(TEST_SYMBOL_ID),
             side: Side::Bid,
-            price: Px::from_i64(1010000), // 101.0
-            qty: Qty::from_i64(1000000),
+            price: Px::from_i64(TEST_CROSSED_BID_PRICE), // 101.0
+            qty: Qty::from_i64(TEST_QUANTITY),
             level: 0,
         };
         let result = book.apply(&update);
@@ -356,51 +376,50 @@ mod tests {
 
     #[test]
     fn test_microprice() {
-        let mut book = OrderBook::new(Symbol::new(1));
+        let mut book = OrderBook::new(Symbol::new(TEST_SYMBOL_ID));
 
         // Bid: 99.5 x 100
         let update = L2Update {
-            ts: Ts::from_nanos(1000),
-            symbol: Symbol::new(1),
+            ts: Ts::from_nanos(TEST_TIMESTAMP_1),
+            symbol: Symbol::new(TEST_SYMBOL_ID),
             side: Side::Bid,
-            price: Px::from_i64(995000), // 99.5
-            qty: Qty::from_i64(1000000), // 100.0
+            price: Px::from_i64(TEST_BID_PRICE), // 99.5
+            qty: Qty::from_i64(TEST_QUANTITY),   // 100.0
             level: 0,
         };
         book.apply(&update).unwrap();
 
         // Ask: 100.5 x 200
         let update = L2Update {
-            ts: Ts::from_nanos(2000),
-            symbol: Symbol::new(1),
+            ts: Ts::from_nanos(TEST_TIMESTAMP_2),
+            symbol: Symbol::new(TEST_SYMBOL_ID),
             side: Side::Ask,
-            price: Px::from_i64(1005000), // 100.5
-            qty: Qty::from_i64(2000000),  // 200.0
+            price: Px::from_i64(TEST_ASK_PRICE),      // 100.5
+            qty: Qty::from_i64(TEST_LARGER_QUANTITY), // 200.0
             level: 0,
         };
         book.apply(&update).unwrap();
 
         let micro = book.microprice().unwrap();
-        // Microprice = (99.5 * 200 + 100.5 * 100) / (100 + 200)
-        // = (995000 * 2000000 + 1005000 * 1000000) / 3000000
-        // = (1990000000000 + 1005000000000) / 3000000
-        // = 2995000000000 / 3000000 = 998333
-        assert_eq!(micro.as_i64(), 998333);
+        // Microprice = (bid_price * ask_qty + ask_price * bid_qty) / (bid_qty + ask_qty)
+        // Uses size-weighted calculation for accurate mid price
+        assert_eq!(micro.as_i64(), TEST_MICROPRICE_EXPECTED);
     }
 
     #[test]
     fn test_imbalance() {
-        let mut book = OrderBook::new(Symbol::new(1));
+        let mut book = OrderBook::new(Symbol::new(TEST_SYMBOL_ID));
 
         // Add more on bid side
-        for i in 0..3 {
+        const IMBALANCE_TEST_LEVELS: usize = 3;
+        for i in 0..IMBALANCE_TEST_LEVELS {
             let update = L2Update {
-                ts: Ts::from_nanos(1000 + i),
-                symbol: Symbol::new(1),
+                ts: Ts::from_nanos(TEST_TIMESTAMP_1 + i as u64),
+                symbol: Symbol::new(TEST_SYMBOL_ID),
                 side: Side::Bid,
                 // SAFETY: i64 cast is safe for small loop values
-                price: Px::from_i64(995000 - (i as i64) * 1000),
-                qty: Qty::from_i64(1000000),
+                price: Px::from_i64(TEST_BID_PRICE - (i as i64) * TEST_PRICE_INCREMENT),
+                qty: Qty::from_i64(TEST_QUANTITY),
                 // SAFETY: Loop runs 0..3, always fits in u8
                 level: i as u8,
             };
@@ -408,12 +427,13 @@ mod tests {
         }
 
         // Add less on ask side
+        const IMBALANCE_TEST_TIMESTAMP: u64 = 5000;
         let update = L2Update {
-            ts: Ts::from_nanos(5000),
-            symbol: Symbol::new(1),
+            ts: Ts::from_nanos(IMBALANCE_TEST_TIMESTAMP),
+            symbol: Symbol::new(TEST_SYMBOL_ID),
             side: Side::Ask,
-            price: Px::from_i64(1000000),
-            qty: Qty::from_i64(500000),
+            price: Px::from_i64(TEST_MID_ASK_PRICE),
+            qty: Qty::from_i64(TEST_SMALL_QUANTITY),
             level: 0,
         };
         book.apply(&update).unwrap();
@@ -425,32 +445,33 @@ mod tests {
 
     #[test]
     fn test_state_hash_deterministic() {
-        let mut book1 = OrderBook::new(Symbol::new(1));
-        let mut book2 = OrderBook::new(Symbol::new(1));
+        let mut book1 = OrderBook::new(Symbol::new(TEST_SYMBOL_ID));
+        let mut book2 = OrderBook::new(Symbol::new(TEST_SYMBOL_ID));
 
+        const HASH_TEST_PRICE_2: i64 = 994000; // Lower bid price for level 1
         let updates = vec![
             L2Update {
                 ts: Ts::from_nanos(1),
-                symbol: Symbol::new(1),
+                symbol: Symbol::new(TEST_SYMBOL_ID),
                 side: Side::Bid,
-                price: Px::from_i64(995000),
-                qty: Qty::from_i64(1000000),
+                price: Px::from_i64(TEST_BID_PRICE),
+                qty: Qty::from_i64(TEST_QUANTITY),
                 level: 0,
             },
             L2Update {
                 ts: Ts::from_nanos(2),
-                symbol: Symbol::new(1),
+                symbol: Symbol::new(TEST_SYMBOL_ID),
                 side: Side::Ask,
-                price: Px::from_i64(1005000),
-                qty: Qty::from_i64(1500000),
+                price: Px::from_i64(TEST_ASK_PRICE),
+                qty: Qty::from_i64(TEST_LARGE_QUANTITY),
                 level: 0,
             },
             L2Update {
                 ts: Ts::from_nanos(3),
-                symbol: Symbol::new(1),
+                symbol: Symbol::new(TEST_SYMBOL_ID),
                 side: Side::Bid,
-                price: Px::from_i64(994000),
-                qty: Qty::from_i64(2000000),
+                price: Px::from_i64(HASH_TEST_PRICE_2),
+                qty: Qty::from_i64(TEST_LARGER_QUANTITY),
                 level: 1,
             },
         ];

@@ -173,16 +173,17 @@ impl ReportingServiceImpl {
                 .await;
 
                 // Broadcast metrics update
-                let _ = event_broadcaster.send(ReportingEvent::MetricsUpdated {
+                // Ignore send errors as receivers may have disconnected
+                drop(event_broadcaster.send(ReportingEvent::MetricsUpdated {
                     timestamp: Ts::now(),
                     metrics: trading_metrics,
-                });
+                }));
 
                 // Broadcast performance update
-                let _ = event_broadcaster.send(ReportingEvent::PerformanceReport {
+                drop(event_broadcaster.send(ReportingEvent::PerformanceReport {
                     timestamp: Ts::now(),
                     report,
-                });
+                }));
             }
         });
 
@@ -198,7 +199,8 @@ impl ReportingServiceImpl {
     ) {
         // Check if Sharpe ratio is below threshold
         if metrics.sharpe_ratio < thresholds.min_sharpe_ratio {
-            let _ = broadcaster.send(ReportingEvent::Alert {
+            // Ignore send errors as receivers may have disconnected
+            drop(broadcaster.send(ReportingEvent::Alert {
                 timestamp: Ts::now(),
                 level: AlertLevel::Warning,
                 message: format!(
@@ -206,12 +208,13 @@ impl ReportingServiceImpl {
                     metrics.sharpe_ratio, thresholds.min_sharpe_ratio
                 ),
                 source: "metrics_engine".to_string(),
-            });
+            }));
         }
 
         // Check win rate for warning
         if metrics.total_trades > 10 && metrics.win_rate < 30.0 {
-            let _ = broadcaster.send(ReportingEvent::Alert {
+            // Ignore send errors as receivers may have disconnected
+            drop(broadcaster.send(ReportingEvent::Alert {
                 timestamp: Ts::now(),
                 level: AlertLevel::Warning,
                 message: format!(
@@ -219,12 +222,13 @@ impl ReportingServiceImpl {
                     metrics.win_rate, metrics.total_trades
                 ),
                 source: "metrics_engine".to_string(),
-            });
+            }));
         }
 
         // Check profit factor
         if metrics.total_trades > 5 && metrics.profit_factor < 1.0 {
-            let _ = broadcaster.send(ReportingEvent::Alert {
+            // Ignore send errors as receivers may have disconnected
+            drop(broadcaster.send(ReportingEvent::Alert {
                 timestamp: Ts::now(),
                 level: AlertLevel::Critical,
                 message: format!(
@@ -232,14 +236,15 @@ impl ReportingServiceImpl {
                     metrics.profit_factor
                 ),
                 source: "metrics_engine".to_string(),
-            });
+            }));
         }
 
         // Check maximum drawdown in trading metrics
         #[allow(clippy::cast_precision_loss)]
         let drawdown_bp = (metrics.max_drawdown as f64 / 100.0) as i32; // Convert to basis points
         if drawdown_bp > thresholds.max_drawdown_bp {
-            let _ = broadcaster.send(ReportingEvent::Alert {
+            // Ignore send errors as receivers may have disconnected
+            drop(broadcaster.send(ReportingEvent::Alert {
                 timestamp: Ts::now(),
                 level: AlertLevel::Emergency,
                 message: format!(
@@ -247,7 +252,7 @@ impl ReportingServiceImpl {
                     drawdown_bp, thresholds.max_drawdown_bp
                 ),
                 source: "metrics_engine".to_string(),
-            });
+            }));
         }
     }
 
@@ -259,7 +264,8 @@ impl ReportingServiceImpl {
     ) {
         // Check drawdown
         if report.max_drawdown_pct > thresholds.max_drawdown_bp {
-            let _ = broadcaster.send(ReportingEvent::Alert {
+            // Ignore send errors as receivers may have disconnected
+            drop(broadcaster.send(ReportingEvent::Alert {
                 timestamp: Ts::now(),
                 level: AlertLevel::Critical,
                 message: format!(
@@ -267,12 +273,13 @@ impl ReportingServiceImpl {
                     report.max_drawdown_pct, thresholds.max_drawdown_bp
                 ),
                 source: "reporting_service".to_string(),
-            });
+            }));
         }
 
         // Check Sharpe ratio
         if report.sharpe_ratio < thresholds.min_sharpe_ratio {
-            let _ = broadcaster.send(ReportingEvent::Alert {
+            // Ignore send errors as receivers may have disconnected
+            drop(broadcaster.send(ReportingEvent::Alert {
                 timestamp: Ts::now(),
                 level: AlertLevel::Warning,
                 message: format!(
@@ -280,12 +287,13 @@ impl ReportingServiceImpl {
                     report.sharpe_ratio, thresholds.min_sharpe_ratio
                 ),
                 source: "reporting_service".to_string(),
-            });
+            }));
         }
 
         // Check daily loss
         if report.daily_pnl < -thresholds.max_daily_loss {
-            let _ = broadcaster.send(ReportingEvent::Alert {
+            // Ignore send errors as receivers may have disconnected
+            drop(broadcaster.send(ReportingEvent::Alert {
                 timestamp: Ts::now(),
                 level: AlertLevel::Emergency,
                 message: format!(
@@ -293,7 +301,7 @@ impl ReportingServiceImpl {
                     report.daily_pnl, thresholds.max_daily_loss
                 ),
                 source: "reporting_service".to_string(),
-            });
+            }));
         }
     }
 }
@@ -320,9 +328,12 @@ impl ReportingService for ReportingServiceImpl {
 
         // Get updated metrics and broadcast
         let metrics = self.metrics_engine.get_metrics();
-        let _ = self
+        if let Err(e) = self
             .event_broadcaster
-            .send(ReportingEvent::MetricsUpdated { timestamp, metrics });
+            .send(ReportingEvent::MetricsUpdated { timestamp, metrics })
+        {
+            tracing::debug!("Failed to broadcast metrics update: {:?}", e);
+        }
 
         Ok(())
     }

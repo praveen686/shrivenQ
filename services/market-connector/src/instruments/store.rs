@@ -6,6 +6,12 @@
 //! - Zero allocations in hot paths
 
 use anyhow::{Context, Result};
+use common::constants::{
+    capacity::PROGRESS_REPORT_INTERVAL,
+    financial::STRIKE_PRICE_SCALE,
+    memory::{BYTES_PER_MB, DEFAULT_WAL_SEGMENT_SIZE_MB},
+    numeric::{INCREMENT, INITIAL_COUNTER, SECOND_INDEX, ZERO, ZERO_U64},
+};
 use common::{Px, Ts};
 use rustc_hash::FxHashMap;
 use std::path::PathBuf;
@@ -15,9 +21,7 @@ use tracing::{debug, info};
 use super::types::{Instrument, InstrumentFilter, InstrumentType, OptionType};
 
 // Size constants
-const BYTES_PER_KB: u64 = 1024;
-const BYTES_PER_MB: u64 = BYTES_PER_KB * 1024;
-const DEFAULT_SEGMENT_SIZE: u64 = 100 * BYTES_PER_MB; // 100MB default
+const DEFAULT_SEGMENT_SIZE: u64 = DEFAULT_WAL_SEGMENT_SIZE_MB as u64 * BYTES_PER_MB; // 100MB default
 
 /// WAL-backed instrument store
 pub struct InstrumentWalStore {
@@ -47,11 +51,10 @@ impl InstrumentWalStore {
     pub fn new(wal_dir: PathBuf, segment_size_mb: Option<usize>) -> Result<Self> {
         std::fs::create_dir_all(&wal_dir).context("Failed to create WAL directory")?;
 
-        #[allow(clippy::cast_possible_truncation)] // MB to bytes conversion
         let segment_size = segment_size_mb
             .map(|mb| {
                 // SAFETY: usize to u64 widening conversion is always safe
-                mb as u64 * BYTES_PER_MB
+                u64::try_from(mb).unwrap_or(DEFAULT_WAL_SEGMENT_SIZE_MB as u64) * BYTES_PER_MB
             })
             .or(Some(DEFAULT_SEGMENT_SIZE));
 
@@ -67,7 +70,7 @@ impl InstrumentWalStore {
             indices: FxHashMap::default(),
             option_chains: FxHashMap::default(),
             options_by_strike: FxHashMap::default(),
-            total_instruments: 0,
+            total_instruments: ZERO,
             last_update: None,
         })
     }
@@ -77,16 +80,16 @@ impl InstrumentWalStore {
         info!("Loading instruments from WAL...");
 
         let start = std::time::Instant::now();
-        let mut loaded_count = 0;
+        let mut loaded_count = INITIAL_COUNTER;
 
         // Read all entries from WAL using iterator
         let mut iter = self.wal.stream::<Instrument>(None)?;
 
         while let Some(instrument) = iter.read_next_entry()? {
             self.add_to_indices(instrument)?;
-            loaded_count += 1;
+            loaded_count += INCREMENT;
 
-            if loaded_count % 1000 == 0 {
+            if loaded_count % PROGRESS_REPORT_INTERVAL == 0 {
                 debug!("Loaded {} instruments from WAL", loaded_count);
             }
         }
@@ -110,7 +113,7 @@ impl InstrumentWalStore {
 
         // Add to in-memory indices
         self.add_to_indices(instrument)?;
-        self.total_instruments += 1;
+        self.total_instruments += INCREMENT;
         self.last_update = Some(Ts::now());
 
         Ok(())
@@ -177,13 +180,16 @@ impl InstrumentWalStore {
                     (instrument.expiry, instrument.strike, instrument.option_type)
                 {
                     let underlying = instrument.exchange_symbol.clone();
-                    #[allow(clippy::cast_sign_loss)] // Unix timestamp is always positive
-                    // SAFETY: Unix timestamps after 1970 are positive, safe to cast to u64
+                    // SAFETY: Unix timestamps after epoch are positive, safe to cast to u64
                     let expiry_ts = expiry as u64;
                     // Convert strike price to fixed-point integer (2 decimal places)
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                     // SAFETY: Strike prices are positive and within reasonable bounds
-                    let strike_int = (strike.as_f64() * 100.0) as u64;
+                    let strike_fp = strike.as_f64() * STRIKE_PRICE_SCALE;
+                    let strike_int = if strike_fp >= 0.0 && strike_fp <= u64::MAX as f64 {
+                        strike_fp as u64
+                    } else {
+                        0_u64
+                    };
 
                     // Add to option chains
                     self.option_chains
@@ -294,10 +300,10 @@ impl InstrumentWalStore {
 
         let futures = self.get_active_futures(underlying);
         let mut sorted_futures = futures;
-        sorted_futures.sort_by_key(|f| f.expiry.unwrap_or(0));
+        sorted_futures.sort_by_key(|f| f.expiry.unwrap_or(ZERO_U64));
 
         let current_futures_token = sorted_futures.first().map(|i| i.instrument_token);
-        let next_futures_token = sorted_futures.get(1).map(|i| i.instrument_token);
+        let next_futures_token = sorted_futures.get(SECOND_INDEX).map(|i| i.instrument_token);
 
         (spot_token, current_futures_token, next_futures_token)
     }
@@ -311,7 +317,7 @@ impl InstrumentWalStore {
         self.indices.clear();
         self.option_chains.clear();
         self.options_by_strike.clear();
-        self.total_instruments = 0;
+        self.total_instruments = ZERO;
 
         // Note: WAL is append-only, we don't clear it
         info!("Cleared in-memory instrument indices");
@@ -354,14 +360,22 @@ impl InstrumentWalStore {
         let atm_strike = (spot_f64 / strike_interval).round() * strike_interval;
 
         // Convert to integer for efficient comparison
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         // SAFETY: ATM strike is positive and within reasonable bounds
-        let atm_strike_int = (atm_strike * 100.0) as u64;
+        let atm_strike_fp = atm_strike * STRIKE_PRICE_SCALE;
+        let atm_strike_int = if atm_strike_fp >= 0.0 && atm_strike_fp <= u64::MAX as f64 {
+            atm_strike_fp as u64
+        } else {
+            0_u64
+        };
 
         // Calculate strike range in integer form for fast comparison
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         // SAFETY: Strike range calculation yields positive value within bounds
-        let strike_range_int = (strike_range as f64 * strike_interval * 100.0) as u64;
+        let strike_range_fp = strike_range as f64 * strike_interval * STRIKE_PRICE_SCALE;
+        let strike_range_int = if strike_range_fp >= 0.0 && strike_range_fp <= u64::MAX as f64 {
+            strike_range_fp as u64
+        } else {
+            0_u64
+        };
         let min_strike_int = atm_strike_int.saturating_sub(strike_range_int);
         let max_strike_int = atm_strike_int.saturating_add(strike_range_int);
 
@@ -432,9 +446,13 @@ impl InstrumentWalStore {
         strike: f64,
         option_type: OptionType,
     ) -> Option<&Instrument> {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // Strike to fixed-point
         // SAFETY: Strike prices are positive and within reasonable bounds
-        let strike_int = (strike * 100.0) as u64;
+        let strike_fp = strike * STRIKE_PRICE_SCALE;
+        let strike_int = if strike_fp >= 0.0 && strike_fp <= u64::MAX as f64 {
+            strike_fp as u64
+        } else {
+            return None;
+        };
 
         self.options_by_strike
             .get(underlying)
@@ -454,7 +472,7 @@ impl InstrumentWalStore {
                     .keys()
                     .map(|&strike_int| {
                         // SAFETY: u64 to f64 for strike display, precision loss acceptable
-                        strike_int as f64 / 100.0
+                        strike_int as f64 / STRIKE_PRICE_SCALE
                     })
                     .collect();
                 strikes.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -503,9 +521,13 @@ pub struct AtmOptionChain<'a> {
 impl<'a> AtmOptionChain<'a> {
     /// Get the closest strike to ATM using efficient integer comparison
     pub fn get_atm_strike_int(&self) -> u64 {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         // SAFETY: ATM strike is positive and within reasonable bounds
-        let atm_strike_int = (self.atm_strike * 100.0) as u64;
+        let atm_strike_fp = self.atm_strike * STRIKE_PRICE_SCALE;
+        let atm_strike_int = if atm_strike_fp >= 0.0 && atm_strike_fp <= u64::MAX as f64 {
+            atm_strike_fp as u64
+        } else {
+            0_u64
+        };
 
         // Find the closest available strike to ATM
         let mut closest_strike = atm_strike_int;
@@ -529,17 +551,25 @@ impl<'a> AtmOptionChain<'a> {
 
     /// Get call option at specific strike
     pub fn get_call(&self, strike: f64) -> Option<&'a Instrument> {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // Strike to fixed-point
         // SAFETY: Strike prices are positive and within reasonable bounds
-        let strike_int = (strike * 100.0) as u64;
+        let strike_fp = strike * STRIKE_PRICE_SCALE;
+        let strike_int = if strike_fp >= 0.0 && strike_fp <= u64::MAX as f64 {
+            strike_fp as u64
+        } else {
+            return None;
+        };
         self.calls.get(&strike_int).copied()
     }
 
     /// Get put option at specific strike
     pub fn get_put(&self, strike: f64) -> Option<&'a Instrument> {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // Strike to fixed-point
         // SAFETY: Strike prices are positive and within reasonable bounds
-        let strike_int = (strike * 100.0) as u64;
+        let strike_fp = strike * STRIKE_PRICE_SCALE;
+        let strike_int = if strike_fp >= 0.0 && strike_fp <= u64::MAX as f64 {
+            strike_fp as u64
+        } else {
+            return None;
+        };
         self.puts.get(&strike_int).copied()
     }
 
@@ -559,12 +589,15 @@ impl<'a> AtmOptionChain<'a> {
             self.calls.keys().chain(self.puts.keys()).copied().collect();
         all_strikes.sort();
         all_strikes.dedup();
-        all_strikes.into_iter().map(|s| s as f64 / 100.0).collect()
+        all_strikes
+            .into_iter()
+            .map(|s| s as f64 / STRIKE_PRICE_SCALE)
+            .collect()
     }
 
     /// Get ITM (In The Money) calls
     pub fn get_itm_calls(&self) -> Vec<&'a Instrument> {
-        let spot_int = (self.spot_price.as_f64() * 100.0) as u64;
+        let spot_int = (self.spot_price.as_f64() * STRIKE_PRICE_SCALE) as u64;
         self.calls
             .iter()
             .filter_map(|(&strike_int, &instrument)| {
@@ -579,7 +612,7 @@ impl<'a> AtmOptionChain<'a> {
 
     /// Get ITM (In The Money) puts
     pub fn get_itm_puts(&self) -> Vec<&'a Instrument> {
-        let spot_int = (self.spot_price.as_f64() * 100.0) as u64;
+        let spot_int = (self.spot_price.as_f64() * STRIKE_PRICE_SCALE) as u64;
         self.puts
             .iter()
             .filter_map(|(&strike_int, &instrument)| {

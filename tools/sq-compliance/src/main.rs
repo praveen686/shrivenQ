@@ -39,6 +39,10 @@ struct Cli {
     #[arg(long, default_value_t = false)]
     details: bool,
 
+    /// Show only summary (less verbose output)
+    #[arg(long, default_value_t = false)]
+    summary: bool,
+
     /// Top N offenders to print when --details
     #[arg(long, default_value_t = 5)]
     top_n: usize,
@@ -304,14 +308,16 @@ fn main() -> Result<()> {
         prod_files.retain(|p| !gs.is_match(p));
     }
 
-    println!("{}", "🧭 Unified Compliance Check (Rust)".bold());
-    println!("{}", "=".repeat(40));
-    println!("Generated: {}   Commit: {}", 
-        chrono_stamp(), 
-        get_git_commit().unwrap_or_else(|| "uncommitted".into())
-    );
-    println!("Found {} Rust files ({} production)\n", all_files.len(), prod_files.len());
-    println!("{}", "Running checks in parallel...".blue());
+    if !cli.summary {
+        println!("{}", "🧭 Unified Compliance Check (Rust)".bold());
+        println!("{}", "=".repeat(40));
+        println!("Generated: {}   Commit: {}", 
+            chrono_stamp(), 
+            get_git_commit().unwrap_or_else(|| "uncommitted".into())
+        );
+        println!("Found {} Rust files ({} production)\n", all_files.len(), prod_files.len());
+        println!("{}", "Running checks in parallel...".blue());
+    }
 
     // Instantiate all checks
     let mut checks: Vec<Box<dyn Check>> = vec![
@@ -343,15 +349,17 @@ fn main() -> Result<()> {
     let results = run_checks(&checks, &prod_files, &all_files, &cfg);
 
     // Display results
-    print_results(&results, &cfg);
+    print_results(&results, &cfg, &cli);
 
     // Score and status
     let (score, status) = compute_score(&results);
     let (crit, high, med, low) = count_by_severity(&results);
 
-    println!("\n{}", "📊 COMPLIANCE SCORE".blue().bold());
-    println!("Critical: {}  High: {}  Medium: {}  Low: {}", crit, high, med, low);
-    println!("Score: {}/100  Status: {}", score, status);
+    if !cli.summary {
+        println!("\n{}", "📊 COMPLIANCE SCORE".blue().bold());
+        println!("Critical: {}  High: {}  Medium: {}  Low: {}", crit, high, med, low);
+        println!("Score: {}/100  Status: {}", score, status);
+    }
 
     // Write reports
     let report_dir = cli.report_dir
@@ -457,7 +465,23 @@ fn run_checks(
         .collect()
 }
 
-fn print_results(results: &[CheckResult], cfg: &Config) {
+fn print_results(results: &[CheckResult], cfg: &Config, cli: &Cli) {
+    if cli.summary {
+        // Summary mode: only show critical/high severity issues
+        let critical_issues: Vec<_> = results.iter()
+            .filter(|r| matches!(r.severity, Severity::CRITICAL | Severity::HIGH))
+            .collect();
+        
+        if !critical_issues.is_empty() {
+            for r in critical_issues {
+                let line = format!("{}", r.message.red());
+                println!("{}", line);
+            }
+        }
+        return;
+    }
+    
+    // Full mode (default)
     println!("\n{}", "Check Results:".blue().bold());
     
     for r in results {
@@ -671,24 +695,42 @@ impl Check for NumericCasts {
         let safety_re = Regex::new(r"// SAFETY:")?;
         
         let violations: Vec<String> = files.par_iter()
-            .filter_map(|p| {
-                let text = fs::read_to_string(p).ok()?;
-                // File has casts, but check if they're annotated with allow/expect or SAFETY comments
-                if cast_re.is_match(&text) && !allow_re.is_match(&text) && !safety_re.is_match(&text) {
-                    Some(p.display().to_string())
-                } else {
-                    None
+            .flat_map(|p| {
+                let mut matches = Vec::new();
+                if let Ok(text) = fs::read_to_string(p) {
+                    // File has casts, but check if they're annotated with allow/expect or SAFETY comments
+                    let has_allow = allow_re.is_match(&text);
+                    let has_safety = safety_re.is_match(&text);
+                    
+                    if !has_allow && !has_safety {
+                        for (line_num, line) in text.lines().enumerate() {
+                            if cast_re.is_match(line) {
+                                matches.push(format!("{}:{}: {}", 
+                                    p.display(), 
+                                    line_num + 1, 
+                                    line.trim()
+                                ));
+                            }
+                        }
+                    }
                 }
+                matches
             })
             .collect();
         
         let count = violations.len();
         let (severity, message) = if count > self.max_files {
+            let sample = if count > 5 {
+                format!("\nFirst 5 violations:\n{}", 
+                    violations.iter().take(5).map(|v| format!("  • {}", v)).collect::<Vec<_>>().join("\n"))
+            } else {
+                String::new()
+            };
             (Severity::CRITICAL, 
-             format!("❌ {} files with unannotated numeric casts (max {})", count, self.max_files))
+             format!("❌ {} unannotated numeric casts (max {}){})", count, self.max_files, sample))
         } else {
             (Severity::OK, 
-             format!("✓ Cast usage acceptable ({} files)", count))
+             format!("✓ Cast usage acceptable ({} casts)", count))
         };
         
         Ok(CheckResult {
@@ -819,20 +861,33 @@ impl Check for StdHashMap {
         
         let violations: Vec<String> = files.par_iter()
             .filter(|p| !cfg.allow.is_allowed(self.name(), p))
-            .filter_map(|p| {
-                let text = fs::read_to_string(p).ok()?;
-                if re.is_match(&text) {
-                    Some(p.display().to_string())
-                } else {
-                    None
+            .flat_map(|p| {
+                let mut matches = Vec::new();
+                if let Ok(text) = fs::read_to_string(p) {
+                    for (line_num, line) in text.lines().enumerate() {
+                        if re.is_match(line) {
+                            matches.push(format!("{}:{}: {}", 
+                                p.display(), 
+                                line_num + 1, 
+                                line.trim()
+                            ));
+                        }
+                    }
                 }
+                matches
             })
             .collect();
         
         let count = violations.len();
         let (severity, message) = if count > 0 {
+            let sample = if count > 5 {
+                format!("\nFirst 5 violations:\n{}", 
+                    violations.iter().take(5).map(|v| format!("  • {}", v)).collect::<Vec<_>>().join("\n"))
+            } else {
+                format!("\n{}", violations.iter().map(|v| format!("  • {}", v)).collect::<Vec<_>>().join("\n"))
+            };
             (Severity::HIGH, 
-             format!("❌ Found {} files using std::HashMap (prefer FxHashMap in hot paths)", count))
+             format!("❌ Found {} std::HashMap usages (prefer FxHashMap){}", count, sample))
         } else {
             (Severity::OK, 
              "✓ No std::HashMap usage in prod paths".into())
@@ -858,32 +913,45 @@ impl Check for FloatMoney {
         let float_re = Regex::new(r": f(32|64).*price|: f(32|64).*amount|price: f(32|64)|amount: f(32|64)")?;
         let deserialize_re = Regex::new(r"#\[derive.*Deserialize")?;
         
-        let violations: Vec<String> = files.par_iter()
-            .filter(|p| !cfg.allow.is_allowed(self.name(), p))
-            .filter_map(|p| {
-                let path_str = p.to_string_lossy();
-                // Skip exempted paths
-                if path_str.contains("/display/") || 
-                   path_str.contains("/features/") ||
-                   path_str.contains("/loaders/") ||
-                   path_str.contains("/adapters/") ||
-                   path_str.contains("/apis/") {
-                    return None;
+        let mut violations: Vec<String> = Vec::new();
+        
+        for p in files {
+            if cfg.allow.is_allowed(self.name(), p) {
+                continue;
+            }
+            
+            let path_str = p.to_string_lossy();
+            // Skip exempted paths
+            if path_str.contains("/display/") || 
+               path_str.contains("/features/") ||
+               path_str.contains("/loaders/") ||
+               path_str.contains("/adapters/") ||
+               path_str.contains("/apis/") {
+                continue;
+            }
+            
+            if let Ok(text) = fs::read_to_string(p) {
+                // Check for violations and collect with line numbers
+                for (line_num, line) in text.lines().enumerate() {
+                    if float_re.is_match(line) && !line.contains("external") && !line.contains("//") {
+                        // Check if file has Deserialize derive (external data format)
+                        if !deserialize_re.is_match(&text) {
+                            violations.push(format!("{}:{} - {}", 
+                                p.display(), 
+                                line_num + 1, 
+                                line.trim()));
+                        }
+                    }
                 }
-                
-                let text = fs::read_to_string(p).ok()?;
-                if float_re.is_match(&text) && !deserialize_re.is_match(&text) {
-                    Some(p.display().to_string())
-                } else {
-                    None
-                }
-            })
-            .collect();
+            }
+        }
         
         let count = violations.len();
         let (severity, message) = if count > 0 {
             (Severity::CRITICAL, 
-             format!("❌ {} files use float for money in internal code", count))
+             format!("❌ {} float money violations found:\n{}", 
+                count, 
+                violations.iter().take(10).map(|v| format!("  • {}", v)).collect::<Vec<_>>().join("\n")))
         } else {
             (Severity::OK, 
              "✓ No floating point money in internal calculations".into())
@@ -1180,59 +1248,66 @@ impl Check for LargeFunctions {
         let fn_start_re = Regex::new(r"^\s*(pub\s+)?fn\s+")?;
         let fn_end_re = Regex::new(r"^\s*\}\s*$")?;
         
-        let file_counts: Vec<_> = files.par_iter()
+        let violations: Vec<String> = files.par_iter()
             .filter(|p| !cfg.allow.is_allowed(self.name(), p))
-            .filter_map(|p| {
+            .flat_map(|p| {
+                let mut matches = Vec::new();
                 if let Ok(text) = fs::read_to_string(p) {
                     let lines: Vec<&str> = text.lines().collect();
                     let mut in_fn = false;
                     let mut fn_start_line = 0;
-                    let mut large_count = 0;
+                    let mut fn_name = String::new();
                     
                     for (i, line) in lines.iter().enumerate() {
                         if fn_start_re.is_match(line) {
                             in_fn = true;
                             fn_start_line = i;
+                            // Extract function name
+                            if let Some(name_start) = line.find("fn ") {
+                                let name_part = &line[name_start + 3..];
+                                if let Some(name_end) = name_part.find(|c: char| c == '(' || c == '<') {
+                                    fn_name = name_part[..name_end].trim().to_string();
+                                }
+                            }
                         } else if in_fn && fn_end_re.is_match(line) {
-                            if i - fn_start_line > 50 {
-                                large_count += 1;
+                            let line_count = i - fn_start_line;
+                            if line_count > 50 {
+                                matches.push(format!("{}:{}: fn {} ({} lines)", 
+                                    p.display(), 
+                                    fn_start_line + 1,
+                                    fn_name,
+                                    line_count
+                                ));
                             }
                             in_fn = false;
                         }
                     }
-                    
-                    if large_count > 0 {
-                        return Some((p.display().to_string(), large_count));
-                    }
                 }
-                None
+                matches
             })
             .collect();
         
-        let total_count: usize = file_counts.iter().map(|(_, c)| c).sum();
-        let (severity, message) = if total_count > self.max_large {
+        let count = violations.len();
+        let (severity, message) = if count > self.max_large {
+            let sample = if count > 5 {
+                format!("\nFirst 5 large functions:\n{}", 
+                    violations.iter().take(5).map(|v| format!("  • {}", v)).collect::<Vec<_>>().join("\n"))
+            } else {
+                String::new()
+            };
             (Severity::LOW, 
-             format!("⚠️  Found {} functions >50 lines", total_count))
+             format!("⚠️  Found {} functions >50 lines{}", count, sample))
         } else {
             (Severity::OK, 
              "✓ Function lengths look reasonable".into())
         };
         
-        let details = if cfg.details {
-            file_counts.into_iter()
-                .take(cfg.top_n)
-                .map(|(path, count)| format!("{}: {} large functions", path, count))
-                .collect()
-        } else {
-            vec![]
-        };
-        
         Ok(CheckResult {
             name: self.name(),
             severity,
-            count: total_count,
+            count,
             message,
-            details,
+            details: if cfg.details { violations.into_iter().take(cfg.top_n).collect() } else { vec![] },
         })
     }
 }
@@ -1317,8 +1392,14 @@ impl Check for MagicNumbers {
         
         let count = violations.len();
         let (severity, message) = if count > self.max_numbers {
+            let sample = if count > 5 {
+                format!("\nFirst 5 violations:\n{}", 
+                    violations.iter().take(5).map(|v| format!("  • {}", v)).collect::<Vec<_>>().join("\n"))
+            } else {
+                String::new()
+            };
             (Severity::LOW, 
-             format!("⚠️  {} potential magic numbers — prefer named constants (max {})", count, self.max_numbers))
+             format!("⚠️  {} potential magic numbers — prefer named constants (max {}){}", count, self.max_numbers, sample))
         } else {
             (Severity::OK, 
              format!("✓ Magic numbers acceptable ({} found)", count))
@@ -1366,8 +1447,14 @@ impl Check for WarningSuppressions {
         
         let count = violations.len();
         let (severity, message) = if count > self.max_suppressions {
+            let sample = if count > 5 {
+                format!("\nFirst 5 suppressions:\n{}", 
+                    violations.iter().take(5).map(|v| format!("  • {}", v)).collect::<Vec<_>>().join("\n"))
+            } else {
+                String::new()
+            };
             (Severity::LOW, 
-             format!("⚠️  {} #[allow(...)] usages — fix root causes when possible (max {})", count, self.max_suppressions))
+             format!("⚠️  {} #[allow(...)] usages — fix root causes when possible (max {}){})", count, self.max_suppressions, sample))
         } else {
             (Severity::OK, 
              format!("✓ Warning suppressions acceptable ({} found)", count))
@@ -1423,19 +1510,28 @@ impl Check for DocDupes {
         doc_lines.sort_unstable();
         let mut max_dup = 1usize;
         let mut cur = 1usize;
+        let mut most_duped_line = String::new();
+        
         for w in doc_lines.windows(2) {
             if w[0] == w[1] { 
-                cur += 1; 
+                cur += 1;
+                if cur > max_dup {
+                    max_dup = cur;
+                    most_duped_line = w[0].clone();
+                }
             } else { 
-                max_dup = max_dup.max(cur); 
                 cur = 1; 
             }
         }
-        max_dup = max_dup.max(cur);
         
         let (severity, message) = if max_dup > self.max_dupes {
+            let sample = if !most_duped_line.is_empty() {
+                format!("\nMost duplicated line ({}×): \"{}\"", max_dup, most_duped_line)
+            } else {
+                String::new()
+            };
             (Severity::LOW, 
-             format!("⚠️  Identical doc line repeats {}× (max {}) — consider refactoring docs", max_dup, self.max_dupes))
+             format!("⚠️  Identical doc line repeats {}× (max {}) — consider refactoring docs{}", max_dup, self.max_dupes, sample))
         } else {
             (Severity::OK, 
              format!("✓ Doc duplication acceptable (max repeat {}×)", max_dup))

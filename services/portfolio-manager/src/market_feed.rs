@@ -7,10 +7,10 @@
 //! - Pre-allocated buffers
 
 use anyhow::{Context, Result};
+use common::constants::fixed_point::SCALE_4 as FIXED_POINT_SCALE;
 use common::{Symbol, Ts};
 use crossbeam::channel::{Receiver, Sender, bounded};
 use rustc_hash::FxHashMap;
-use services_common::constants::FIXED_POINT_SCALE;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use tokio::sync::RwLock;
@@ -45,7 +45,7 @@ impl PriceSnapshot {
     }
 
     /// Update prices atomically
-    #[inline(always)]
+    #[inline]
     pub fn update(&self, bid: i64, ask: i64, last: i64, volume: i64, timestamp: u64) {
         self.bid.store(bid, Ordering::Release);
         self.ask.store(ask, Ordering::Release);
@@ -55,7 +55,7 @@ impl PriceSnapshot {
     }
 
     /// Get mid price (fixed-point)
-    #[inline(always)]
+    #[inline]
     pub fn mid_price(&self) -> i64 {
         let bid = self.bid.load(Ordering::Acquire);
         let ask = self.ask.load(Ordering::Acquire);
@@ -63,7 +63,7 @@ impl PriceSnapshot {
     }
 
     /// Get spread (fixed-point)
-    #[inline(always)]
+    #[inline]
     pub fn spread(&self) -> i64 {
         let ask = self.ask.load(Ordering::Acquire);
         let bid = self.bid.load(Ordering::Acquire);
@@ -147,7 +147,7 @@ impl ReturnsBuffer {
     }
 
     /// Add return to buffer
-    #[inline(always)]
+    #[inline]
     pub fn add_return(&mut self, symbol: Symbol, return_value: i64) {
         if let Some(buffer) = self.symbol_returns.get_mut(&symbol) {
             buffer[self.position % self.capacity] = return_value;
@@ -155,7 +155,7 @@ impl ReturnsBuffer {
     }
 
     /// Add index return
-    #[inline(always)]
+    #[inline]
     pub fn add_index_return(&mut self, index: &str, return_value: i64) {
         if let Some(buffer) = self.index_returns.get_mut(index) {
             buffer[self.position % self.capacity] = return_value;
@@ -163,7 +163,7 @@ impl ReturnsBuffer {
     }
 
     /// Advance position
-    #[inline(always)]
+    #[inline]
     pub fn advance(&mut self) {
         self.position = (self.position + 1) % self.capacity;
     }
@@ -172,18 +172,21 @@ impl ReturnsBuffer {
     pub fn calculate_beta(&self, symbol: Symbol, index: &str) -> i32 {
         let symbol_returns = match self.symbol_returns.get(&symbol) {
             Some(returns) => returns,
-            None => return FIXED_POINT_SCALE, // 1.0 = market neutral
+            // SAFETY: SCALE_4 (10000) fits in i32
+            None => return FIXED_POINT_SCALE as i32, // 1.0 = market neutral
         };
 
         let index_returns = match self.index_returns.get(index) {
             Some(returns) => returns,
-            None => return FIXED_POINT_SCALE,
+            // SAFETY: SCALE_4 (10000) fits in i32
+            None => return FIXED_POINT_SCALE as i32,
         };
 
         // Calculate covariance and index variance
         let n = self.capacity.min(self.position);
         if n < 2 {
-            return FIXED_POINT_SCALE; // Not enough data
+            // SAFETY: SCALE_4 (10000) fits in i32
+            return FIXED_POINT_SCALE as i32; // Not enough data
         }
 
         // Calculate means
@@ -266,7 +269,7 @@ impl ReturnsBuffer {
         #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
         let correlation = (covariance as f64)
             / ((symbol_variance as f64).sqrt() * (index_variance as f64).sqrt());
-        (correlation * FIXED_POINT_SCALE.0) as i32 // Fixed-point
+        (correlation * FIXED_POINT_SCALE as f64) as i32 // Fixed-point
     }
 }
 
@@ -362,7 +365,7 @@ impl MarketFeedManager {
     }
 
     /// Queue price update for processing
-    #[inline(always)]
+    #[inline]
     pub fn queue_price_update(&self, update: PriceUpdate) -> Result<()> {
         // Send update through channel for background processing
         self.update_sender
@@ -372,7 +375,7 @@ impl MarketFeedManager {
     }
 
     /// Update price for symbol (direct synchronous update)
-    #[inline(always)]
+    #[inline]
     pub fn update_price(&self, update: PriceUpdate) -> Result<()> {
         if let Some(snapshot) = self.price_cache.get(&update.symbol) {
             // Calculate return before updating
@@ -431,7 +434,7 @@ impl MarketFeedManager {
     }
 
     /// Get current price for symbol
-    #[inline(always)]
+    #[inline]
     pub fn get_price(&self, symbol: Symbol) -> Option<(i64, i64, i64)> {
         self.price_cache.get(&symbol).map(|snapshot| {
             (

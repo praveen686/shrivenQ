@@ -2,7 +2,6 @@
 
 **Institutional-Grade, Ultra-Low-Latency Trading Platform for Indian & Crypto Markets**
 
-[![CI](https://github.com/praveen686/shrivenquant/actions/workflows/strict-ci.yml/badge.svg)](https://github.com/praveen686/shrivenquant/actions/workflows/strict-ci.yml)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 
@@ -100,7 +99,6 @@ cargo run -p trading-engine
 | **gRPC Framework** | ✅ Complete | 100% | All services use gRPC for communication |
 | **Fixed-Point Arithmetic** | ✅ Complete | 100% | All financial calculations use i64 |
 | **Compliance & Quality** | ✅ Complete | 100% | Zero clippy warnings, no unsafe code |
-| **CI/CD Pipeline** | 🔄 In Progress | 70% | GitHub Actions workflows configured |
 | **Live Trading** | ⏳ Planned | 0% | Ready for implementation |
 
 ### Sprint History
@@ -187,7 +185,6 @@ let mut orders = FxHashMap::default();
 - **[Development Guide](docs/developer-guide/QUANTITATIVE_DEVELOPMENT_BEST_PRACTICES.md)** - Best practices
 - **[Auth Integration](services/auth/README.md)** - Zerodha authentication setup
 - **[Performance Guide](docs/performance/guidelines.md)** - Optimization techniques
-- **[CI/CD Pipeline](docs/cicd/three-stage-pipeline.md)** - Deployment workflows
 
 ## 🔐 Zerodha Integration
 
@@ -211,13 +208,6 @@ ZERODHA_API_SECRET=your_api_secret
 cargo run -p auth-service --example zerodha_simple_usage
 ```
 
-## 🚦 CI/CD Pipeline
-
-Three-stage pipeline with strict quality gates:
-
-1. **Development** - Feature branches, unit tests
-2. **Test** - Integration tests, performance benchmarks
-3. **Production** - Blue-green deployment, health checks
 
 ## 📈 Roadmap
 

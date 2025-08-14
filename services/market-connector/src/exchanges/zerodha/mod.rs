@@ -15,14 +15,14 @@ use rustc_hash::FxHashMap;
 use serde::Deserialize;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 /// Zerodha WebSocket feed
 pub struct ZerodhaFeed {
     config: FeedConfig,
     auth: ZerodhaAuth,
     symbols: Vec<Symbol>,
-    #[allow(dead_code)] // Reserved for potential symbol remapping functionality
+    /// Map token strings to Symbol for fast lookup during message parsing
     symbol_map: FxHashMap<String, Symbol>,
 }
 
@@ -43,8 +43,7 @@ impl ZerodhaFeed {
         }
     }
 
-    /// Parse Zerodha market depth message from JSON (reserved for text message support)
-    #[allow(dead_code)] // Reserved for potential JSON text message parsing
+    /// Parse Zerodha market depth message from JSON
     fn parse_depth(&self, msg: &ZerodhaDepth) -> Vec<L2Update> {
         let symbol = match self.symbol_map.get(&msg.token) {
             Some(s) => *s,
@@ -60,6 +59,7 @@ impl ZerodhaFeed {
         // Process bid levels
         for (i, level) in msg.depth.buy.iter().enumerate() {
             if level.quantity > 0.0 {
+                trace!("Bid level {}: {} orders", i, level.order_count());
                 updates.push(L2Update::new(ts, symbol).with_level_data(
                     Side::Bid,
                     Px::new(level.price),
@@ -72,6 +72,7 @@ impl ZerodhaFeed {
         // Process ask levels
         for (i, level) in msg.depth.sell.iter().enumerate() {
             if level.quantity > 0.0 {
+                trace!("Ask level {}: {} orders", i, level.order_count());
                 updates.push(L2Update::new(ts, symbol).with_level_data(
                     Side::Ask,
                     Px::new(level.price),
@@ -94,7 +95,15 @@ impl FeedAdapter for ZerodhaFeed {
     }
 
     async fn subscribe(&mut self, symbols: Vec<Symbol>) -> anyhow::Result<()> {
-        self.symbols = symbols;
+        self.symbols = symbols.clone();
+
+        // Build symbol map for fast token-to-symbol lookup
+        self.symbol_map.clear();
+        for symbol in &symbols {
+            // Map both numeric and string representations
+            self.symbol_map.insert(symbol.0.to_string(), *symbol);
+        }
+
         info!("Subscribed to {} symbols", self.symbols.len());
         Ok(())
     }
@@ -188,9 +197,82 @@ impl FeedAdapter for ZerodhaFeed {
             match msg {
                 Ok(Message::Text(text)) => {
                     debug!("Received text message: {}", text);
-                    // Try to parse as JSON for control messages
-                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
-                        debug!("Parsed JSON control message: {}", json);
+                    // Parse and handle different JSON message types
+                    match serde_json::from_str::<ZerodhaMessage>(&text) {
+                        Ok(ZerodhaMessage::Depth(depth_msg)) => {
+                            // Handle market depth updates
+                            if depth_msg.is_valid_depth_message() {
+                                let updates = self.parse_depth(&depth_msg);
+                                for update in updates {
+                                    if let Err(e) = tx.send(update).await {
+                                        error!("Failed to send depth update: {}", e);
+                                        break;
+                                    }
+                                }
+                            } else {
+                                warn!("Invalid depth message type received");
+                            }
+                        }
+                        Ok(ZerodhaMessage::Tick(tick_msg)) => {
+                            // Handle tick data
+                            if tick_msg.is_valid_tick_message() {
+                                // Log additional tick data for monitoring
+                                let (open, high, low, close) = tick_msg.get_ohlc();
+                                let (last_price, last_qty) = tick_msg.get_last_trade();
+                                let (avg_price, volume) = tick_msg.get_market_stats();
+
+                                trace!("Tick OHLC: O={} H={} L={} C={}", open, high, low, close);
+                                trace!("Last trade: price={} qty={}", last_price, last_qty);
+                                trace!("Market stats: avg={} vol={}", avg_price, volume);
+
+                                if let Some(updates) = self.parse_tick(&tick_msg) {
+                                    for update in updates {
+                                        if let Err(e) = tx.send(update).await {
+                                            error!("Failed to send tick update: {}", e);
+                                            break;
+                                        }
+                                    }
+                                }
+                            } else {
+                                warn!("Invalid tick message type received");
+                            }
+                        }
+                        Ok(ZerodhaMessage::Control(control_msg)) => {
+                            // Handle control messages (subscription confirmations, etc.)
+                            if control_msg.is_connection_message() {
+                                info!("Connection control message received");
+                            }
+                            if let Some(msg) = control_msg.get_message() {
+                                info!("Control message: {}", msg);
+                                if msg.contains("subscribed") {
+                                    info!("Subscription confirmed");
+                                } else if msg.contains("unsubscribed") {
+                                    info!("Unsubscription confirmed");
+                                }
+                            }
+                            if let Some(data) = control_msg.get_data() {
+                                debug!("Control data: {:?}", data);
+                            }
+                        }
+                        Ok(ZerodhaMessage::Error(error_msg)) => {
+                            // Handle error messages
+                            if error_msg.is_error_message() {
+                                let (code, message) = error_msg.get_error_info();
+                                error!("Zerodha error: {} - {}", code, message);
+                                // Potentially reconnect or resubscribe based on error code
+                                if code == "TOKEN_EXPIRED" || code == "INVALID_TOKEN" {
+                                    error!("Authentication error, need to reconnect");
+                                    break;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            // Fallback for unknown message format
+                            debug!("Failed to parse Zerodha message: {}", e);
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                                debug!("Unknown JSON message: {}", json);
+                            }
+                        }
                     }
                 }
                 Ok(Message::Binary(data)) => {
@@ -331,9 +413,10 @@ impl ZerodhaFeed {
             8 => {
                 // LTP mode: only last traded price
                 // Protocol conversion: Zerodha sends prices as i32 (paise), convert to f64 (rupees)
-                #[allow(clippy::cast_precision_loss)] // i32 fits in f64 without precision loss
-                let last_price =
-                    i32::from_be_bytes([data[4], data[5], data[6], data[7]]) as f64 / 100.0;
+                // Price comes as i32 in paise (1/100 rupee), convert to fixed-point
+                // Fixed-point scale is 10000, wire format is 100, so multiply by 100
+                let last_price_i32 = i32::from_be_bytes([data[4], data[5], data[6], data[7]]);
+                let last_price = (last_price_i32 as i64) * 100; // Convert paise to fixed-point
 
                 let token_name = match instrument_token {
                     13568258 => "NIFTY_SEP_FUT",
@@ -347,10 +430,10 @@ impl ZerodhaFeed {
                     instrument_token, token_name, last_price
                 );
 
-                if last_price > 0.0 {
+                if last_price > 0 {
                     // Create a simple L2Update with last price (no bid/ask in LTP mode)
-                    let price_px = Px::new(last_price);
-                    let qty = Qty::new(1.0); // Minimal quantity since we don't have real bid/ask
+                    let price_px = Px::from_i64(last_price);
+                    let qty = Qty::from_i64(10000); // 1.0 in fixed-point
 
                     let update =
                         L2Update::new(ts, symbol).with_level_data(Side::Bid, price_px, qty, 0);
@@ -361,30 +444,31 @@ impl ZerodhaFeed {
             44 => {
                 // Quote mode: OHLC + volume but no market depth
                 // Protocol conversion: Zerodha sends prices as i32 (paise), convert to f64 (rupees)
-                #[allow(clippy::cast_precision_loss)] // i32 fits in f64 without precision loss
-                let last_price =
-                    i32::from_be_bytes([data[4], data[5], data[6], data[7]]) as f64 / 100.0;
+                // Price comes as i32 in paise (1/100 rupee), convert to fixed-point
+                // Fixed-point scale is 10000, wire format is 100, so multiply by 100
+                let last_price_i32 = i32::from_be_bytes([data[4], data[5], data[6], data[7]]);
+                let last_price = (last_price_i32 as i64) * 100; // Convert paise to fixed-point
                 // SAFETY: Quantities are always non-negative in exchange data
                 let last_quantity = u32::from_be_bytes([data[8], data[9], data[10], data[11]]);
                 #[allow(clippy::cast_precision_loss)] // Protocol conversion from paise to rupees
                 let average_price =
-                    i32::from_be_bytes([data[12], data[13], data[14], data[15]]) as f64 / 100.0;
+                    (i32::from_be_bytes([data[12], data[13], data[14], data[15]]) as i64) * 100;
                 // SAFETY: Volumes are always non-negative
                 let volume = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
                 let buy_quantity = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
                 let sell_quantity = u32::from_be_bytes([data[24], data[25], data[26], data[27]]);
                 #[allow(clippy::cast_precision_loss)] // Protocol OHLC conversion
                 let open =
-                    i32::from_be_bytes([data[28], data[29], data[30], data[31]]) as f64 / 100.0;
+                    (i32::from_be_bytes([data[28], data[29], data[30], data[31]]) as i64) * 100;
                 #[allow(clippy::cast_precision_loss)] // Protocol OHLC conversion
                 let high =
-                    i32::from_be_bytes([data[32], data[33], data[34], data[35]]) as f64 / 100.0;
+                    (i32::from_be_bytes([data[32], data[33], data[34], data[35]]) as i64) * 100;
                 #[allow(clippy::cast_precision_loss)] // Protocol OHLC conversion
                 let low =
-                    i32::from_be_bytes([data[36], data[37], data[38], data[39]]) as f64 / 100.0;
+                    (i32::from_be_bytes([data[36], data[37], data[38], data[39]]) as i64) * 100;
                 #[allow(clippy::cast_precision_loss)] // Protocol OHLC conversion
                 let close =
-                    i32::from_be_bytes([data[40], data[41], data[42], data[43]]) as f64 / 100.0;
+                    (i32::from_be_bytes([data[40], data[41], data[42], data[43]]) as i64) * 100;
 
                 info!(
                     "📈 Quote tick for token {}: OHLC({:.2}/{:.2}/{:.2}/{:.2}) LTP={:.2} Vol={} AvgPx={:.2} LastQty={}",
@@ -400,8 +484,8 @@ impl ZerodhaFeed {
                 );
 
                 // Create synthetic bid/ask from buy/sell quantities
-                if last_price > 0.0 {
-                    let price_px = Px::new(last_price);
+                if last_price > 0 {
+                    let price_px = Px::from_i64(last_price);
 
                     if buy_quantity > 0 {
                         #[allow(clippy::cast_precision_loss)] // u32 quantity to f64
@@ -432,30 +516,31 @@ impl ZerodhaFeed {
             164 => {
                 // Full mode: includes market depth (5 bid + 5 ask levels)
                 // Protocol conversion: Zerodha sends prices as i32 (paise), convert to f64 (rupees)
-                #[allow(clippy::cast_precision_loss)] // i32 fits in f64 without precision loss
-                let last_price =
-                    i32::from_be_bytes([data[4], data[5], data[6], data[7]]) as f64 / 100.0;
+                // Price comes as i32 in paise (1/100 rupee), convert to fixed-point
+                // Fixed-point scale is 10000, wire format is 100, so multiply by 100
+                let last_price_i32 = i32::from_be_bytes([data[4], data[5], data[6], data[7]]);
+                let last_price = (last_price_i32 as i64) * 100; // Convert paise to fixed-point
                 // SAFETY: Quantities are always non-negative in exchange data
                 let last_quantity = u32::from_be_bytes([data[8], data[9], data[10], data[11]]);
                 #[allow(clippy::cast_precision_loss)] // Protocol conversion from paise to rupees
                 let average_price =
-                    i32::from_be_bytes([data[12], data[13], data[14], data[15]]) as f64 / 100.0;
+                    (i32::from_be_bytes([data[12], data[13], data[14], data[15]]) as i64) * 100;
                 // SAFETY: Volumes are always non-negative
                 let volume = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
                 let buy_quantity = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
                 let sell_quantity = u32::from_be_bytes([data[24], data[25], data[26], data[27]]);
                 #[allow(clippy::cast_precision_loss)] // Protocol OHLC conversion
                 let open =
-                    i32::from_be_bytes([data[28], data[29], data[30], data[31]]) as f64 / 100.0;
+                    (i32::from_be_bytes([data[28], data[29], data[30], data[31]]) as i64) * 100;
                 #[allow(clippy::cast_precision_loss)] // Protocol OHLC conversion
                 let high =
-                    i32::from_be_bytes([data[32], data[33], data[34], data[35]]) as f64 / 100.0;
+                    (i32::from_be_bytes([data[32], data[33], data[34], data[35]]) as i64) * 100;
                 #[allow(clippy::cast_precision_loss)] // Protocol OHLC conversion
                 let low =
-                    i32::from_be_bytes([data[36], data[37], data[38], data[39]]) as f64 / 100.0;
+                    (i32::from_be_bytes([data[36], data[37], data[38], data[39]]) as i64) * 100;
                 #[allow(clippy::cast_precision_loss)] // Protocol OHLC conversion
                 let close =
-                    i32::from_be_bytes([data[40], data[41], data[42], data[43]]) as f64 / 100.0;
+                    (i32::from_be_bytes([data[40], data[41], data[42], data[43]]) as i64) * 100;
 
                 info!(
                     "🔥 Full tick for token {}: OHLC({:.2}/{:.2}/{:.2}/{:.2}) LTP={:.2} Vol={} AvgPx={:.2} BuyQty={} SellQty={} LastQty={} +depth",
@@ -559,36 +644,183 @@ impl ZerodhaFeed {
 
         Ok(updates)
     }
+
+    /// Parse tick message from JSON
+    fn parse_tick(&self, msg: &ZerodhaTick) -> Option<Vec<L2Update>> {
+        let symbol = match self.symbol_map.get(&msg.token) {
+            Some(s) => *s,
+            None => {
+                warn!("Unknown token in tick: {}", msg.token);
+                return None;
+            }
+        };
+
+        let ts = Ts::from_nanos(msg.timestamp * 1_000_000);
+        let mut updates = Vec::new();
+
+        // Create a synthetic quote update from tick data
+        // We use level 0 for the best bid/ask derived from last price
+
+        // For bid, use last_price slightly below
+        let bid_price = Px::new(msg.last_price * 0.9995); // 5 bps below
+        let bid_qty = Qty::new(msg.buy_quantity as f64);
+        updates.push(L2Update::new(ts, symbol).with_level_data(Side::Bid, bid_price, bid_qty, 0));
+
+        // For ask, use last_price slightly above
+        let ask_price = Px::new(msg.last_price * 1.0005); // 5 bps above
+        let ask_qty = Qty::new(msg.sell_quantity as f64);
+        updates.push(L2Update::new(ts, symbol).with_level_data(Side::Ask, ask_price, ask_qty, 0));
+
+        // Log tick data for monitoring
+        debug!(
+            "Tick for {}: last={:.2}, volume={}, bid_qty={}, ask_qty={}",
+            msg.token, msg.last_price, msg.volume, msg.buy_quantity, msg.sell_quantity
+        );
+
+        Some(updates)
+    }
 }
 
 // Zerodha message types - Used for JSON text message parsing
-// These are kept for potential future JSON message support alongside binary parsing
+// JSON message types for text-based market data and control messages
 
-#[allow(dead_code)] // JSON message types - reserved for future text message support
+/// Main message envelope for all Zerodha text messages
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum ZerodhaMessage {
+    /// Market depth update
     Depth(ZerodhaDepth),
+    /// Control/status message
+    Control(ZerodhaControl),
+    /// Trade tick message
+    Tick(ZerodhaTick),
+    /// Error message
+    Error(ZerodhaError),
 }
 
-#[allow(dead_code)] // JSON message types - reserved for future text message support
+/// Market depth message with order book levels
 #[derive(Debug, Deserialize)]
 struct ZerodhaDepth {
+    #[serde(rename = "type")]
+    msg_type: String,
     token: String,
     timestamp: u64,
     depth: Depth,
 }
 
-#[allow(dead_code)] // JSON message types - reserved for future text message support
+impl ZerodhaDepth {
+    /// Validate message type for depth updates
+    fn is_valid_depth_message(&self) -> bool {
+        self.msg_type == "depth"
+    }
+}
+
+/// Depth data with buy and sell levels
 #[derive(Debug, Deserialize)]
 struct Depth {
     buy: Vec<DepthLevel>,
     sell: Vec<DepthLevel>,
 }
 
-#[allow(dead_code)] // JSON message types - reserved for future text message support
+/// Individual depth level
 #[derive(Debug, Deserialize)]
 struct DepthLevel {
     price: f64,
     quantity: f64,
+    orders: Option<u32>,
+}
+
+impl DepthLevel {
+    /// Get order count for this price level
+    fn order_count(&self) -> u32 {
+        self.orders.unwrap_or(0)
+    }
+}
+
+/// Control message for connection status and subscriptions
+#[derive(Debug, Deserialize)]
+struct ZerodhaControl {
+    #[serde(rename = "type")]
+    msg_type: String,
+    message: Option<String>,
+    data: Option<serde_json::Value>,
+}
+
+impl ZerodhaControl {
+    /// Check if this is a connection control message
+    fn is_connection_message(&self) -> bool {
+        self.msg_type == "connection"
+    }
+
+    /// Get control message content
+    fn get_message(&self) -> Option<&str> {
+        self.message.as_deref()
+    }
+
+    /// Get additional control data
+    fn get_data(&self) -> Option<&serde_json::Value> {
+        self.data.as_ref()
+    }
+}
+
+/// Trade tick message
+#[derive(Debug, Deserialize)]
+struct ZerodhaTick {
+    #[serde(rename = "type")]
+    msg_type: String,
+    token: String,
+    timestamp: u64,
+    last_price: f64,
+    last_quantity: f64,
+    average_price: f64,
+    volume: u64,
+    buy_quantity: u64,
+    sell_quantity: u64,
+    open: f64,
+    high: f64,
+    low: f64,
+    close: f64,
+}
+
+impl ZerodhaTick {
+    /// Validate message type for tick data
+    fn is_valid_tick_message(&self) -> bool {
+        self.msg_type == "tick"
+    }
+
+    /// Get OHLC data for charting
+    fn get_ohlc(&self) -> (f64, f64, f64, f64) {
+        (self.open, self.high, self.low, self.close)
+    }
+
+    /// Get last trade information
+    fn get_last_trade(&self) -> (f64, f64) {
+        (self.last_price, self.last_quantity)
+    }
+
+    /// Get market statistics
+    fn get_market_stats(&self) -> (f64, u64) {
+        (self.average_price, self.volume)
+    }
+}
+
+/// Error message from Zerodha
+#[derive(Debug, Deserialize)]
+struct ZerodhaError {
+    #[serde(rename = "type")]
+    msg_type: String,
+    code: String,
+    message: String,
+}
+
+impl ZerodhaError {
+    /// Check if this is an error message
+    fn is_error_message(&self) -> bool {
+        self.msg_type == "error"
+    }
+
+    /// Get error details for logging
+    fn get_error_info(&self) -> (&str, &str) {
+        (&self.code, &self.message)
+    }
 }

@@ -1,0 +1,14 @@
+{
+  "timestamp": "1755193133",
+  "commit": "3b262b6",
+  "violations": {
+    "critical": 0,
+    "high": 0,
+    "low": 4,
+    "medium": 2,
+    "total": 6
+  },
+  "score": 90,
+  "status": "EXCELLENT",
+  "commit_authorized": true
+}

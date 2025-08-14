@@ -34,9 +34,17 @@ pub mod time {
 
     /// Microseconds per second
     pub const MICROS_PER_SEC: u64 = 1_000_000;
+    /// Unix epoch year for timestamp validation
+    pub const UNIX_EPOCH_YEAR: i32 = 1970;
 
     /// Nanoseconds per second
     pub const NANOS_PER_SEC: u64 = 1_000_000_000;
+
+    /// Nanoseconds per millisecond
+    pub const NANOS_PER_MILLI: u64 = 1_000_000;
+
+    /// Nanoseconds per microsecond
+    pub const NANOS_PER_MICRO: u64 = 1_000;
 
     /// Default token expiry in seconds (1 hour)
     pub const DEFAULT_TOKEN_EXPIRY_SECS: u64 = 3600;
@@ -88,8 +96,18 @@ pub mod memory {
     /// Gigabyte in bytes
     pub const GB: usize = 1024 * 1024 * 1024;
 
+    /// Kilobyte in bytes (u64 for file operations)
+    pub const BYTES_PER_KB: u64 = 1024;
+    /// Megabyte in bytes (u64 for file operations)
+    pub const BYTES_PER_MB: u64 = 1024 * 1024;
+    /// Gigabyte in bytes (u64 for file operations)
+    pub const BYTES_PER_GB: u64 = 1024 * 1024 * 1024;
+
     /// Default WAL segment size (128MB)
     pub const DEFAULT_WAL_SEGMENT_SIZE: usize = 128 * MB;
+
+    /// Default WAL segment size in MB  
+    pub const DEFAULT_WAL_SEGMENT_SIZE_MB: usize = 128;
 
     /// CPU cache line size (64 bytes for x86_64)
     pub const CACHE_LINE_SIZE: usize = 64;
@@ -125,6 +143,30 @@ pub mod memory {
     pub const ARENA_SIZE_LARGE: usize = 65536;
 }
 
+/// Numeric constants for common operations
+pub mod numeric {
+    /// Zero value for initialization
+    pub const ZERO: usize = 0;
+    /// One value for increments
+    pub const ONE: usize = 1;
+    /// Zero value for i64
+    pub const ZERO_I64: i64 = 0;
+    /// Zero value for u64
+    pub const ZERO_U64: u64 = 0;
+    /// Zero value for f64 comparisons
+    pub const ZERO_F64: f64 = 0.0;
+    /// Default initial counter value
+    pub const INITIAL_COUNTER: usize = 0;
+    /// Default increment value
+    pub const INCREMENT: usize = 1;
+    /// First index in arrays
+    pub const FIRST_INDEX: usize = 0;
+    /// Second index in arrays
+    pub const SECOND_INDEX: usize = 1;
+    /// Minimum positive value
+    pub const MIN_POSITIVE: usize = 1;
+}
+
 /// Collection capacity constants
 pub mod capacity {
     /// Standard collection pre-allocation sizes
@@ -141,6 +183,9 @@ pub mod capacity {
     pub const HUGE: usize = 500;
     /// Massive collection capacity
     pub const MASSIVE: usize = 1000;
+
+    /// Progress report interval for long operations
+    pub const PROGRESS_REPORT_INTERVAL: usize = 1000;
 
     /// Specific collection sizes
     pub const ORDER_FILLS_CAPACITY: usize = 8;
@@ -196,6 +241,12 @@ pub mod trading {
     /// Minimum order quantity (1 unit in fixed-point)
     pub const MIN_ORDER_QTY: i64 = SCALE_4;
 
+    /// Maker fee in basis points (10 bp = 0.1%)
+    pub const MAKER_FEE_BP: i64 = 10;
+
+    /// Taker fee in basis points (20 bp = 0.2%)
+    pub const TAKER_FEE_BP: i64 = 20;
+
     /// Maximum orders per symbol
     pub const MAX_ORDERS_PER_SYMBOL: usize = 100;
 
@@ -228,6 +279,8 @@ pub mod financial {
 
     /// Default center price for ROI calculations (NIFTY approximate)
     pub const DEFAULT_ROI_CENTER_PRICE: f64 = 25000.0;
+    /// Strike price scale for fixed-point representation (2 decimal places)
+    pub const STRIKE_PRICE_SCALE: f64 = 100.0;
 
     /// Default ROI width for order book
     pub const DEFAULT_ROI_WIDTH: f64 = 1000.0;
@@ -337,6 +390,34 @@ pub mod network {
     pub const MAX_RATE_LIMITERS: usize = 10000;
 }
 
+/// Calendar constants
+pub mod calendar {
+    /// January month number
+    pub const JANUARY: u32 = 1;
+    /// February month number
+    pub const FEBRUARY: u32 = 2;
+    /// March month number
+    pub const MARCH: u32 = 3;
+    /// April month number
+    pub const APRIL: u32 = 4;
+    /// May month number
+    pub const MAY: u32 = 5;
+    /// June month number
+    pub const JUNE: u32 = 6;
+    /// July month number
+    pub const JULY: u32 = 7;
+    /// August month number
+    pub const AUGUST: u32 = 8;
+    /// September month number
+    pub const SEPTEMBER: u32 = 9;
+    /// October month number
+    pub const OCTOBER: u32 = 10;
+    /// November month number
+    pub const NOVEMBER: u32 = 11;
+    /// December month number
+    pub const DECEMBER: u32 = 12;
+}
+
 /// Market hours and session constants
 pub mod market {
     /// Market open hour (9 AM)
@@ -350,6 +431,15 @@ pub mod market {
 
     /// Market close minute (30 minutes)
     pub const MARKET_CLOSE_MINUTE: u8 = 30;
+
+    /// NSE/BSE market close time - hour component
+    pub const NSE_CLOSE_HOUR: u32 = 15;
+
+    /// NSE/BSE market close time - minute component  
+    pub const NSE_CLOSE_MINUTE: u32 = 30;
+
+    /// NSE/BSE market close time - second component
+    pub const NSE_CLOSE_SECOND: u32 = 0;
 
     /// Pre-market duration in minutes
     pub const PRE_MARKET_DURATION_MINS: u16 = 15;
@@ -375,9 +465,27 @@ pub mod math {
     /// Number of trading minutes per day (375 for Indian markets)
     pub const TRADING_MINS_PER_DAY: u16 = 375;
 
+    /// Default fetch interval in hours
+    pub const DEFAULT_FETCH_INTERVAL_HOURS: u64 = 24;
+
+    /// Default fetch hour (8 AM IST)
+    pub const DEFAULT_FETCH_HOUR: u32 = 8;
+
     /// Default confidence level for VaR calculations
     pub const DEFAULT_VAR_CONFIDENCE: f64 = 0.95;
 
     /// Default window size for moving averages
     pub const DEFAULT_MA_WINDOW: usize = 20;
+
+    /// Minimum data points for statistics
+    pub const MIN_DATA_POINTS: usize = 2;
+
+    /// Maximum error log entries before suppression
+    pub const MAX_ERROR_LOG_ENTRIES: usize = 10;
+
+    /// Fetch window in minutes for recent data
+    pub const FETCH_WINDOW_MINUTES: u32 = 5;
+
+    /// Bit shift for f64 precision check (2^53)
+    pub const F64_PRECISION_BITS: u32 = 53;
 }

@@ -57,3 +57,30 @@ pub const DEFAULT_POOL_SIZE: usize = 10000;
 pub const MAX_PRICE: i64 = i64::MAX / FIXED_POINT_SCALE; // Prevent overflow
 pub const MAX_QUANTITY: i64 = 1_000_000_000; // 1B units max
 pub const MIN_QUANTITY: i64 = 1; // Minimum 1 unit
+
+// Option strike price constants
+pub const STRIKE_PRICE_SCALE: f64 = 100.0; // Strike prices stored with 2 decimal places
+pub const STRIKE_PRICE_SCALE_INT: u64 = 100; // Integer version
+
+// Network/timeout constants
+pub const DEFAULT_CONNECT_TIMEOUT_SECS: u64 = 10;
+pub const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 30;
+pub const DEFAULT_HEARTBEAT_INTERVAL_SECS: u64 = 30;
+pub const MAX_RECONNECT_ATTEMPTS: u32 = 5;
+pub const RECONNECT_BACKOFF_MS: u64 = 1000;
+pub const MAX_BACKOFF_MS: u64 = 30000; // 30 seconds max backoff
+
+// Event buffer sizes
+pub const EVENT_BUFFER_SIZE: usize = 10000;
+pub const DEFAULT_BATCH_SIZE: usize = 100;
+
+// Default intervals
+pub const DEFAULT_FETCH_INTERVAL_HOURS: u64 = 24;
+pub const DEFAULT_FETCH_HOUR: u32 = 8; // 8 AM IST
+
+// WAL/Storage constants
+pub const DEFAULT_WAL_SEGMENT_SIZE_MB: usize = 100;
+pub const MAX_WAL_SEGMENTS: usize = 10;
+
+// Display/reporting thresholds
+pub const PROGRESS_REPORT_INTERVAL: usize = 1000; // Report every 1000 items

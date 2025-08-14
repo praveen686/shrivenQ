@@ -49,7 +49,7 @@ impl Position {
     /// Update position with fill - LOCK-FREE
     ///
     /// Performance: < 100ns typical
-    #[inline(always)]
+    #[inline]
     pub fn apply_fill(&self, side: Side, qty: Qty, price: Px, ts: Ts) {
         let qty_raw = qty.as_i64();
         // SAFETY: Price is always positive in trading context, cast preserves value
@@ -118,7 +118,7 @@ impl Position {
     /// Update market prices for unrealized PnL - LOCK-FREE
     ///
     /// Performance: < 50ns typical
-    #[inline(always)]
+    #[inline]
     pub fn update_market(&self, bid: Px, ask: Px, ts: Ts) {
         // SAFETY: Market prices are always positive, cast preserves value
         let bid_raw = bid.as_i64() as u64;
@@ -155,7 +155,7 @@ impl Position {
     }
 
     /// Get total PnL
-    #[inline(always)]
+    #[inline]
     pub fn total_pnl(&self) -> i64 {
         self.realized_pnl.load(Ordering::Acquire) + self.unrealized_pnl.load(Ordering::Acquire)
     }
@@ -224,14 +224,14 @@ impl PositionTracker {
     }
 
     /// Add pending order
-    #[inline(always)]
+    #[inline]
     pub fn add_pending(&self, order_id: u64, symbol: Symbol, side: Side, qty: Qty) {
         let mut pending = self.pending_orders.write();
         pending.insert(order_id, (symbol, side, qty));
     }
 
     /// Apply fill to position
-    #[inline(always)]
+    #[inline]
     pub fn apply_fill(&self, order_id: u64, fill_qty: Qty, fill_price: Px, ts: Ts) {
         // Remove from pending orders
         let order_info = {
@@ -283,7 +283,7 @@ impl PositionTracker {
     }
 
     /// Update market prices for position
-    #[inline(always)]
+    #[inline]
     pub fn update_market(&self, symbol: Symbol, bid: Px, ask: Px, ts: Ts) {
         let positions = self.positions.read();
         if let Some(position) = positions.get(&symbol) {
@@ -322,7 +322,7 @@ impl PositionTracker {
     }
 
     /// Get position for symbol
-    #[inline(always)]
+    #[inline]
     pub fn get_position(&self, symbol: Symbol) -> Option<Arc<Position>> {
         let positions = self.positions.read();
         positions.get(&symbol).cloned()
@@ -344,7 +344,7 @@ impl PositionTracker {
     }
 
     /// Get global PnL
-    #[inline(always)]
+    #[inline]
     pub fn get_global_pnl(&self) -> (i64, i64, i64) {
         let realized = self.total_realized.load(Ordering::Acquire);
         let unrealized = self.total_unrealized.load(Ordering::Acquire);

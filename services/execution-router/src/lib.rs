@@ -15,7 +15,11 @@ pub mod venue_manager;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::constants::{financial::PERCENT_SCALE, fixed_point::SCALE_4};
+use common::constants::{
+    financial::PERCENT_SCALE,
+    fixed_point::{BASIS_POINTS, SCALE_4},
+    trading::{MAKER_FEE_BP, TAKER_FEE_BP},
+};
 use common::{Px, Qty, Side, Symbol, Ts};
 use dashmap::DashMap;
 use parking_lot::RwLock;
@@ -542,20 +546,22 @@ impl ExecutionRouterService {
     }
 
     /// Calculate commission based on execution report and fill details
-    #[allow(clippy::cast_possible_truncation)] // Commission fits in i64 range
     fn calculate_commission(&self, _report: &ExecutionReport, quantity: Qty, price: Px) -> i64 {
-        // Commission calculation based on trade value
-        let trade_value = quantity.as_f64() * price.as_f64();
+        // Commission calculation based on trade value using fixed-point arithmetic
+        // Trade value = (quantity * price) / SCALE_4
+        // Both quantity and price are already in fixed-point with SCALE_4
+        let trade_value_fixed = (quantity.as_i64() * price.as_i64()) / SCALE_4;
 
         // Standard maker/taker fee structure (in basis points)
-        let fee_rate = if self.determine_maker_status(_report) {
-            0.001 // 0.1% for makers (rebate in real scenario)
+        let fee_bp = if self.determine_maker_status(_report) {
+            MAKER_FEE_BP // Maker fee (rebate in real scenario)
         } else {
-            0.002 // 0.2% for takers
+            TAKER_FEE_BP // Taker fee
         };
 
-        // Convert to fixed-point commission amount
-        (trade_value * fee_rate) as i64
+        // Calculate commission: (trade_value * fee_bp) / BASIS_POINTS
+        // Result is in fixed-point format
+        (trade_value_fixed * fee_bp) / BASIS_POINTS
     }
 
     /// Update metrics

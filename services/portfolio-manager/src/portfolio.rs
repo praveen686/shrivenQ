@@ -6,8 +6,9 @@
 //! - No allocations in metric calculations
 
 use common::Symbol;
+use common::constants::fixed_point::SCALE_4 as FIXED_POINT_SCALE;
+use common::constants::math::SQRT_TRADING_DAYS;
 use serde::{Deserialize, Serialize};
-use services_common::constants::FIXED_POINT_SCALE;
 
 /// Portfolio statistics
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -127,7 +128,8 @@ impl PortfolioAnalyzer {
         // Calculate beta using correlation and volatility ratio
         // Beta = Correlation * (Portfolio Vol / Market Vol)
         // Will be updated by market feed manager with real data
-        stats.beta = FIXED_POINT_SCALE; // 1.0 = market neutral (default until market data available)
+        // SAFETY: SCALE_4 (10000) fits in i32
+        stats.beta = FIXED_POINT_SCALE as i32; // 1.0 = market neutral (default until market data available)
         stats.correlation = self.calculate_correlation();
 
         stats
@@ -174,11 +176,14 @@ impl PortfolioAnalyzer {
         // Annualized volatility: daily_vol * sqrt(252)
         // sqrt(252) ≈ 15.8745
         // SAFETY: variance to f64 for sqrt calculation - analytics boundary
-        #[allow(clippy::cast_precision_loss)]
         let daily_vol = (variance as f64).sqrt();
         // SAFETY: Volatility percentage fits in i32
-        #[allow(clippy::cast_possible_truncation)]
-        let volatility = (daily_vol * 15.8745 * 100 as f64) as i32;
+        let vol_fp = daily_vol * SQRT_TRADING_DAYS * 100.0;
+        let volatility = if vol_fp >= i32::MIN as f64 && vol_fp <= i32::MAX as f64 {
+            vol_fp as i32
+        } else {
+            0_i32
+        };
         metrics.volatility = volatility;
 
         // Downside deviation (volatility of negative returns only)
@@ -199,8 +204,13 @@ impl PortfolioAnalyzer {
                 / negative_returns.len().max(1) as i64;
 
             // SAFETY: downside_variance to f64 for sqrt - analytics boundary
-            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
-            let downside_dev = ((downside_variance as f64).sqrt() * 15.8745 * 100 as f64) as i32;
+            let downside_vol = (downside_variance as f64).sqrt();
+            let downside_fp = downside_vol * SQRT_TRADING_DAYS * 100.0;
+            let downside_dev = if downside_fp >= i32::MIN as f64 && downside_fp <= i32::MAX as f64 {
+                downside_fp as i32
+            } else {
+                0_i32
+            };
             metrics.downside_deviation = downside_dev;
         }
 
@@ -226,8 +236,8 @@ impl PortfolioAnalyzer {
             // Drawdown percentage (fixed-point)
             if peak > 0 {
                 // SAFETY: Drawdown percentage fits in i32
-                #[allow(clippy::cast_possible_truncation)]
-                let drawdown_pct = ((max_dd * FIXED_POINT_SCALE) / peak) as i32;
+                let dd_calc = (max_dd * FIXED_POINT_SCALE) / peak;
+                let drawdown_pct = i32::try_from(dd_calc).unwrap_or(i32::MAX);
                 metrics.max_drawdown_pct = drawdown_pct;
             }
         }
@@ -255,12 +265,11 @@ impl PortfolioAnalyzer {
 
         // Convert to annualized returns (fixed-point percentage)
         // SAFETY: Return percentage fits in i32
-        #[allow(clippy::cast_possible_truncation)]
-        let total_ret = (total * FIXED_POINT_SCALE / count.max(1)) as i32;
+        let total_calc = total * FIXED_POINT_SCALE / count.max(1);
+        let total_ret = i32::try_from(total_calc).unwrap_or(0);
         metrics.total_return = total_ret;
         // SAFETY: count.max(1) always >= 1, fits in i32
-        #[allow(clippy::cast_possible_truncation)]
-        let daily_ret = metrics.total_return / count.max(1) as i32;
+        let daily_ret = metrics.total_return / i32::try_from(count.max(1)).unwrap_or(1);
         metrics.daily_return = daily_ret;
         metrics.monthly_return = metrics.daily_return.saturating_mul(20); // ~20 trading days
         metrics.annual_return = metrics.daily_return.saturating_mul(252); // 252 trading days
@@ -273,7 +282,8 @@ impl PortfolioAnalyzer {
             // SAFETY: wins.len() > 0 guaranteed by if condition, fits in i64
             metrics.avg_win = wins.iter().sum::<i64>() / wins.len() as i64;
             // SAFETY: wins.len() and returns.len() fit in i32 for reasonable portfolio sizes
-            metrics.win_rate = (wins.len() as i32 * FIXED_POINT_SCALE) / returns.len() as i32;
+            metrics.win_rate =
+                (wins.len() as i32 * FIXED_POINT_SCALE as i32) / returns.len() as i32;
         }
 
         if !losses.is_empty() {
@@ -306,7 +316,7 @@ impl PortfolioAnalyzer {
         // SAFETY: variance to f64 for calculations - analytics boundary
         #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
         let daily_volatility = (variance as f64).sqrt();
-        let annual_volatility = (daily_volatility * 15.8745 * 100 as f64) as i32; // sqrt(252) ≈ 15.8745
+        let annual_volatility = (daily_volatility * SQRT_TRADING_DAYS * 100 as f64) as i32; // sqrt(252)
 
         // Sharpe Ratio = (Annual Return - Risk Free Rate) / Annual Volatility
         if annual_volatility > 0 {
@@ -335,7 +345,7 @@ impl PortfolioAnalyzer {
             // SAFETY: downside_variance to f64 for calculations - analytics boundary
             #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
             let downside_deviation = (downside_variance as f64).sqrt();
-            let annual_downside_dev = (downside_deviation * 15.8745 * 100 as f64) as i32;
+            let annual_downside_dev = (downside_deviation * SQRT_TRADING_DAYS * 100 as f64) as i32;
 
             if annual_downside_dev > 0 {
                 let excess_return = metrics.annual_return.saturating_sub(risk_free_rate);
