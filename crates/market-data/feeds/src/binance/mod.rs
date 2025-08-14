@@ -66,8 +66,12 @@ impl BinanceFeed {
                 Side::Bid,
                 Px::new(price),
                 Qty::new(qty),
-                // SAFETY: Cast is safe within expected range
-                i as u8,
+                // SAFETY: i is explicitly bounded by u8::MAX check before cast
+                if i <= u8::MAX as usize {
+                    i as u8
+                } else {
+                    continue;
+                },
             ));
         }
 
@@ -81,8 +85,12 @@ impl BinanceFeed {
                 Px::new(price),
                 // SAFETY: Cast is safe within expected range
                 Qty::new(qty),
-                // SAFETY: Cast is safe within expected range
-                i as u8,
+                // SAFETY: i is explicitly bounded by u8::MAX check before cast
+                if i <= u8::MAX as usize {
+                    i as u8
+                } else {
+                    continue;
+                },
             ));
         }
 

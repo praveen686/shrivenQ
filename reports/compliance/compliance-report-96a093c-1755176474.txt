@@ -1,0 +1,23 @@
+ShrivenQuant Compliance Report
+===============================
+Generated: 1755176474
+Commit: 96a093c
+
+[FAIL] build - ❌ Build timeout after 30s (count: 1)
+[OK] numeric_casts - ✓ Cast usage acceptable (8 files) (count: 8)
+[OK] panic_unwrap - ✓ No panic/unwrap/expect in production (count: 0)
+[OK] std_hashmap - ✓ No std::HashMap usage in prod paths (count: 0)
+[OK] float_money - ✓ No floating point money in internal calculations (count: 0)
+[OK] todos - ✓ No outstanding TODO/FIXME markers (count: 0)
+[OK] ignored_errors - ✓ No ignored error patterns in prod (count: 0)
+[WARN] clones - ⚠️  211 clone() calls in prod — review hot paths (count: 211)
+[WARN] string_allocs - ⚠️  526 string allocation sites — avoid in hot paths (count: 526)
+[OK] underscore_abuse - ✓ Underscore usage acceptable (count: 0)
+[WARN] magic_numbers - ⚠️  416 potential magic numbers — prefer named constants (max 10) (count: 416)
+[WARN] warning_suppressions - ⚠️  61 #[allow(...)] usages — fix root causes when possible (max 15) (count: 61)
+[OK] doc_dupes - ✓ Doc duplication acceptable (max repeat 3×) (count: 3)
+[WARN] large_functions - ⚠️  Found 1 functions >50 lines (count: 1)
+[WARN] inline_attrs - ⚠️  75 #[inline] attributes (max 50) (count: 75)
+
+Violations: Critical=1 High=0 Medium=2 Low=4
+Score: 65/100  Status: NEEDS_IMPROVEMENT

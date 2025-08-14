@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package shrivenquant.risk.v1;
+
+// Risk management service API
+service RiskService {
+  // Check if order can be placed
+  rpc CheckOrder(CheckOrderRequest) returns (CheckOrderResponse);
+  
+  // Update position after fill
+  rpc UpdatePosition(UpdatePositionRequest) returns (UpdatePositionResponse);
+  
+  // Get current positions
+  rpc GetPositions(GetPositionsRequest) returns (GetPositionsResponse);
+  
+  // Get risk metrics
+  rpc GetMetrics(GetMetricsRequest) returns (GetMetricsResponse);
+  
+  // Activate kill switch
+  rpc ActivateKillSwitch(KillSwitchRequest) returns (KillSwitchResponse);
+  
+  // Stream risk alerts
+  rpc StreamAlerts(StreamAlertsRequest) returns (stream RiskAlert);
+}
+
+message CheckOrderRequest {
+  string symbol = 1;
+  Side side = 2;
+  int64 quantity = 3;  // Fixed-point
+  int64 price = 4;     // Fixed-point
+  string strategy_id = 5;
+  string exchange = 6;
+}
+
+message CheckOrderResponse {
+  CheckResult result = 1;
+  string reason = 2;
+  RiskMetrics current_metrics = 3;
+}
+
+enum CheckResult {
+  CHECK_RESULT_UNSPECIFIED = 0;
+  CHECK_RESULT_APPROVED = 1;
+  CHECK_RESULT_REJECTED = 2;
+  CHECK_RESULT_REQUIRES_APPROVAL = 3;
+}
+
+message UpdatePositionRequest {
+  string symbol = 1;
+  Side side = 2;
+  int64 quantity = 3;  // Fixed-point
+  int64 price = 4;     // Fixed-point
+  string exchange = 5;
+}
+
+message UpdatePositionResponse {
+  bool success = 1;
+  Position updated_position = 2;
+}
+
+message GetPositionsRequest {
+  string symbol = 1; // Optional: filter by symbol
+}
+
+message GetPositionsResponse {
+  repeated Position positions = 1;
+  int64 total_exposure = 2;  // Fixed-point
+}
+
+message Position {
+  string symbol = 1;
+  int64 net_quantity = 2;    // Fixed-point
+  int64 avg_price = 3;       // Fixed-point
+  int64 mark_price = 4;      // Fixed-point
+  int64 unrealized_pnl = 5;  // Fixed-point
+  int64 realized_pnl = 6;    // Fixed-point
+  int64 position_value = 7;  // Fixed-point
+  string exchange = 8;
+}
+
+message GetMetricsRequest {}
+
+message GetMetricsResponse {
+  RiskMetrics metrics = 1;
+}
+
+message RiskMetrics {
+  int64 total_exposure = 1;     // Fixed-point
+  int32 current_drawdown = 2;   // Fixed-point percentage
+  int64 daily_pnl = 3;          // Fixed-point
+  int32 open_positions = 4;
+  int32 orders_today = 5;
+  bool circuit_breaker_active = 6;
+  bool kill_switch_active = 7;
+}
+
+message KillSwitchRequest {
+  bool activate = 1;
+  string reason = 2;
+}
+
+message KillSwitchResponse {
+  bool success = 1;
+  bool is_active = 2;
+}
+
+message StreamAlertsRequest {
+  repeated AlertLevel levels = 1;
+}
+
+message RiskAlert {
+  AlertLevel level = 1;
+  string message = 2;
+  int64 timestamp = 3;
+  string source = 4;
+  map<string, string> metadata = 5;
+}
+
+enum AlertLevel {
+  ALERT_LEVEL_UNSPECIFIED = 0;
+  ALERT_LEVEL_INFO = 1;
+  ALERT_LEVEL_WARNING = 2;
+  ALERT_LEVEL_CRITICAL = 3;
+  ALERT_LEVEL_EMERGENCY = 4;
+}
+
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  SIDE_BUY = 1;
+  SIDE_SELL = 2;
+}

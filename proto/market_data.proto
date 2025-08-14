@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package shrivenquant.marketdata.v1;
+
+// Market data service API
+service MarketDataService {
+  // Subscribe to market data streams
+  rpc Subscribe(SubscribeRequest) returns (stream MarketDataEvent);
+  
+  // Unsubscribe from symbols
+  rpc Unsubscribe(UnsubscribeRequest) returns (UnsubscribeResponse);
+  
+  // Get current snapshot
+  rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
+  
+  // Get historical data
+  rpc GetHistoricalData(GetHistoricalDataRequest) returns (GetHistoricalDataResponse);
+}
+
+message SubscribeRequest {
+  repeated string symbols = 1;
+  repeated DataType data_types = 2;
+  string exchange = 3;
+}
+
+message UnsubscribeRequest {
+  repeated string symbols = 1;
+  string exchange = 2;
+}
+
+message UnsubscribeResponse {
+  bool success = 1;
+}
+
+message MarketDataEvent {
+  string symbol = 1;
+  string exchange = 2;
+  int64 timestamp_nanos = 3;
+  
+  oneof data {
+    OrderBookUpdate order_book = 4;
+    Trade trade = 5;
+    Quote quote = 6;
+    Candle candle = 7;
+  }
+}
+
+message OrderBookUpdate {
+  repeated PriceLevel bids = 1;
+  repeated PriceLevel asks = 2;
+  int64 sequence = 3;
+}
+
+message PriceLevel {
+  int64 price = 1;  // Fixed-point: actual * 10000
+  int64 quantity = 2;  // Fixed-point: actual * 10000
+  int32 count = 3;
+}
+
+message Trade {
+  int64 price = 1;  // Fixed-point
+  int64 quantity = 2;  // Fixed-point
+  bool is_buyer_maker = 3;
+  string trade_id = 4;
+}
+
+message Quote {
+  int64 bid_price = 1;  // Fixed-point
+  int64 bid_size = 2;   // Fixed-point
+  int64 ask_price = 3;  // Fixed-point
+  int64 ask_size = 4;   // Fixed-point
+}
+
+message Candle {
+  int64 open = 1;   // Fixed-point
+  int64 high = 2;   // Fixed-point
+  int64 low = 3;    // Fixed-point
+  int64 close = 4;  // Fixed-point
+  int64 volume = 5; // Fixed-point
+  int32 trades = 6;
+  string interval = 7;
+}
+
+message GetSnapshotRequest {
+  repeated string symbols = 1;
+  string exchange = 2;
+}
+
+message GetSnapshotResponse {
+  repeated MarketSnapshot snapshots = 1;
+}
+
+message MarketSnapshot {
+  string symbol = 1;
+  OrderBookUpdate order_book = 2;
+  Quote quote = 3;
+  int64 timestamp_nanos = 4;
+}
+
+message GetHistoricalDataRequest {
+  string symbol = 1;
+  string exchange = 2;
+  int64 start_time = 3;
+  int64 end_time = 4;
+  DataType data_type = 5;
+  string interval = 6; // For candles
+}
+
+message GetHistoricalDataResponse {
+  repeated MarketDataEvent events = 1;
+}
+
+enum DataType {
+  DATA_TYPE_UNSPECIFIED = 0;
+  DATA_TYPE_ORDER_BOOK = 1;
+  DATA_TYPE_TRADES = 2;
+  DATA_TYPE_QUOTES = 3;
+  DATA_TYPE_CANDLES = 4;
+}

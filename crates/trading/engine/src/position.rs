@@ -1,5 +1,6 @@
 //! Lock-free position tracking with cache-aligned data structures
 
+use common::constants::trading::SIDE_BUY;
 use common::{Px, Qty, Side, Symbol, Ts};
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
@@ -44,7 +45,7 @@ impl Position {
         let price_raw = price.as_i64().unsigned_abs();
 
         // Determine quantity delta
-        let qty_delta = if side == 0 { qty_raw } else { -qty_raw }; // Buy = 0, Sell = 1
+        let qty_delta = if side == SIDE_BUY { qty_raw } else { -qty_raw };
 
         // Update quantity
         let old_qty = self.quantity.fetch_add(qty_delta, Ordering::AcqRel);

@@ -297,7 +297,7 @@ impl InstrumentFetcher {
             instrument_token: symbol.symbol.chars().fold(0u32, |acc, c| {
                 #[allow(clippy::cast_lossless)] // char to u32 is always safe
                 // SAFETY: Cast is safe within expected range
-                acc.wrapping_mul(31).wrapping_add(c as u32)
+                acc.wrapping_mul(31).wrapping_add(c as u32) // SAFETY: char fits in u32
             }),
             trading_symbol: symbol.symbol.clone(),
             exchange_symbol: symbol.base_asset.clone(),

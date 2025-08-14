@@ -1,0 +1,23 @@
+ShrivenQuant Compliance Report
+===============================
+Generated: 1755166458
+Commit: 96a093c
+
+[FAIL] build - Check 'build' crashed (count: 1)
+[OK] numeric_casts - ✓ Cast usage acceptable (0 files) (count: 0)
+[OK] panic_unwrap - ✓ No panic/unwrap/expect in production (count: 0)
+[OK] std_hashmap - ✓ No std::HashMap usage in prod paths (count: 0)
+[OK] float_money - ✓ No floating point money in internal calculations (count: 0)
+[OK] todos - ✓ No outstanding TODO/FIXME markers (count: 0)
+[OK] ignored_errors - ✓ No ignored error patterns in prod (count: 0)
+[OK] clones - ✓ Clone usage reasonable (0 calls) (count: 0)
+[OK] string_allocs - ✓ String allocations reasonable (0 sites) (count: 0)
+[OK] underscore_abuse - ✓ Underscore usage acceptable (count: 0)
+[OK] magic_numbers - ✓ Magic numbers acceptable (0 found) (count: 0)
+[OK] warning_suppressions - ✓ Warning suppressions acceptable (0 found) (count: 0)
+[OK] doc_dupes - ✓ No doc lines to analyze (count: 0)
+[OK] large_functions - ✓ Function lengths look reasonable (count: 0)
+[OK] inline_attrs - ✓ Inline attribute usage reasonable (0 uses) (count: 0)
+
+Violations: Critical=1 High=0 Medium=0 Low=0
+Score: 75/100  Status: GOOD

@@ -53,7 +53,7 @@ impl Metrics {
         latencies.sort_unstable();
         #[allow(clippy::cast_possible_truncation)] // Test metrics, len() fits in u64
         // SAFETY: Cast is safe within expected range
-        let avg = latencies.iter().sum::<u64>() / latencies.len() as u64;
+        let avg = latencies.iter().sum::<u64>() / latencies.len() as u64; // SAFETY: len() fits in u64
         let p50 = latencies[latencies.len() / 2];
         let p95 = latencies[latencies.len() * 95 / 100];
         let p99 = latencies[latencies.len() * 99 / 100];
@@ -136,7 +136,7 @@ pub async fn run_binance_testnet_v2_integration() -> anyhow::Result<()> {
     // Create auth
     let mut auth = BinanceAuth::new();
     // Add testnet market configuration
-    let _result = auth.add_market(BinanceConfig::new_testnet(
+    let _ = auth.add_market(BinanceConfig::new_testnet(
         api_key,
         api_secret,
         BinanceMarket::Spot,
@@ -274,7 +274,7 @@ pub async fn run_binance_testnet_v2_integration() -> anyhow::Result<()> {
                 // SAFETY: Cast is safe within expected range
                 // Nanoseconds fit in u64 for reasonable durations
                 // SAFETY: Cast is safe within expected range
-                let latency = start.elapsed().as_nanos() as u64;
+                let latency = start.elapsed().as_nanos() as u64; // SAFETY: nanoseconds fit in u64
                 latencies.push(latency);
 
                 // Log BBO periodically

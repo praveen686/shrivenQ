@@ -31,11 +31,11 @@ async fn test_zerodha_real_auth() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create auth instance - fully automated with no manual intervention
     let config = ZerodhaConfig::new(user_id, password, totp_secret, api_key, api_secret);
-    let _auth = ZerodhaAuth::new(config);
+    let auth = ZerodhaAuth::new(config);
 
     // Auth handles everything automatically - no manual login flow needed
-    // Auth config is private - just verify auth was created successfully
-    // The actual authentication happens internally
+    // Verify auth was created successfully with expected API key
+    assert!(!auth.get_api_key().is_empty());
     Ok(())
 }
 
@@ -79,10 +79,11 @@ async fn test_zerodha_websocket_connection() -> Result<(), Box<dyn std::error::E
     let totp_secret = env::var("ZERODHA_TOTP_SECRET").unwrap_or_else(|_| "test_totp".to_string());
 
     let config = ZerodhaConfig::new(user_id, password, totp_secret, api_key.clone(), api_secret);
-    let _auth = ZerodhaAuth::new(config);
+    let auth = ZerodhaAuth::new(config);
 
     // Auth handles token retrieval automatically internally
-    // WebSocket connection would use the token from auth module
+    // Verify auth is ready for WebSocket connection
+    assert_eq!(auth.get_api_key(), api_key);
 
     // Test WebSocket connection - auth module would provide the token internally
     let ws_url = format!(

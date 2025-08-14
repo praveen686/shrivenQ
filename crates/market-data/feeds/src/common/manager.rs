@@ -195,7 +195,7 @@ impl FeedManager {
         // Create authenticator
         let mut auth = BinanceAuth::new();
         // Add market configuration
-        let _result = auth.add_market(BinanceAuthConfig::new(
+        let _ = auth.add_market(BinanceAuthConfig::new(
             config.api_key.clone(),
             config.api_secret.clone(),
             BinanceMarket::Spot,

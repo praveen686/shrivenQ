@@ -1,5 +1,6 @@
 //! Core types for `ShrivenQ` trading platform
 
+use crate::constants::fixed_point::SCALE_4;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -30,7 +31,7 @@ impl Px {
     /// For external API compatibility only - prefer `from_i64`
     #[must_use]
     pub fn new(value: f64) -> Self {
-        let scaled = (value * 10000.0).round();
+        let scaled = (value * SCALE_4 as f64).round();
         // Safely convert f64 to i64 using proper bounds
         // i64::MAX = 9_223_372_036_854_775_807
         const MAX_SAFE: f64 = 9_223_372_036_854_775_807.0;
@@ -44,7 +45,7 @@ impl Px {
             // Now safe to cast after bounds check
             #[allow(clippy::cast_possible_truncation)]
             // SAFETY: Cast is safe within expected range
-            let result = scaled as i64;
+            let result = scaled as i64; // SAFETY: price scaled to fixed precision
             result
         };
         Self(clamped)
@@ -62,25 +63,23 @@ impl Px {
         // SAFETY: Cast is safe within expected range
         {
             // SAFETY: Cast is safe within expected range
-            self.0 as f64 / 10000.0
+            self.0 as f64 / SCALE_4 as f64
         }
     }
 
     /// Create from cents (100 cents = 1 unit)
     #[must_use]
     pub const fn from_cents(cents: i64) -> Self {
-        Self(cents * 100) // 100 cents = 10000 ticks
+        Self(cents * (SCALE_4 / 100)) // 100 cents = SCALE_4 ticks
     }
 
     /// Create from integer price in smallest units (e.g., paise, cents)
     /// Assumes 2 decimal places in input, converts to 4 decimal internal
     #[must_use]
-    // SAFETY: Cast is safe within expected range
     pub const fn from_price_i32(price: i32) -> Self {
-        // SAFETY: Cast is safe within expected range
-        // Safe: i32 to i64 is always lossless (widening)
-        // SAFETY: Cast is safe within expected range
-        Self((price as i64) * 100) // Convert 2 decimals to 4
+        // SAFETY: i32 to i64 is always lossless (widening conversion)
+        #[allow(clippy::cast_lossless)]
+        Self((price as i64) * (SCALE_4 / 100))
     }
 
     /// Get price as i64 ticks
@@ -114,14 +113,14 @@ impl Px {
     /// Returns value in ticks (divide by 10000 for display)
     #[must_use]
     pub const fn mul_qty(self, qty: Qty) -> i64 {
-        (self.0 * qty.0) / 10000
+        (self.0 * qty.0) / SCALE_4
     }
 }
 
 impl fmt::Display for Px {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let whole = self.0 / 10000;
-        let frac = (self.0 % 10000).abs();
+        let whole = self.0 / SCALE_4;
+        let frac = (self.0 % SCALE_4).abs();
         write!(f, "{whole}.{frac:04}")
     }
 }
@@ -135,7 +134,7 @@ impl Qty {
     /// For internal code, prefer `from_i64`
     #[must_use]
     pub fn new(value: f64) -> Self {
-        let scaled = (value * 10000.0).round();
+        let scaled = (value * SCALE_4 as f64).round();
         // Safely convert f64 to i64 using proper bounds
         // i64::MAX = 9_223_372_036_854_775_807
         const MAX_SAFE: f64 = 9_223_372_036_854_775_807.0;
@@ -151,7 +150,7 @@ impl Qty {
             // Now safe to cast after bounds check
             // SAFETY: Cast is safe within expected range
             #[allow(clippy::cast_possible_truncation)]
-            let result = scaled as i64;
+            let result = scaled as i64; // SAFETY: price scaled to fixed precision
             result
         };
         Self(clamped)
@@ -170,23 +169,23 @@ impl Qty {
         // SAFETY: Cast is safe within expected range
         #[allow(clippy::cast_precision_loss)]
         {
-            self.0 as f64 / 10000.0
+            self.0 as f64 / SCALE_4 as f64
         }
     }
 
     /// Create from whole units
     #[must_use]
     pub const fn from_units(units: i64) -> Self {
-        Self(units * 10000)
+        Self(units * SCALE_4)
     }
     // SAFETY: Cast is safe within expected range
 
     // SAFETY: Cast is safe within expected range
     /// Create from integer quantity
-    // SAFETY: Cast is safe within expected range
     #[must_use]
     pub const fn from_qty_i32(qty: i32) -> Self {
-        // Safe: i32 to i64 is always lossless (widening)
+        // SAFETY: i32 to i64 is always lossless (widening conversion)
+        #[allow(clippy::cast_lossless)]
         Self((qty as i64) * 10000)
     }
 
@@ -232,8 +231,8 @@ impl Qty {
 
 impl fmt::Display for Qty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let whole = self.0 / 10000;
-        let frac = (self.0 % 10000).abs();
+        let whole = self.0 / SCALE_4;
+        let frac = (self.0 % SCALE_4).abs();
         write!(f, "{whole}.{frac:04}")
     }
 }

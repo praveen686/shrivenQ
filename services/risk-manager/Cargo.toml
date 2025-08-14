@@ -1,0 +1,35 @@
+[package]
+name = "risk-manager"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+# Core dependencies
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = "0.1"
+
+# Internal dependencies
+common = { path = "../../crates/core/common" }
+engine = { path = "../../crates/trading/engine" }
+
+# Concurrent data structures
+dashmap = "6.1"
+parking_lot = "0.12"
+rustc-hash = "2.1"
+
+# Metrics and monitoring
+prometheus = "0.13"
+
+# Configuration
+config = "0.14"
+
+# Time handling
+chrono = { workspace = true }

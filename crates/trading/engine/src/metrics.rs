@@ -1,6 +1,9 @@
 //! SIMD-optimized metrics calculation
 
 use crate::position::PositionTracker;
+use common::constants::{
+    fixed_point::SCALE_4, math::SQRT_TRADING_DAYS, memory::LARGE_BUFFER_CAPACITY,
+};
 use common::{Px, Qty, Symbol, Ts};
 use std::arch::x86_64::*;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
@@ -25,9 +28,9 @@ pub struct MetricsEngine {
     peak_equity: AtomicI64,
 
     // Performance metrics
-    sharpe_ratio: AtomicU64,  // Fixed point * 1000
-    win_rate: AtomicU64,      // Percentage * 100
-    profit_factor: AtomicU64, // Fixed point * 1000
+    sharpe_ratio: AtomicU64,  // Fixed point * SCALE_3
+    win_rate: AtomicU64,      // Percentage * SCALE_2
+    profit_factor: AtomicU64, // Fixed point * SCALE_3
 
     // Time metrics
     first_trade_time: AtomicU64,
@@ -56,7 +59,7 @@ impl MetricsEngine {
             profit_factor: AtomicU64::new(0),
             first_trade_time: AtomicU64::new(0),
             last_trade_time: AtomicU64::new(0),
-            returns_buffer: Vec::with_capacity(10000),
+            returns_buffer: Vec::with_capacity(LARGE_BUFFER_CAPACITY),
             _padding: [0; 32],
         }
     }
@@ -74,7 +77,7 @@ impl MetricsEngine {
         self.total_trades.fetch_add(1, Ordering::Relaxed);
 
         // Update volume using fixed-point arithmetic
-        let volume = ((qty.raw() * price.as_i64()) / 10000).unsigned_abs();
+        let volume = ((qty.raw() * price.as_i64()) / SCALE_4).unsigned_abs();
         self.total_volume.fetch_add(volume, Ordering::Relaxed);
 
         // Update last trade time
@@ -173,7 +176,7 @@ impl MetricsEngine {
         let std_dev = (variance / self.returns_buffer.len() as f64).sqrt();
 
         if std_dev > 0.0 {
-            (mean / std_dev) * (252.0_f64).sqrt() // Annualized
+            (mean / std_dev) * SQRT_TRADING_DAYS // Annualized
         } else {
             0.0
         }
@@ -185,11 +188,8 @@ impl MetricsEngine {
     pub fn calculate_sharpe(&self) -> f64 {
         if self.returns_buffer.len() < 2 {
             return 0.0;
-            // SAFETY: Cast is safe within expected range
         }
-        // SAFETY: Cast is safe within expected range
 
-        // SAFETY: Cast is safe within expected range
         let mean = self.returns_buffer.iter().sum::<f64>() / self.returns_buffer.len() as f64;
 
         let variance = self
@@ -197,18 +197,15 @@ impl MetricsEngine {
             .iter()
             .map(|&r| {
                 let diff = r - mean;
-                // SAFETY: Cast is safe within expected range
                 diff * diff
-                // SAFETY: Cast is safe within expected range
             })
-            // SAFETY: Cast is safe within expected range
             .sum::<f64>()
             / self.returns_buffer.len() as f64;
 
         let std_dev = variance.sqrt();
 
         if std_dev > 0.0 {
-            (mean / std_dev) * (252.0_f64).sqrt() // Annualized
+            (mean / std_dev) * SQRT_TRADING_DAYS // Annualized
         } else {
             0.0
         }
@@ -218,20 +215,15 @@ impl MetricsEngine {
     #[allow(clippy::cast_precision_loss)] // Analytics boundary - ADR-0005
     pub fn get_metrics(&self) -> TradingMetrics {
         let total = self.total_trades.load(Ordering::Acquire);
-        // SAFETY: Cast is safe within expected range
         let wins = self.winning_trades.load(Ordering::Acquire);
-        // SAFETY: Cast is safe within expected range
         let losses = self.losing_trades.load(Ordering::Acquire);
-        // SAFETY: Cast is safe within expected range
 
         let win_rate = if total > 0 {
             (wins as f64 / total as f64) * 100.0
         } else {
             0.0
         };
-        // SAFETY: Cast is safe within expected range
 
-        // SAFETY: Cast is safe within expected range
         let gross_profit = self.gross_profit.load(Ordering::Acquire);
         // SAFETY: Cast is safe within expected range
         let gross_loss = self.gross_loss.load(Ordering::Acquire).abs();

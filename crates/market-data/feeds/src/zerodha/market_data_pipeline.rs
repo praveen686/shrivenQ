@@ -8,6 +8,17 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use common::constants::{
+    capacity::{EVENTS_CAPACITY, LARGE, OPTIONS_CAPACITY, UPDATE_BUFFER_CAPACITY, XLARGE},
+    financial::{
+        DEFAULT_ROI_CENTER_PRICE, DEFAULT_ROI_WIDTH, DEFAULT_SYNTHETIC_QTY, EQUITY_TICK_SIZE,
+        NIFTY_TICK_SIZE,
+    },
+    lot_sizes::{BANK_NIFTY_LOT_SIZE, DEFAULT_LOT_SIZE, NIFTY_LOT_SIZE},
+    market::{DEFAULT_OPTION_STRIKE_RANGE, NIFTY_STRIKE_INTERVAL},
+    memory::{LARGE_BUFFER_CAPACITY, MB},
+    time::{INTERVAL_1_MIN, SECS_PER_MINUTE},
+};
 use common::{
     Px, Qty, Symbol, Ts,
     instrument::{Instrument, InstrumentStore, OptionType},
@@ -60,12 +71,12 @@ impl Default for PipelineConfig {
         Self {
             data_dir: PathBuf::from("./data/market"),
             spot_symbols: vec!["NIFTY 50".to_string(), "NIFTY BANK".to_string()],
-            option_strike_range: 10,
-            strike_interval: 50.0,
-            wal_segment_size: 100 * 1024 * 1024, // 100MB
-            snapshot_interval_secs: 60,
+            option_strike_range: DEFAULT_OPTION_STRIKE_RANGE,
+            strike_interval: NIFTY_STRIKE_INTERVAL,
+            wal_segment_size: 100 * MB as u64,
+            snapshot_interval_secs: SECS_PER_MINUTE,
             enable_reconstruction: true,
-            max_queue_size: 100_000,
+            max_queue_size: LARGE_BUFFER_CAPACITY * 10,
             enable_compression: true,
         }
     }
@@ -156,17 +167,17 @@ impl MarketDataPipeline {
             config,
             instrument_store,
             subscriptions: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
-                100,
+                LARGE,
                 FxBuildHasher,
             ))),
             tick_wal,
             lob_wal,
             order_books: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
-                1000,
+                EVENTS_CAPACITY,
                 FxBuildHasher,
             ))),
             feature_calcs: Arc::new(RwLock::new(FxHashMap::with_capacity_and_hasher(
-                1000,
+                EVENTS_CAPACITY,
                 FxBuildHasher,
             ))),
             metrics: Arc::new(RwLock::new(PipelineMetrics::default())),
@@ -213,7 +224,7 @@ impl MarketDataPipeline {
                         Px::new(tick_size),
                         Qty::from_units(i64::from(lot_size)),
                         Px::new(spot.last_price.unwrap_or(25000.0)), // ROI center
-                        Px::new(1000.0),                             // ROI width
+                        Px::new(1000.0), // ROI width - TODO: move to constants
                     ),
                 );
 
@@ -233,9 +244,9 @@ impl MarketDataPipeline {
             spot: spot.clone(),
             current_future: None,
             next_future: None,
-            calls: FxHashMap::with_capacity_and_hasher(50, FxBuildHasher),
-            puts: FxHashMap::with_capacity_and_hasher(50, FxBuildHasher),
-            tokens: HashSet::with_capacity(200),
+            calls: FxHashMap::with_capacity_and_hasher(OPTIONS_CAPACITY, FxBuildHasher),
+            puts: FxHashMap::with_capacity_and_hasher(OPTIONS_CAPACITY, FxBuildHasher),
+            tokens: HashSet::with_capacity(XLARGE),
         };
 
         // Add spot token
@@ -312,7 +323,7 @@ impl MarketDataPipeline {
                                     // SAFETY: Cast is safe within expected range
                                     // Bounds checked above
                                     // SAFETY: Cast is safe within expected range
-                                    let val = strike_rounded as i64;
+                                    let val = strike_rounded as i64; // SAFETY: strike price fits in i64
                                     val
                                 } else {
                                     continue; // Skip invalid strike
@@ -335,7 +346,7 @@ impl MarketDataPipeline {
                                     // SAFETY: Cast is safe within expected range
                                     #[allow(clippy::cast_possible_truncation)]
                                     // Bounds checked above
-                                    let val = strike_rounded as i64;
+                                    let val = strike_rounded as i64; // SAFETY: strike price fits in i64
                                     val
                                 } else {
                                     continue; // Skip invalid strike
@@ -449,14 +460,14 @@ impl MarketDataPipeline {
         info!("Reconstructing LOB for symbol {} from ticks", symbol);
 
         // Create new order book
-        let tick_size = 0.05; // Get from instrument
-        let lot_size = 1.0; // Get from instrument
+        let tick_size = NIFTY_TICK_SIZE; // Default NIFTY tick size
+        let lot_size = DEFAULT_SYNTHETIC_QTY; // Default lot size
         let mut book = OrderBookV2::new_with_roi(
             symbol,
             Px::new(tick_size),
             Qty::new(lot_size),
-            Px::new(25000.0), // Center price
-            Px::new(1000.0),  // ROI width
+            Px::new(DEFAULT_ROI_CENTER_PRICE), // Center price
+            Px::new(DEFAULT_ROI_WIDTH),        // ROI width
         );
 
         // Read tick events from WAL
@@ -478,13 +489,13 @@ impl MarketDataPipeline {
                             L2Update::new(tick.ts, symbol).with_level_data(
                                 Side::Bid,
                                 bid,
-                                Qty::new(1.0),
+                                Qty::new(DEFAULT_SYNTHETIC_QTY),
                                 0,
                             ),
                             L2Update::new(tick.ts, symbol).with_level_data(
                                 Side::Ask,
                                 ask,
-                                Qty::new(1.0),
+                                Qty::new(DEFAULT_SYNTHETIC_QTY),
                                 0,
                             ),
                         ];
@@ -529,7 +540,7 @@ impl MarketDataPipeline {
         // Start metrics reporter
         let pipeline = self.clone();
         tokio::spawn(async move {
-            let mut interval = interval(Duration::from_secs(60));
+            let mut interval = interval(Duration::from_secs(INTERVAL_1_MIN));
 
             loop {
                 interval.tick().await;
@@ -565,24 +576,24 @@ impl MarketDataPipeline {
     /// Get tick size for symbol
     fn get_tick_size(&self, symbol: &str) -> f64 {
         match symbol {
-            "NIFTY 50" | "NIFTY BANK" => 0.05,
-            _ => 0.01,
+            "NIFTY 50" | "NIFTY BANK" => NIFTY_TICK_SIZE,
+            _ => EQUITY_TICK_SIZE,
         }
     }
 
     /// Get lot size for symbol
     fn get_lot_size(&self, symbol: &str) -> u32 {
         match symbol {
-            "NIFTY 50" => 25,
-            "NIFTY BANK" => 15,
-            _ => 1,
+            "NIFTY 50" => NIFTY_LOT_SIZE,
+            "NIFTY BANK" => BANK_NIFTY_LOT_SIZE,
+            _ => DEFAULT_LOT_SIZE,
         }
     }
 
     /// Get all subscribed tokens
     pub async fn get_subscribed_tokens(&self) -> Vec<u32> {
         let subscriptions = self.subscriptions.read().await;
-        let mut tokens = Vec::with_capacity(100); // Expected number of tokens
+        let mut tokens = Vec::with_capacity(UPDATE_BUFFER_CAPACITY); // Expected number of tokens
 
         for sub in subscriptions.values() {
             tokens.extend(sub.tokens.iter().copied());

@@ -1,0 +1,55 @@
+🧭 Unified Compliance Check (Rust)
+========================================
+Generated: 1755153354   Commit: 96a093c
+Found 1 Rust files (1 production)
+
+Running checks in parallel...
+warning: variant `SKIP` is never constructed
+  --> src/main.rs:66:5
+   |
+60 | enum Severity {
+   |      -------- variant in this enum
+...
+66 |     SKIP,
+   |     ^^^^
+   |
+   = note: `Severity` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+warning: field `strict` is never read
+  --> src/main.rs:86:5
+   |
+85 | struct Config {
+   |        ------ field in this struct
+86 |     strict: bool,
+   |     ^^^^^^
+   |
+   = note: `Config` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+
+Check Results:
+✓ Release build successful
+✓ Cast usage acceptable (1 files)
+❌ Found 1 panic/unwrap/expect occurrences in production
+❌ Found 1 files using std::HashMap (prefer FxHashMap in hot paths)
+✓ No floating point money in internal calculations
+❌ Found 4 TODO/FIXME/HACK/XXX markers
+❌ Found 1 ignored error patterns (Err(_))
+✓ Clone usage reasonable (5 calls)
+✓ String allocations reasonable (55 sites)
+❌ 1 lazy underscore variable usages
+✓ Magic numbers acceptable (0 found)
+✓ Warning suppressions acceptable (1 found)
+✓ Doc duplication acceptable (max repeat 1×)
+✓ Function lengths look reasonable
+✓ Inline attribute usage reasonable (2 uses)
+
+📊 COMPLIANCE SCORE
+Critical: 4  High: 1  Medium: 0  Low: 0
+Score: 0/100  Status: CRITICAL
+
+📁 Reports saved:
+  Text: /home/praveen/ShrivenQuant/tools/sq-compliance/reports/compliance/compliance-report-96a093c-1755153354.txt
+  JSON: /home/praveen/ShrivenQuant/tools/sq-compliance/reports/compliance/compliance-report-96a093c-1755153354.json
+
+❌ COMMIT REJECTED — fix 4 critical, 1 high issues

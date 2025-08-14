@@ -209,9 +209,11 @@ fn test_concurrent_write_and_read() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let wal_path = Arc::new(temp_dir.path().to_path_buf());
 
-    // Initialize WAL
+    // Initialize WAL to ensure directory structure is created
     {
-        let _wal = Wal::new(&wal_path, Some(128 * 1024 * 1024))?;
+        let wal = Wal::new(&wal_path, Some(128 * 1024 * 1024))?;
+        // Explicitly drop to ensure clean initialization
+        drop(wal);
     }
 
     // Writer thread

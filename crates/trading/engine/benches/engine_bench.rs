@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use bus::EventBus;
+use common::constants::bench::{BENCH_ARENA_SIZE, BENCH_POOL_SIZE};
 use common::{Px, Qty, Side, Symbol};
 use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
 use engine::core::{Engine, EngineConfig, ExecutionMode};
@@ -22,7 +23,7 @@ fn bench_memory_pool(c: &mut Criterion) {
             _data: [u64; 8],
         }
 
-        let pool: ObjectPool<TestObj> = ObjectPool::new(1000);
+        let pool: ObjectPool<TestObj> = ObjectPool::new(BENCH_POOL_SIZE);
 
         b.iter(|| {
             if let Some(obj) = pool.acquire() {
@@ -34,9 +35,12 @@ fn bench_memory_pool(c: &mut Criterion) {
 
     // Benchmark arena allocation
     group.bench_function("arena_allocation", |b| {
-        let arena = match Arena::new(1024 * 1024) {
+        let arena = match Arena::new(BENCH_ARENA_SIZE) {
             Ok(a) => a,
-            Err(_) => return,
+            Err(e) => {
+                eprintln!("Failed to create arena: {:?}", e);
+                return;
+            }
         };
 
         b.iter(|| {

@@ -1,0 +1,41 @@
+[package]
+name = "services-common"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+# Core dependencies
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+# gRPC
+tonic = { workspace = true }
+prost = { workspace = true }
+shrivenquant-proto = { path = "../../crates/core/proto" }
+
+# Internal services
+common = { path = "../../crates/core/common" }
+data-aggregator = { path = "../data-aggregator" }
+risk-manager = { path = "../risk-manager" }
+execution-router = { path = "../execution-router" }
+
+# Async
+tokio = { workspace = true }
+async-trait = "0.1"
+futures = "0.3"
+
+# Utils
+uuid = { version = "1.10", features = ["v4"] }
+rustc-hash = "2.1"
+parking_lot = "0.12"
+crossbeam = "0.8"
+
+[dev-dependencies]
+tempfile = "3.10"

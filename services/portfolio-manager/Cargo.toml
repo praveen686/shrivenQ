@@ -1,0 +1,43 @@
+[package]
+name = "portfolio-manager"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+# Core dependencies
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+async-trait = "0.1"
+
+# Internal dependencies
+common = { path = "../../crates/core/common" }
+execution-router = { path = "../execution-router" }
+risk-manager = { path = "../risk-manager" }
+
+# Data structures (FxHashMap for compliance)
+parking_lot = "0.12"
+rustc-hash = "2.1"
+
+# Math and optimization
+nalgebra = "0.33"
+statrs = "0.17"
+
+# Atomics
+crossbeam = "0.8"
+
+# gRPC for market-connector integration
+tonic = { workspace = true }
+prost = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+tempfile = "3.10"
+proptest = "1.5"

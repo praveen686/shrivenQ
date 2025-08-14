@@ -1,0 +1,37 @@
+[package]
+name = "demo-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "demo"
+path = "src/main.rs"
+
+[dependencies]
+# Core dependencies
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Service dependencies
+auth-service = { path = "../auth" }
+market-connector = { path = "../market-connector" }
+common = { path = "../../crates/core/common" }
+
+# Web framework for demo API
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# Config
+config = "0.14"
+
+# Performance
+rustc-hash = "2.1"

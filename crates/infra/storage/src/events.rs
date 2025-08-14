@@ -209,6 +209,19 @@ pub enum SystemEventType {
     Info,
 }
 
+impl std::fmt::Display for SystemEventType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SystemEventType::Startup => write!(f, "STARTUP"),
+            SystemEventType::Shutdown => write!(f, "SHUTDOWN"),
+            SystemEventType::ConfigChange => write!(f, "CONFIG_CHANGE"),
+            SystemEventType::Error => write!(f, "ERROR"),
+            SystemEventType::Warning => write!(f, "WARNING"),
+            SystemEventType::Info => write!(f, "INFO"),
+        }
+    }
+}
+
 /// LOB snapshot event
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LobSnapshot {

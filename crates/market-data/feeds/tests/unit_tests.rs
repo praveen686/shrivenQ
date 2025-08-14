@@ -23,9 +23,10 @@ async fn test_zerodha_auth() {
         "test_api_key".to_string(),
         "test_api_secret".to_string(),
     );
-    let _auth = ZerodhaAuth::new(config);
+    let auth = ZerodhaAuth::new(config);
 
-    // Smoke test - just verify the auth object can be created without panicking
+    // Verify auth object is properly initialized
+    assert!(auth.get_api_key().contains("test_api_key"));
 
     // Clean up
     std::fs::remove_file("/tmp/test_zerodha_token.json").ok();

@@ -59,7 +59,7 @@ fn unpack_generation(tagged: usize) -> u32 {
         reason = "Extracting packed u32 from upper bits"
     )]
     // SAFETY: Cast is safe within expected range
-    ((tagged >> TAG_BITS) as u32)
+    ((tagged >> TAG_BITS) as u32) // SAFETY: generation fits in u32 after shift
 }
 
 #[inline(always)]
@@ -73,7 +73,7 @@ fn unpack_index(tagged: usize) -> u32 {
     // SAFETY: Cast is safe within expected range
     )]
     // SAFETY: Cast is safe within expected range
-    ((tagged & INDEX_MASK) as u32)
+    ((tagged & INDEX_MASK) as u32) // SAFETY: masked index fits in u32
 }
 
 // 32-bit fallback - no tagging, just use the index directly
@@ -105,7 +105,7 @@ fn unpack_index(tagged: usize) -> u32 {
     // SAFETY: Cast is safe within expected range
         reason = "32-bit system, no truncation"
     )]
-    (tagged as u32)
+    (tagged as u32) // SAFETY: direct cast for 32-bit platforms
 }
 
 /// Lock-free object pool with ABA prevention using tagged pointers
@@ -214,7 +214,7 @@ impl<T> ObjectPool<T> {
                 reason = "Index validated < capacity <= u32::MAX"
             )]
             // SAFETY: Cast is safe within expected range
-            let new_tagged = pack_tagged(new_generation, known_index as u32);
+            let new_tagged = pack_tagged(new_generation, known_index as u32); // SAFETY: index fits in u32
             // SAFETY: Cast is safe within expected range
 
             // Try to update head to point to us

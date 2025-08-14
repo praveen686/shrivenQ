@@ -291,10 +291,8 @@ impl FeatureCalculatorV2Fixed {
     /// Calculate effective spread (fixed-point)
     fn calculate_effective_spread_fixed(&self, book: &OrderBookV2) -> i64 {
         let quoted_spread = self.last_spread;
-        // SAFETY: Cast is safe within expected range
-        let bid_vol = book.bids.total_volume() as i64;
-        // SAFETY: Cast is safe within expected range
-        let ask_vol = book.asks.total_volume() as i64;
+        let bid_vol = book.bids.total_volume();
+        let ask_vol = book.asks.total_volume();
         let total_vol = bid_vol + ask_vol;
 
         let volume_factor = if total_vol > 0 {
@@ -348,11 +346,9 @@ impl FeatureCalculatorV2Fixed {
     fn calculate_flow_toxicity_fixed(&self, book: &OrderBookV2) -> i64 {
         let imbalance = self.calculate_imbalance_fixed(book);
         let spread_normalized = (self.last_spread * 100) / FIXED_100.max(1);
-        // SAFETY: Cast is safe within expected range
 
-        // SAFETY: Cast is safe within expected range
-        let bid_vol = book.bids.total_volume() as i64;
-        let ask_vol = book.asks.total_volume() as i64;
+        let bid_vol = book.bids.total_volume();
+        let ask_vol = book.asks.total_volume();
         let volume_ratio = if bid_vol > 0 {
             (ask_vol * FIXED_SCALE) / bid_vol
         } else {

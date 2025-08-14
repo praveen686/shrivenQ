@@ -1,0 +1,76 @@
+[package]
+name = "api-gateway"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Core dependencies
+common = { path = "../../crates/core/common" }
+services-common = { path = "../common" }
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+async-trait = "0.1"
+
+# HTTP framework
+axum = { version = "0.7", features = ["ws", "macros"] }
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "compression-full", "timeout"] }
+hyper = { version = "1.0", features = ["full"] }
+
+# gRPC clients
+tonic = "0.12"
+prost = "0.13"
+
+# JSON Web Tokens
+jsonwebtoken = "9.0"
+base64 = "0.22"
+
+# WebSocket
+axum-extra = { version = "0.9", features = ["typed-header"] }
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
+
+# Configuration
+config = "0.14"
+clap = { version = "4.0", features = ["derive"] }
+
+# Monitoring and observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+metrics = { version = "0.22", optional = true }
+metrics-exporter-prometheus = { version = "0.13", optional = true }
+
+# Performance
+rustc-hash = "2.0"
+dashmap = "6.0"
+parking_lot = "0.12"
+
+# HTTP client for health checks
+reqwest = { version = "0.12", features = ["json"] }
+
+# Rate limiting
+governor = "0.6"
+nonzero_ext = "0.3"
+
+# Time utilities
+chrono = { version = "0.4", features = ["serde"] }
+
+# Additional dependencies
+uuid = { version = "1.0", features = ["v4", "serde"] }
+procfs = "0.16"
+
+[build-dependencies]
+tonic-build = "0.12"
+
+[features]
+default = ["monitoring"]
+monitoring = ["dep:metrics", "dep:metrics-exporter-prometheus"]
+
+[dev-dependencies]
+tokio-test = "0.4"
+tower-test = "0.4"

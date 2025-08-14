@@ -6,6 +6,7 @@
 //! All conversions are centralized here with proper guardrails.
 
 // Qty type not needed for analytics module
+use common::constants::fixed_point::SCALE_4;
 
 // Maximum safe integer value in f64 (2^53)
 const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_992;
@@ -26,7 +27,7 @@ impl Analytics {
             value
         );
         // SAFETY: Cast is safe within expected range
-        value as f64 / 10000.0
+        value as f64 / SCALE_4 as f64
     }
 
     /// Convert f64 back to fixed-point with floor rounding for prices
@@ -41,17 +42,22 @@ impl Analytics {
         }
 
         // SAFETY: Cast is safe within expected range
-        let scaled = value * 10000.0;
+        let scaled = value * SCALE_4 as f64;
         // SAFETY: Cast is safe within expected range
         if scaled > MAX_SAFE_INTEGER as f64 || scaled < -(MAX_SAFE_INTEGER as f64) {
             tracing::error!("Value {} out of range for fixed-point", value);
             return if scaled > 0.0 { i64::MAX } else { i64::MIN };
             // SAFETY: Cast is safe within expected range
         }
-        // SAFETY: Cast is safe within expected range
-
-        // SAFETY: Cast is safe within expected range
-        scaled.floor() as i64
+        // Bounds check before cast to prevent overflow
+        let floored = scaled.floor();
+        // SAFETY: i64 bounds as f64 for comparison, floored to i64 after bounds check
+        if floored >= i64::MIN as f64 && floored <= i64::MAX as f64 {
+            floored as i64
+        } else {
+            // Return saturated value for out-of-range inputs
+            if floored > 0.0 { i64::MAX } else { i64::MIN }
+        }
     }
 
     /// Convert f64 back to fixed-point with round rounding for quantities
@@ -68,7 +74,7 @@ impl Analytics {
         // SAFETY: Cast is safe within expected range
 
         // SAFETY: Cast is safe within expected range
-        let scaled = value * 10000.0;
+        let scaled = value * SCALE_4 as f64;
         if scaled > MAX_SAFE_INTEGER as f64 || scaled < -(MAX_SAFE_INTEGER as f64) {
             // SAFETY: Cast is safe within expected range
             tracing::error!("Value {} out of range for fixed-point", value);
@@ -77,7 +83,14 @@ impl Analytics {
             // SAFETY: Cast is safe within expected range
         }
 
-        scaled.round() as i64
+        // Bounds check before cast to prevent overflow
+        let rounded = scaled.round();
+        if rounded >= i64::MIN as f64 && rounded <= i64::MAX as f64 {
+            rounded as i64
+        } else {
+            // Return saturated value for out-of-range inputs
+            if rounded > 0.0 { i64::MAX } else { i64::MIN }
+        }
     }
 
     /// Calculate variance using Welford's method (numerically stable)
@@ -156,8 +169,8 @@ impl Analytics {
         let mut volume_sum = 0i128;
 
         for (price, volume) in prices.iter().zip(volumes.iter()) {
-            weighted_sum += (*price as i128) * (*volume as i128);
-            volume_sum += *volume as i128;
+            weighted_sum += (*price as i128) * (*volume as i128); // SAFETY: price/volume fit in i128
+            volume_sum += *volume as i128; // SAFETY: volume fits in i128
         }
 
         if volume_sum == 0 {

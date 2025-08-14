@@ -72,15 +72,32 @@ impl NseOrderEntry {
             symbol: fields[1].to_string(),
             instrument_type: fields[2].to_string(),
             expiry_date: fields[3].to_string(),
-            // SAFETY: Cast is safe within expected range
-            strike_price: (fields[4].parse::<f64>().unwrap_or(0.0) * 10000.0) as i64,
+            strike_price: {
+                let val = fields[4].parse::<f64>().unwrap_or(0.0) * 10000.0;
+                if val >= i64::MIN as f64 && val <= i64::MAX as f64 {
+                    val as i64
+                } else {
+                    0 // Default for out-of-range values
+                }
+            },
             option_type: fields[5].to_string(),
-            // SAFETY: Cast is safe within expected range
             corp_action_level: fields[6].to_string(),
-            // SAFETY: Cast is safe within expected range
-            quantity: (fields[7].parse::<f64>().unwrap_or(0.0) * 10000.0) as i64,
-            // SAFETY: Cast is safe within expected range
-            price: (fields[8].parse::<f64>().unwrap_or(0.0) * 10000.0) as i64,
+            quantity: {
+                let val = fields[7].parse::<f64>().unwrap_or(0.0) * 10000.0;
+                if val >= i64::MIN as f64 && val <= i64::MAX as f64 {
+                    val as i64
+                } else {
+                    0 // Default for out-of-range values
+                }
+            },
+            price: {
+                let val = fields[8].parse::<f64>().unwrap_or(0.0) * 10000.0;
+                if val >= i64::MIN as f64 && val <= i64::MAX as f64 {
+                    val as i64
+                } else {
+                    0 // Default for out-of-range values
+                }
+            },
             timestamp: fields[9].to_string(),
             side: if fields[10] == "B" {
                 Side::Bid

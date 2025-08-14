@@ -1,6 +1,11 @@
 //! Risk management engine - Pre-allocated checks
 
 use crate::core::EngineConfig;
+use common::constants::{
+    fixed_point::SCALE_4,
+    memory::DEFAULT_BUFFER_CAPACITY,
+    trading::{MAX_ORDER_SIZE_TICKS, MAX_POSITION_SIZE_TICKS, RATE_LIMIT_WINDOW_MS},
+};
 use common::{Px, Qty, Side, Symbol};
 use dashmap::DashMap;
 use parking_lot::Mutex;
@@ -34,16 +39,16 @@ pub struct RiskLimits {
 impl Default for RiskLimits {
     fn default() -> Self {
         Self {
-            max_position_size: 100_000_000, // 10000 units in ticks (10000 * 10000)
-            max_position_value: 100_000_000, // 10 crore in paise
-            max_total_exposure: 500_000_000, // 50 crore in paise
-            max_order_size: 10_000_000,     // 1000 units in ticks (1000 * 10000)
-            max_order_value: 100_000_000,   // 1 crore in paise (increased for tests)
-            max_orders_per_minute: 100,
-            max_daily_loss: -500_000, // 5 lakh loss limit
-            max_drawdown: -1_000_000, // 10 lakh drawdown
-            order_rate_window_ms: 1000,
-            cancel_rate_window_ms: 1000,
+            max_position_size: MAX_POSITION_SIZE_TICKS as u64, // 10000 units in ticks
+            max_position_value: 100_000_000,                   // 10 crore in paise
+            max_total_exposure: 500_000_000,                   // 50 crore in paise
+            max_order_size: MAX_ORDER_SIZE_TICKS as u64,       // 1000 units in ticks
+            max_order_value: 100_000_000, // 1 crore in paise (increased for tests)
+            max_orders_per_minute: 100,   // TODO: Move to constants
+            max_daily_loss: -500_000,     // 5 lakh loss limit
+            max_drawdown: -1_000_000,     // 10 lakh drawdown
+            order_rate_window_ms: 1000,   // 1 second
+            cancel_rate_window_ms: 1000,  // 1 second
             _padding: [0; 16],
         }
     }
@@ -105,13 +110,13 @@ pub struct RiskEngine {
 
 impl RiskEngine {
     pub fn new(config: EngineConfig) -> Self {
-        let mut order_timestamps = Vec::with_capacity(1000);
-        order_timestamps.resize(1000, 0);
+        let mut order_timestamps = Vec::with_capacity(DEFAULT_BUFFER_CAPACITY);
+        order_timestamps.resize(DEFAULT_BUFFER_CAPACITY, 0);
 
         Self {
             config,
             limits: RiskLimits::default(),
-            symbol_risks: DashMap::with_capacity(100),
+            symbol_risks: DashMap::with_capacity(100), // TODO: Move to constants
             total_exposure: AtomicU64::new(0),
             daily_pnl: AtomicI64::new(0),
             peak_value: AtomicU64::new(0),
@@ -134,8 +139,10 @@ impl RiskEngine {
 
         // Use fixed-point arithmetic (qty and price are already in ticks)
         let qty_units = qty.as_i64().unsigned_abs();
-        let price_ticks = price.map(|p| p.as_i64().unsigned_abs()).unwrap_or(100_000); // Default 10.00
-        let order_value = (qty_units * price_ticks) / 10000; // Divide by 10000 to get value in base units
+        let price_ticks = price
+            .map(|p| p.as_i64().unsigned_abs())
+            .unwrap_or(SCALE_4 as u64 * 10); // Default 10.00
+        let order_value = (qty_units * price_ticks) / SCALE_4 as u64; // Divide by SCALE_4 to get value in base units
 
         // Size checks (branch-free using comparison masks)
         let size_ok = u64::from(qty_units <= self.limits.max_order_size);
@@ -204,7 +211,7 @@ impl RiskEngine {
 
         // Check oldest timestamp in window
         let oldest = timestamps[ring_idx];
-        let window_start = now.saturating_sub(60_000); // 60 second window
+        let window_start = now.saturating_sub(RATE_LIMIT_WINDOW_MS); // Rate limit window
 
         if oldest > window_start {
             // Too many orders in window
@@ -220,7 +227,7 @@ impl RiskEngine {
     /// Update position risk after fill
     #[inline(always)]
     pub fn update_position(&self, symbol: Symbol, side: Side, qty: Qty, _price: Px) {
-        let qty_units = qty.as_i64() / 10000; // Convert ticks to whole units
+        let qty_units = qty.as_i64() / SCALE_4; // Convert ticks to whole units
 
         if let Some(risk) = self.symbol_risks.get(&symbol) {
             let delta = match side {

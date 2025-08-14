@@ -1,0 +1,311 @@
+🧭 Unified Compliance Check (Rust)
+========================================
+Generated: 1755177464   Commit: 96a093c
+Found 102 Rust files (101 production)
+
+Running checks in parallel...
+warning: field `symbol_venues` is never read
+  --> services/execution-router/src/router.rs:45:5
+   |
+41 | pub struct SmartOrderRouter {
+   |            ---------------- field in this struct
+...
+45 |     symbol_venues: FxHashMap<Symbol, Vec<String>>,
+   |     ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: field `primary_venue` is never read
+  --> services/execution-router/src/venue_manager.rs:60:5
+   |
+56 | pub struct VenueManager {
+   |            ------------ field in this struct
+...
+60 |     primary_venue: String,
+   |     ^^^^^^^^^^^^^
+
+warning: unused attribute `allow`
+   --> services/market-connector/src/bin/test_exchange_connectivity.rs:291:5
+    |
+291 |     #[allow(clippy::cast_precision_loss)]
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: the built-in attribute `allow` will be ignored, since it's applied to the macro invocation `info`
+   --> services/market-connector/src/bin/test_exchange_connectivity.rs:292:5
+    |
+292 |     info!("  Average price: {:.4}", if read_count > 0 { 
+    |     ^^^^
+    = note: `#[warn(unused_attributes)]` on by default
+
+warning: unused attribute `allow`
+   --> services/market-connector/src/bin/test_exchange_connectivity.rs:296:5
+    |
+296 |     #[allow(clippy::cast_precision_loss)]
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: the built-in attribute `allow` will be ignored, since it's applied to the macro invocation `info`
+   --> services/market-connector/src/bin/test_exchange_connectivity.rs:297:5
+    |
+297 |     info!("  Average quantity: {:.2}", if read_count > 0 { 
+    |     ^^^^
+
+warning: variable does not need to be mutable
+   --> services/demo/src/main.rs:227:9
+    |
+227 |     let mut market = state.market.write().await;
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: field `password` is never read
+  --> services/demo/src/main.rs:31:5
+   |
+29 | struct LoginRequest {
+   |        ------------ field in this struct
+30 |     username: String,
+31 |     password: String,
+   |     ^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: unused import: `anyhow::Result`
+ --> services/common/src/event_bus/router.rs:4:5
+  |
+4 | use anyhow::Result;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `warn`
+  --> services/common/src/event_bus/mod.rs:21:29
+   |
+21 | use tracing::{debug, error, warn};
+   |                             ^^^^
+
+warning: unused variable: `service`
+   --> services/common/src/clients/data_aggregator_client.rs:107:13
+    |
+107 |         let service = self.service.read().await;
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_service`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> services/common/src/clients/data_aggregator_client.rs:106:13
+    |
+106 |         let mut count = 0;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: variable does not need to be mutable
+  --> services/common/src/event_bus/bus.rs:58:30
+   |
+58 |         let (dead_letter_tx, mut dead_letter_rx) = if config.enable_dead_letter_queue {
+   |                              ----^^^^^^^^^^^^^^
+   |                              |
+   |                              help: remove this `mut`
+
+warning: field `retry_count` is never read
+  --> services/common/src/clients/market_data_client.rs:59:5
+   |
+54 | struct SubscriptionState {
+   |        ----------------- field in this struct
+...
+59 |     retry_count: u32,
+   |     ^^^^^^^^^^^
+   |
+   = note: `SubscriptionState` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+warning: field `retry_count` is never read
+  --> services/common/src/clients/risk_client.rs:60:5
+   |
+57 | struct AlertSubscriptionState {
+   |        ---------------------- field in this struct
+...
+60 |     retry_count: u32,
+   |     ^^^^^^^^^^^
+   |
+   = note: `AlertSubscriptionState` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: field `bus` is never read
+   --> services/common/src/event_bus/bus.rs:367:5
+    |
+366 | pub struct EventBusSubscriber<T: BusMessage> {
+    |            ------------------ field in this struct
+367 |     bus: Arc<EventBus<T>>,
+    |     ^^^
+
+warning: unused import: `std::arch::x86_64::*`
+  --> services/reporting/src/metrics.rs:16:5
+   |
+16 | use std::arch::x86_64::*;
+   |     ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `std::collections::VecDeque`
+ --> services/reporting/src/analytics.rs:6:5
+  |
+6 | use std::collections::VecDeque;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `rustc_hash::FxHashMap`
+  --> services/reporting/src/lib.rs:21:5
+   |
+21 | use rustc_hash::FxHashMap;
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `metrics_engine`
+   --> services/reporting/src/lib.rs:151:13
+    |
+151 |         let metrics_engine = Arc::clone(&self.metrics_engine);
+    |             ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_metrics_engine`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: field `daily_pnl` is never read
+  --> services/reporting/src/performance.rs:15:5
+   |
+11 | pub struct PerformanceAnalyzer {
+   |            ------------------- field in this struct
+...
+15 |     daily_pnl: VecDeque<DailyPnL>,
+   |     ^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: unused import: `std::cmp::Ordering`
+  --> services/portfolio-manager/src/optimization.rs:14:5
+   |
+14 | use std::cmp::Ordering;
+   |     ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `Px`
+  --> services/portfolio-manager/src/rebalancer.rs:10:14
+   |
+10 | use common::{Px, Qty, Side, Symbol};
+   |              ^^
+
+warning: unused import: `Px`
+  --> services/portfolio-manager/src/market_feed.rs:10:14
+   |
+10 | use common::{Px, Symbol, Ts};
+   |              ^^
+
+warning: unused imports: `Deserialize` and `Serialize`
+  --> services/portfolio-manager/src/market_feed.rs:13:13
+   |
+13 | use serde::{Deserialize, Serialize};
+   |             ^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `common::constants::fixed_point::SCALE_4`
+  --> services/portfolio-manager/src/lib.rs:20:5
+   |
+20 | use common::constants::fixed_point::SCALE_4;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `stats`
+   --> services/portfolio-manager/src/lib.rs:278:13
+    |
+278 |         let stats = portfolio::PortfolioStats {
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_stats`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `weight`
+   --> services/portfolio-manager/src/optimization.rs:110:13
+    |
+110 |         let weight = SCALE_4 as i32 / n as i32; // Equal weight for all
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_weight`
+
+warning: type `RebalanceOrder` is more private than the item `Rebalancer::handle_fill`
+   --> services/portfolio-manager/src/rebalancer.rs:104:5
+    |
+104 |     pub fn handle_fill(&mut self, order_id: u64) -> Option<RebalanceOrder> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `Rebalancer::handle_fill` is reachable at visibility `pub`
+    |
+note: but type `RebalanceOrder` is only usable at visibility `pub(self)`
+   --> services/portfolio-manager/src/rebalancer.rs:23:1
+    |
+23  | struct RebalanceOrder {
+    | ^^^^^^^^^^^^^^^^^^^^^
+    = note: `#[warn(private_interfaces)]` on by default
+
+warning: type `RebalanceOrder` is more private than the item `Rebalancer::pending_orders`
+   --> services/portfolio-manager/src/rebalancer.rs:114:5
+    |
+114 |     pub fn pending_orders(&self) -> Vec<RebalanceOrder> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `Rebalancer::pending_orders` is reachable at visibility `pub`
+    |
+note: but type `RebalanceOrder` is only usable at visibility `pub(self)`
+   --> services/portfolio-manager/src/rebalancer.rs:23:1
+    |
+23  | struct RebalanceOrder {
+    | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `work_matrix` is never read
+  --> services/portfolio-manager/src/optimization.rs:23:5
+   |
+17 | pub struct PortfolioOptimizer {
+   |            ------------------ field in this struct
+...
+23 |     work_matrix: DMatrix<f64>,
+   |     ^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: field `target_weight` is never read
+  --> services/portfolio-manager/src/rebalancer.rs:28:5
+   |
+23 | struct RebalanceOrder {
+   |        -------------- field in this struct
+...
+28 |     target_weight: i32,
+   |     ^^^^^^^^^^^^^
+   |
+   = note: `RebalanceOrder` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `update_sender` is never read
+  --> services/portfolio-manager/src/market_feed.rs:89:5
+   |
+81 | pub struct MarketFeedManager {
+   |            ----------------- field in this struct
+...
+89 |     update_sender: Sender<PriceUpdate>,
+   |     ^^^^^^^^^^^^^
+
+
+Check Results:
+✓ Release build successful
+✓ Cast usage acceptable (7 files)
+✓ No panic/unwrap/expect in production
+✓ No std::HashMap usage in prod paths
+✓ No floating point money in internal calculations
+✓ No outstanding TODO/FIXME markers
+✓ No ignored error patterns in prod
+⚠️  211 clone() calls in prod — review hot paths
+⚠️  526 string allocation sites — avoid in hot paths
+✓ Underscore usage acceptable
+⚠️  413 potential magic numbers — prefer named constants (max 10)
+⚠️  61 #[allow(...)] usages — fix root causes when possible (max 15)
+✓ Doc duplication acceptable (max repeat 3×)
+⚠️  Found 1 functions >50 lines
+⚠️  75 #[inline] attributes (max 50)
+
+📊 COMPLIANCE SCORE
+Critical: 0  High: 0  Medium: 2  Low: 4
+Score: 90/100  Status: EXCELLENT
+
+📁 Reports saved:
+  Text: /home/praveen/ShrivenQuant/reports/compliance/compliance-report-96a093c-1755177466.txt
+  JSON: /home/praveen/ShrivenQuant/reports/compliance/compliance-report-96a093c-1755177466.json
+
+⚠️  COMMIT ALLOWED WITH WARNINGS

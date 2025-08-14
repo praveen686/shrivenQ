@@ -6,6 +6,10 @@ use crate::position::PositionTracker;
 use crate::risk::RiskEngine;
 use crate::venue::VenueAdapter;
 use bus::EventBus;
+use common::constants::{
+    memory::MB,
+    trading::{DEFAULT_MAX_ORDERS_PER_SEC, DEFAULT_MAX_POSITIONS},
+};
 use common::{Px, Qty, Symbol, Ts};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
@@ -46,11 +50,11 @@ impl Default for EngineConfig {
         Self {
             mode: ExecutionMode::Paper,
             venue: VenueType::Zerodha,
-            max_positions: 1000,
-            max_orders_per_sec: 1000,
+            max_positions: DEFAULT_MAX_POSITIONS,
+            max_orders_per_sec: DEFAULT_MAX_ORDERS_PER_SEC,
             risk_check_enabled: true,
             metrics_enabled: true,
-            memory_pool_size: 1024 * 1024, // 1MB pool
+            memory_pool_size: MB, // 1MB pool
             _padding: [0; 32],
         }
     }

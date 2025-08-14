@@ -171,3 +171,6 @@
   4. Build a monitoring dashboard to track your system?
 
   Which would be most valuable for you right now?
+
+
+   > First read the /home/praveen/ShrivenQuant/docs thoroughly and critically and pldge that you will follow all the best practices 
