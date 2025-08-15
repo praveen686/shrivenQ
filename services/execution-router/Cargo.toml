@@ -12,13 +12,13 @@ license.workspace = true
 anyhow = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 async-trait = "0.1"
 
 # Internal dependencies
-common = { path = "../../crates/core/common" }
-engine = { path = "../../crates/trading/engine" }
+common = { path = "../common" }
 risk-manager = { path = "../risk-manager" }
 market-connector = { path = "../market-connector" }
 
@@ -26,6 +26,7 @@ market-connector = { path = "../market-connector" }
 rustc-hash = "2.1"
 dashmap = "6.1"
 parking_lot = "0.12"
+rand = "0.8"
 
 # Messaging
 crossbeam-channel = "0.5"
@@ -35,3 +36,16 @@ prometheus = "0.13"
 
 # Time handling
 chrono = { workspace = true }
+
+# gRPC dependencies
+tonic = { workspace = true }
+shrivenquant-proto = { path = "../../crates/core/proto" }
+tokio-stream = "0.1"
+async-stream = "0.3"
+
+# WebSocket for real market data
+tokio-tungstenite = "0.20"
+futures-util = "0.3"
+
+# Error handling
+thiserror = { workspace = true }

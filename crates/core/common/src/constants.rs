@@ -457,7 +457,7 @@ pub mod market {
 /// Statistical and mathematical constants
 pub mod math {
     /// Square root of 252 (trading days) for annualized calculations
-    pub const SQRT_TRADING_DAYS: f64 = 15.874507866387544;
+    pub const SQRT_TRADING_DAYS: f64 = 15.874_507_866_387_544;
 
     /// Number of trading days per year
     pub const TRADING_DAYS_PER_YEAR: u16 = 252;

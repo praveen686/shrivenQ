@@ -1,0 +1,46 @@
+ShrivenQuant Compliance Report
+===============================
+Generated: 1755263809
+Commit: f99c313
+
+[FAIL] build - ❌ Release build failed (count: 1)
+[FAIL] numeric_casts - ❌ 33 unannotated numeric casts (max 10)
+First 5 violations:
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:266: position_value: p.position_value as i64,
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:274: total_exposure: total_exposure as i64,
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:288: total_exposure: metrics.total_exposure as i64,
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:291: open_positions: metrics.open_positions as i32,
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:292: orders_today: metrics.orders_today as i32,) (count: 33)
+[OK] panic_unwrap - ✓ No panic/unwrap/expect in production (count: 0)
+[FAIL] std_hashmap - ❌ Found 5 std::HashMap usages (prefer FxHashMap)
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:355: // Proto-generated code requires std::collections::HashMap for metadata field
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:357: metadata: std::collections::HashMap::new(),
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:377: metadata: std::collections::HashMap::new(),
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:403: metadata: std::collections::HashMap::new(),
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:433: metadata: std::collections::HashMap::new(), (count: 5)
+[OK] float_money - ✓ No floating point money in internal calculations (count: 0)
+[OK] todos - ✓ No outstanding TODO/FIXME markers (count: 0)
+[FAIL] ignored_errors - ❌ Found 66 ignored error patterns (Err(_)) (count: 66)
+[WARN] clones - ⚠️  271 clone() calls in prod — review hot paths (count: 271)
+[WARN] string_allocs - ⚠️  611 string allocation sites — avoid in hot paths (count: 611)
+[OK] underscore_abuse - ✓ Underscore usage acceptable (count: 0)
+[WARN] magic_numbers - ⚠️  377 potential magic numbers — prefer named constants (max 10)
+First 5 violations:
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:156: let segment_bytes = WAL_SEGMENT_SIZE_MB.saturating_mul(1024).saturating_mul(1024);
+  • /home/praveen/ShrivenQuant/services/market-connector/src/main.rs:59: assert_eq!(DEFAULT_PORT, 50052);
+  • /home/praveen/ShrivenQuant/services/market-connector/src/orderbook/book.rs:327: qty: Qty::from_i64(TEST_QUANTITY + 500000), // 150.0 = 100.0 + 50.0
+  • /home/praveen/ShrivenQuant/services/market-connector/src/orderbook/price_levels.rs:172: book.set(0, Px::from_i64(1000000), Qty::from_i64(100000));
+  • /home/praveen/ShrivenQuant/services/market-connector/src/orderbook/price_levels.rs:173: book.set(1, Px::from_i64(995000), Qty::from_i64(200000)); (count: 377)
+[WARN] warning_suppressions - ⚠️  66 #[allow(...)] usages — fix root causes when possible (max 15)
+First 5 suppressions:
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:52: #[allow(clippy::cast_possible_truncation)]
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:53: #[allow(clippy::cast_precision_loss)]
+  • /home/praveen/ShrivenQuant/services/market-connector/src/grpc_service.rs:37: #[allow(clippy::cast_possible_truncation)]
+  • /home/praveen/ShrivenQuant/services/market-connector/src/grpc_service.rs:38: #[allow(clippy::cast_precision_loss)]
+  • /home/praveen/ShrivenQuant/services/market-connector/src/grpc_service.rs:39: #[allow(clippy::cast_possible_truncation)]) (count: 66)
+[OK] doc_dupes - ✓ Doc duplication acceptable (max repeat 3×) (count: 3)
+[WARN] large_functions - ⚠️  Found 3 functions >50 lines (count: 3)
+[WARN] inline_attrs - ⚠️  61 #[inline] attributes (max 50) (count: 61)
+
+Violations: Critical=3 High=1 Medium=2 Low=4
+Score: 5/100  Status: CRITICAL

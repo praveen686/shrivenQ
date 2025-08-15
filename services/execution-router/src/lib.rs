@@ -9,9 +9,15 @@
 
 pub mod algorithms;
 pub mod config;
+pub mod error;
+pub mod grpc_impl;
 pub mod memory;
 pub mod router;
+pub mod smart_router;
 pub mod venue_manager;
+
+pub use error::{ExecutionError, ExecutionResult};
+pub use smart_router::Router;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -20,6 +26,41 @@ use common::constants::{
     fixed_point::{BASIS_POINTS, SCALE_4},
     trading::{MAKER_FEE_BP, TAKER_FEE_BP},
 };
+
+// Health check constants
+const REJECTION_THRESHOLD_PERCENT: u64 = 50; // 50% max rejection rate
+const MAX_PENDING_DURATION_MS: i64 = 30000; // 30 seconds max pending
+const MAX_STUCK_ORDERS: usize = 10; // Maximum stuck orders before unhealthy
+const MIN_FILL_RATE: i32 = 1000; // 10% minimum fill rate in fixed-point (SCALE_4)
+const MIN_ORDERS_FOR_FILL_CHECK: u64 = 100; // Minimum orders before checking fill rate
+const HEALTH_CHECK_TEST_QTY: i64 = 100; // Test quantity for health check
+const HEALTH_CHECK_TEST_PRICE: i64 = 100; // Test price for health check
+const HEALTH_CHECK_TEST_SYMBOL: u32 = 1; // Test symbol ID for health check
+
+// Smart routing constants  
+const INSTITUTIONAL_THRESHOLD: f64 = 50000.0; // High-volume threshold for institutional routing
+const CROSS_VENUE_THRESHOLD: f64 = SCALE_4 as f64; // Medium-volume threshold for cross-venue routing
+
+// Routing score constants (public for router module)
+pub(crate) const MAX_FEE_BASIS_POINTS: i32 = 1000; // Maximum fee for scoring (10%)
+pub(crate) const FEE_SCORE_DIVISOR: i32 = 10; // Divisor for fee score calculation
+pub(crate) const LATENCY_EXCELLENT_US: u64 = 1000; // < 1ms is excellent
+pub(crate) const LATENCY_GOOD_US: u64 = 5000; // < 5ms is good  
+pub(crate) const LATENCY_ACCEPTABLE_US: u64 = 10000; // < 10ms is acceptable
+pub(crate) const LATENCY_SCORE_EXCELLENT: i32 = 50; // Score for excellent latency
+pub(crate) const LATENCY_SCORE_GOOD: i32 = 30; // Score for good latency
+pub(crate) const LATENCY_SCORE_ACCEPTABLE: i32 = 10; // Score for acceptable latency
+
+// Simulation delays (milliseconds)
+const BINANCE_ORDER_DELAY_MS: u64 = 10; // Simulated Binance order delay
+const ZERODHA_ORDER_DELAY_MS: u64 = 15; // Simulated Zerodha order delay
+const BINANCE_CANCEL_DELAY_MS: u64 = 8; // Simulated Binance cancel delay
+const ZERODHA_CANCEL_DELAY_MS: u64 = 12; // Simulated Zerodha cancel delay
+const BINANCE_MODIFY_DELAY_MS: u64 = 12; // Simulated Binance modify delay
+const ZERODHA_MODIFY_DELAY_MS: u64 = 18; // Simulated Zerodha modify delay
+
+// Commission calculation constants
+const MAKER_PROBABILITY_PERCENT: u64 = 60; // 60% chance of being a maker
 use common::{Px, Qty, Side, Symbol, Ts};
 use dashmap::DashMap;
 use parking_lot::RwLock;
@@ -47,6 +88,29 @@ impl std::fmt::Display for OrderId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+/// Execution algorithms for sophisticated order execution
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ExecutionAlgorithm {
+    /// Smart order routing - intelligently route across venues
+    Smart,
+    /// Time-weighted average price
+    Twap,
+    /// Volume-weighted average price
+    Vwap,
+    /// Percentage of volume
+    Pov,
+    /// Implementation shortfall minimization
+    ImplementationShortfall,
+    /// Iceberg - show only partial quantity
+    Iceberg,
+    /// Peg to market or midpoint
+    Peg,
+    /// Dark pool seeking
+    DarkPool,
+    /// Liquidity seeking across lit and dark venues
+    LiquiditySeeking,
 }
 
 /// Order types
@@ -128,6 +192,14 @@ pub struct OrderRequest {
     pub limit_price: Option<Px>,
     /// Stop price (for stop orders)
     pub stop_price: Option<Px>,
+    /// Is buy order (convenience field)
+    pub is_buy: bool,
+    /// Execution algorithm to use
+    pub algorithm: ExecutionAlgorithm,
+    /// Urgency (0.0 to 1.0)
+    pub urgency: f64,
+    /// Target participation rate for POV algo
+    pub participation_rate: Option<f64>,
     /// Time in force
     pub time_in_force: TimeInForce,
     /// Preferred venue (optional)
@@ -348,6 +420,294 @@ impl ExecutionRouterService {
             risk_manager: None,
         }
     }
+    
+    /// Submit order (public interface for gRPC)
+    pub async fn submit_order(
+        &self,
+        client_order_id: String,
+        symbol: Symbol,
+        side: common::Side,
+        quantity: Qty,
+        venue: String,
+        strategy_id: String,
+    ) -> ExecutionResult<u64> {
+        let request = OrderRequest {
+            client_order_id: client_order_id.clone(),
+            symbol,
+            side,
+            quantity,
+            order_type: OrderType::Limit,
+            limit_price: None,
+            stop_price: None,
+            is_buy: matches!(side, Side::Bid),
+            algorithm: ExecutionAlgorithm::Smart,
+            urgency: 0.5,
+            participation_rate: None,
+            time_in_force: TimeInForce::GTC,
+            venue: Some(venue),
+            strategy_id,
+            params: rustc_hash::FxHashMap::default(),
+        };
+        
+        // We need to use mut self for internal method
+        // For now, create the order directly here
+        let order_id = self.create_and_submit_order(request).await?;
+        Ok(order_id.0)
+    }
+    
+    /// Cancel order (public interface for gRPC)
+    pub async fn cancel_order(&self, order_id: u64) -> ExecutionResult<()> {
+        let order_id = OrderId::new(order_id);
+        // Check if order exists
+        if let Some(order_ref) = self.orders.get(&order_id) {
+            let mut order = order_ref.write();
+            
+            if order.status == OrderStatus::Filled {
+                return Err(ExecutionError::CannotCancelFilledOrder { id: order_id.0 });
+            }
+            
+            order.status = OrderStatus::Cancelled;
+            order.updated_at = Ts::now();
+            
+            // Update metrics
+            self.metrics.write().cancelled_orders += 1;
+            
+            info!("Order {} cancelled", order_id.0);
+            Ok(())
+        } else {
+            Err(ExecutionError::OrderNotFound { id: order_id.0 })
+        }
+    }
+    
+    /// Modify order (public interface for gRPC)
+    pub async fn modify_order(
+        &self,
+        order_id: u64,
+        new_quantity: Option<Qty>,
+        new_price: Option<Px>,
+    ) -> ExecutionResult<Order> {
+        let order_id = OrderId::new(order_id);
+        
+        // Check if order exists and can be modified
+        if let Some(order_ref) = self.orders.get(&order_id) {
+            let mut order = order_ref.write();
+            
+            if order.status == OrderStatus::Filled {
+                return Err(ExecutionError::CannotModifyFilledOrder { id: order_id.0 });
+            }
+            
+            // Apply modifications
+            if let Some(qty) = new_quantity {
+                order.quantity = qty;
+            }
+            if let Some(price) = new_price {
+                order.limit_price = Some(price);
+            }
+            
+            order.updated_at = Ts::now();
+            info!("Order {} modified", order_id.0);
+            
+            Ok(order.clone())
+        } else {
+            Err(ExecutionError::OrderNotFound { id: order_id.0 })
+        }
+    }
+    
+    /// Get order by ID (public interface for gRPC)
+    pub async fn get_order(&self, order_id: u64) -> ExecutionResult<Order> {
+        let order_id = OrderId::new(order_id);
+        if let Some(order_ref) = self.orders.get(&order_id) {
+            Ok(order_ref.read().clone())
+        } else {
+            Err(ExecutionError::OrderNotFound { id: order_id.0 })
+        }
+    }
+    
+    /// Get order by client ID (public interface for gRPC)
+    pub async fn get_order_by_client_id(&self, client_order_id: &str) -> ExecutionResult<Order> {
+        if let Some(order_id) = self.client_order_map.get(client_order_id) {
+            self.get_order(order_id.0).await
+        } else {
+            Err(ExecutionError::ClientOrderNotFound { 
+                client_id: client_order_id.to_string() 
+            })
+        }
+    }
+    
+    /// Get execution metrics (public interface for gRPC)
+    pub async fn get_metrics(&self) -> ExecutionMetrics {
+        self.metrics.read().clone()
+    }
+    
+    /// Create and submit order (internal implementation)
+    async fn create_and_submit_order(&self, request: OrderRequest) -> ExecutionResult<OrderId> {
+        // Generate order ID
+        let order_id = self.next_order_id();
+        
+        // Select venue
+        let venue = request.venue.clone().unwrap_or_else(|| self.select_venue(&request));
+        
+        // Create order
+        let order = Order {
+            order_id,
+            client_order_id: request.client_order_id.clone(),
+            exchange_order_id: None,
+            symbol: request.symbol,
+            side: request.side,
+            quantity: request.quantity,
+            filled_quantity: Qty::ZERO,
+            avg_fill_price: Px::ZERO,
+            status: OrderStatus::Pending,
+            order_type: request.order_type,
+            limit_price: request.limit_price,
+            stop_price: request.stop_price,
+            time_in_force: request.time_in_force,
+            venue: venue.clone(),
+            strategy_id: request.strategy_id,
+            created_at: Ts::now(),
+            updated_at: Ts::now(),
+            fills: Vec::new(),
+        };
+        
+        // Store order using Arc to avoid cloning
+        let order_arc = Arc::new(RwLock::new(order));
+        self.orders.insert(order_id, Arc::clone(&order_arc));
+        self.client_order_map.insert(request.client_order_id, order_id);
+        
+        // Update metrics
+        self.metrics.write().total_orders += 1;
+        
+        info!("Order {} submitted to {}", order_id.0, venue);
+        
+        // Submit to exchange asynchronously
+        {
+            let mut order = order_arc.write();
+            order.status = OrderStatus::Sent;
+            order.updated_at = Ts::now();
+        }
+        
+        // Spawn task to handle exchange communication
+        let order_arc_clone = Arc::clone(&order_arc);
+        let exchange_order_map = Arc::clone(&self.exchange_order_map);
+        let metrics = Arc::clone(&self.metrics);
+        let venue_clone = venue.clone();
+        
+        tokio::spawn(async move {
+            // Send to exchange based on venue
+            let start_time = std::time::Instant::now();
+            
+            // Simulate exchange latency based on venue
+            let latency_ms = match venue_clone.as_str() {
+                "binance" => 10,
+                "zerodha" => 15,
+                _ => 20,
+            };
+            
+            tokio::time::sleep(tokio::time::Duration::from_millis(latency_ms)).await;
+            
+            // Exchange acknowledges order
+            {
+                let mut order = order_arc_clone.write();
+                order.status = OrderStatus::Acknowledged;
+                order.exchange_order_id = Some(format!("EX{:08x}", order.order_id.0));
+                order.updated_at = Ts::now();
+                
+                // Map exchange order ID to internal ID
+                if let Some(ref ex_id) = order.exchange_order_id {
+                    exchange_order_map.insert(ex_id.clone(), order.order_id);
+                }
+            }
+            
+            // Update metrics
+            let elapsed_ms = start_time.elapsed().as_millis() as u64;
+            metrics.write().avg_fill_time_ms = elapsed_ms;
+        });
+        
+        Ok(order_id)
+    }
+
+    /// Create new execution router from config
+    pub fn from_config(_config: config::ExecutionConfig) -> Self {
+        // Use Smart routing as default strategy
+        let venue_strategy = VenueStrategy::Smart;
+        
+        Self {
+            next_order_id: AtomicU64::new(1),
+            orders: Arc::new(DashMap::new()),
+            client_order_map: Arc::new(DashMap::new()),
+            exchange_order_map: Arc::new(DashMap::new()),
+            venue_strategy,
+            metrics: Arc::new(RwLock::new(ExecutionMetrics::default())),
+            risk_manager: None,
+        }
+    }
+
+    /// Check if the service is healthy
+    pub async fn is_healthy(&self) -> bool {
+        // Check metrics for critical issues
+        let (total_orders, rejected_orders, fill_rate) = {
+            let metrics = self.metrics.read();
+            (metrics.total_orders, metrics.rejected_orders, metrics.fill_rate)
+        }; // Drop lock before await
+        
+        // Check if too many rejected orders
+        if total_orders > 0 {
+            let rejection_rate = rejected_orders.saturating_mul(PERCENT_SCALE as u64) / total_orders;
+            if rejection_rate > REJECTION_THRESHOLD_PERCENT {
+                error!("High rejection rate: {}%", rejection_rate);
+                return false;
+            }
+        }
+        
+        // Check if we have active orders stuck in pending state for too long
+        let mut stuck_orders = 0;
+        let now = Ts::now();
+        const NANOS_PER_MILLI: u64 = 1_000_000;
+        
+        for entry in self.orders.iter() {
+            let order = entry.value().read();
+            if order.status == OrderStatus::Pending {
+                let now_ms = (now.as_nanos() / NANOS_PER_MILLI) as i64;
+                let created_ms = (order.created_at.as_nanos() / NANOS_PER_MILLI) as i64;
+                let elapsed_ms = now_ms - created_ms;
+                if elapsed_ms > MAX_PENDING_DURATION_MS {
+                    stuck_orders += 1;
+                }
+            }
+        }
+        
+        if stuck_orders > MAX_STUCK_ORDERS {
+            error!("Too many stuck orders: {}", stuck_orders);
+            return false;
+        }
+        
+        // Check risk manager connectivity if configured
+        if let Some(ref risk_manager) = self.risk_manager {
+            // Risk manager health is determined by successful check_order calls
+            // If risk manager is set but not responding, it's unhealthy
+            let test_check = risk_manager
+                .check_order(
+                    Symbol::new(HEALTH_CHECK_TEST_SYMBOL), 
+                    Side::Bid, 
+                    Qty::from_i64(HEALTH_CHECK_TEST_QTY), 
+                    Px::from_i64(HEALTH_CHECK_TEST_PRICE)
+                )
+                .await;
+            
+            if matches!(test_check, risk_manager::RiskCheckResult::Rejected(ref reason) if reason.contains("unavailable")) {
+                error!("Risk manager unavailable");
+                return false;
+            }
+        }
+        
+        // Check fill rate - if it's too low, something might be wrong
+        if total_orders > MIN_ORDERS_FOR_FILL_CHECK && fill_rate < MIN_FILL_RATE {
+            warn!("Low fill rate: {}", fill_rate);
+            // Don't fail health check for low fill rate, just warn
+        }
+        
+        true
+    }
 
     /// Set risk manager
     pub fn set_risk_manager(&mut self, risk_manager: Arc<dyn risk_manager::RiskManager>) {
@@ -375,11 +735,6 @@ impl ExecutionRouterService {
     /// Advanced smart routing algorithm with liquidity analysis
     fn select_optimal_venue(&self, request: &OrderRequest) -> String {
         let quantity_value = request.quantity.as_f64();
-
-        // High-volume threshold for institutional routing
-        const INSTITUTIONAL_THRESHOLD: f64 = 50000.0;
-        // Medium-volume threshold for cross-venue routing
-        const CROSS_VENUE_THRESHOLD: f64 = SCALE_4 as f64;
 
         let symbol_str = format!("{}", request.symbol); // Convert Symbol to string
         match symbol_str.as_str() {
@@ -435,7 +790,7 @@ impl ExecutionRouterService {
         );
 
         // Simulate network delay
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(BINANCE_ORDER_DELAY_MS)).await;
 
         // In production: send gRPC request to market-connector service
         // let request = ExecuteOrderRequest { ... };
@@ -456,7 +811,7 @@ impl ExecutionRouterService {
         );
 
         // Simulate network delay
-        tokio::time::sleep(tokio::time::Duration::from_millis(15)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(ZERODHA_ORDER_DELAY_MS)).await;
 
         Ok(())
     }
@@ -471,7 +826,7 @@ impl ExecutionRouterService {
                     order.exchange_order_id
                 );
                 // Simulate network delay
-                tokio::time::sleep(tokio::time::Duration::from_millis(8)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(BINANCE_CANCEL_DELAY_MS)).await;
                 Ok(())
             }
             "zerodha" => {
@@ -481,7 +836,7 @@ impl ExecutionRouterService {
                     order.exchange_order_id
                 );
                 // Simulate network delay
-                tokio::time::sleep(tokio::time::Duration::from_millis(12)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(ZERODHA_CANCEL_DELAY_MS)).await;
                 Ok(())
             }
             _ => Err(anyhow::anyhow!(
@@ -506,7 +861,7 @@ impl ExecutionRouterService {
                     modifications.quantity
                 );
                 // Simulate network delay
-                tokio::time::sleep(tokio::time::Duration::from_millis(12)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(BINANCE_MODIFY_DELAY_MS)).await;
                 Ok(())
             }
             "zerodha" => {
@@ -517,7 +872,7 @@ impl ExecutionRouterService {
                     modifications.quantity
                 );
                 // Simulate network delay
-                tokio::time::sleep(tokio::time::Duration::from_millis(18)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(ZERODHA_MODIFY_DELAY_MS)).await;
                 Ok(())
             }
             _ => Err(anyhow::anyhow!(
@@ -541,8 +896,8 @@ impl ExecutionRouterService {
         _report.order_id.hash(&mut hasher);
         let hash = hasher.finish();
 
-        // 60% chance of being a maker (institutional trading typically provides liquidity)
-        (hash % PERCENT_SCALE as u64) < 60
+        // Check probability of being a maker (institutional trading typically provides liquidity)
+        (hash % PERCENT_SCALE as u64) < MAKER_PROBABILITY_PERCENT
     }
 
     /// Calculate commission based on execution report and fill details

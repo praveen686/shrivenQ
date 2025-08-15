@@ -11,7 +11,8 @@ use chrono::{DateTime, Utc};
 
 // Re-export commonly used types
 pub use events::{
-    CandleEvent, DataEvent, MicrostructureEvent, SystemEvent, TradeEvent, VolumeProfileEvent,
+    CandleEvent, DataEvent, MicrostructureEvent, OrderBookEvent, OrderBookEventType,
+    SystemEvent, TradeEvent, VolumeProfileEvent,
 };
 pub use segment::{Segment, SegmentReader};
 pub use wal::{Wal, WalEntry, WalStats};

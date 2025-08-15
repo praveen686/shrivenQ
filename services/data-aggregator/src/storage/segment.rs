@@ -64,6 +64,48 @@ impl Segment {
         })
     }
 
+    /// Open an existing segment file for appending
+    ///
+    /// # Performance
+    /// - Reads header to get current state
+    /// - Seeks to end for appending
+    pub fn open_for_append(path: &Path, max_size: u64) -> Result<Self> {
+        let file = OpenOptions::new()
+            .write(true)
+            .read(true)
+            .open(path)?;
+            
+        // Read header to get current state
+        let mut file_reader = BufReader::new(&file);
+        let magic = file_reader.read_u32::<LittleEndian>()?;
+        if magic != SEGMENT_MAGIC {
+            return Err(anyhow!("Invalid segment magic: {:#x}", magic));
+        }
+        
+        let version = file_reader.read_u32::<LittleEndian>()?;
+        if version != SEGMENT_VERSION {
+            return Err(anyhow!("Unsupported segment version: {}", version));
+        }
+        
+        let entries = file_reader.read_u64::<LittleEndian>()?;
+        drop(file_reader);
+        
+        // Seek to end for appending
+        let mut file = file;
+        let size = file.seek(SeekFrom::End(0))?;
+        
+        // Create writer for appending
+        let writer = BufWriter::with_capacity(64 * 1024, file);
+        
+        Ok(Self {
+            path: path.to_path_buf(),
+            file: writer,
+            size,
+            max_size,
+            entries,
+        })
+    }
+
     /// Open an existing segment file for reading
     pub fn open(path: &Path) -> Result<SegmentReader> {
         let file = File::open(path)?;

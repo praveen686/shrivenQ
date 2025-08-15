@@ -33,6 +33,9 @@ members = [
     "services/portfolio-manager",
     "services/reporting",
     "services/demo",
+    "services/orderbook",
+    "services/trading-gateway",
+    "services/oms",
 ]
 resolver = "2"
 exclude = [

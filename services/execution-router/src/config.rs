@@ -26,6 +26,12 @@ pub struct ExecutionConfig {
 
     /// Retry configuration
     pub retry_config: RetryConfig,
+    
+    /// Order cache size
+    pub order_cache_size: usize,
+    
+    /// Venue timeout in milliseconds
+    pub venue_timeout_ms: u64,
 }
 
 /// Venue configuration
@@ -115,6 +121,9 @@ pub struct RetryConfig {
 
 impl Default for ExecutionConfig {
     fn default() -> Self {
+        const DEFAULT_ORDER_CACHE_SIZE: usize = 10000;
+        const DEFAULT_VENUE_TIMEOUT_MS: u64 = 5000;
+        
         Self {
             default_venue: "binance".to_string(),
             venues: FxHashMap::default(),
@@ -142,6 +151,8 @@ impl Default for ExecutionConfig {
                 max_delay_ms: MAX_RETRY_DELAY_MS,
                 backoff_multiplier: 2,
             },
+            order_cache_size: DEFAULT_ORDER_CACHE_SIZE,
+            venue_timeout_ms: DEFAULT_VENUE_TIMEOUT_MS,
         }
     }
 }

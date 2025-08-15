@@ -7,6 +7,14 @@ authors.workspace = true
 repository.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "data-aggregator"
+path = "src/main.rs"
+
+[[bin]]
+name = "wal_replay"
+path = "src/bin/wal_replay.rs"
+
 [dependencies]
 # Core dependencies
 anyhow = { workspace = true }
@@ -19,6 +27,7 @@ async-trait = "0.1"
 # Internal dependencies
 common = { path = "../../crates/core/common" }
 market-connector = { path = "../market-connector" }
+shrivenquant-proto = { path = "../../crates/core/proto" }
 
 # Data processing
 chrono = { workspace = true }
@@ -35,6 +44,14 @@ crc32fast = "1.4"
 
 # Metrics
 prometheus = "0.13"
+
+# CLI parsing
+clap = { version = "4.0", features = ["derive"] }
+
+# gRPC dependencies
+tonic = { workspace = true }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.10"

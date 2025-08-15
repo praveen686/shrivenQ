@@ -53,8 +53,17 @@ impl GrpcAuthService for AuthServiceGrpc {
                 let permissions: Vec<i32> = context
                     .permissions
                     .iter()
-                    // SAFETY: Proto enum to i32 cast is always safe
-                    .map(|p| Self::internal_to_proto_permission(p) as i32) // SAFETY: proto enum to i32 cast is always safe
+                    .map(|p| {
+                        // Safe conversion: Permission enum to i32 (proto-generated requirement)
+                        let proto_perm = Self::internal_to_proto_permission(p);
+                        match i32::try_from(proto_perm as u32) {
+                            Ok(val) => val,
+                            Err(_) => {
+                                tracing::error!("Permission {:?} exceeds i32 range", proto_perm);
+                                0 // UNSPECIFIED permission
+                            }
+                        }
+                    })
                     .collect();
 
                 let response = LoginResponse {
@@ -81,8 +90,17 @@ impl GrpcAuthService for AuthServiceGrpc {
                 let permissions: Vec<i32> = context
                     .permissions
                     .iter()
-                    // SAFETY: Proto enum to i32 cast is always safe
-                    .map(|p| Self::internal_to_proto_permission(p) as i32) // SAFETY: proto enum to i32 cast is always safe
+                    .map(|p| {
+                        // Safe conversion: Permission enum to i32 (proto-generated requirement)
+                        let proto_perm = Self::internal_to_proto_permission(p);
+                        match i32::try_from(proto_perm as u32) {
+                            Ok(val) => val,
+                            Err(_) => {
+                                tracing::error!("Permission {:?} exceeds i32 range", proto_perm);
+                                0 // UNSPECIFIED permission
+                            }
+                        }
+                    })
                     .collect();
 
                 let response = ValidateTokenResponse {

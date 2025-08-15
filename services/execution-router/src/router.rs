@@ -148,6 +148,12 @@ impl SmartOrderRouter {
 
     /// Smart routing combining multiple factors
     fn route_smart(&self, _request: &OrderRequest) -> RoutingDecision {
+        use crate::{
+            MAX_FEE_BASIS_POINTS, FEE_SCORE_DIVISOR,
+            LATENCY_EXCELLENT_US, LATENCY_GOOD_US, LATENCY_ACCEPTABLE_US,
+            LATENCY_SCORE_EXCELLENT, LATENCY_SCORE_GOOD, LATENCY_SCORE_ACCEPTABLE
+        };
+        
         // Score each venue based on multiple factors
         let mut scores: FxHashMap<String, i32> = FxHashMap::default();
 
@@ -159,18 +165,18 @@ impl SmartOrderRouter {
             let mut score = 0;
 
             // Fee score (lower is better)
-            score += (1000 - info.taker_fee_bps) / 10;
+            score += (MAX_FEE_BASIS_POINTS - info.taker_fee_bps) / FEE_SCORE_DIVISOR;
 
             // Liquidity score
             score += info.liquidity_score;
 
             // Latency score (lower is better)
-            if info.avg_latency_us < 1000 {
-                score += 50;
-            } else if info.avg_latency_us < 5000 {
-                score += 30;
-            } else if info.avg_latency_us < 10000 {
-                score += 10;
+            if info.avg_latency_us < LATENCY_EXCELLENT_US {
+                score += LATENCY_SCORE_EXCELLENT;
+            } else if info.avg_latency_us < LATENCY_GOOD_US {
+                score += LATENCY_SCORE_GOOD;
+            } else if info.avg_latency_us < LATENCY_ACCEPTABLE_US {
+                score += LATENCY_SCORE_ACCEPTABLE;
             }
 
             scores.insert(name.clone(), score);

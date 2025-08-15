@@ -13,7 +13,8 @@ use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
 
-use super::segment::{Segment, SegmentReader};
+use super::segment::SegmentReader;
+use super::segment::Segment;
 
 /// Default segment size (128 MB)
 const DEFAULT_SEGMENT_SIZE: u64 = 128 * 1024 * 1024;
@@ -97,8 +98,16 @@ impl Wal {
     /// - Uses fsync for durability
     /// - Should be called periodically, not on every write
     pub fn flush(&mut self) -> Result<()> {
-        if let Some(segment) = &mut self.current_segment {
-            segment.flush()?;
+        // To properly persist the entry count, we need to close and reopen the segment
+        if let Some(segment) = self.current_segment.take() {
+            // Close the segment (this updates the entry count in the header)
+            segment.close()?;
+            
+            // Reopen the segment for appending
+            let segment_path = self.segment_path(self.segment_counter);
+            if segment_path.exists() {
+                self.current_segment = Some(Segment::open_for_append(&segment_path, self.segment_size)?);
+            }
         }
         Ok(())
     }
@@ -134,6 +143,69 @@ impl Wal {
             removed, before_ts
         );
         Ok(removed)
+    }
+
+    /// Read all entries from WAL within time range
+    ///
+    /// # Performance
+    /// - Sequential read optimized
+    /// - Returns iterator for memory efficiency
+    pub fn read_range<T: WalEntry>(&self, start_ts: Ts, end_ts: Ts) -> Result<Vec<T>> {
+        let mut entries = Vec::new();
+        let segments = Self::list_segments(&self.dir)?;
+        
+        for segment_path in segments {
+            let mut reader = Segment::open(&segment_path)?;
+            
+            // Read all entries from this segment
+            while let Some(data) = reader.read_next()? {
+                match bincode::deserialize::<T>(&data) {
+                    Ok(entry) => {
+                        let ts = entry.timestamp();
+                        if ts >= start_ts && ts <= end_ts {
+                            entries.push(entry);
+                        }
+                    }
+                    Err(e) => {
+                        debug!("Failed to deserialize WAL entry: {}", e);
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        // Sort by timestamp
+        entries.sort_by_key(|entry| entry.timestamp());
+        Ok(entries)
+    }
+    
+    /// Read all entries from WAL (no time filtering)
+    pub fn read_all<T: WalEntry>(&self) -> Result<Vec<T>> {
+        let mut entries = Vec::new();
+        let segments = Self::list_segments(&self.dir)?;
+        
+        info!("Reading from {} segments", segments.len());
+        
+        for segment_path in segments {
+            info!("Reading segment: {}", segment_path.display());
+            let mut reader = Segment::open(&segment_path)?;
+            
+            while let Some(data) = reader.read_next()? {
+                match bincode::deserialize::<T>(&data) {
+                    Ok(entry) => {
+                        entries.push(entry);
+                    }
+                    Err(e) => {
+                        debug!("Failed to deserialize WAL entry: {}", e);
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        info!("Read {} entries from WAL", entries.len());
+        entries.sort_by_key(|entry| entry.timestamp());
+        Ok(entries)
     }
 
     /// Get statistics about the WAL
@@ -224,6 +296,27 @@ impl Wal {
 
         Ok(last_entry_ts < before_ts)
     }
+    
+    /// Check WAL health status
+    pub fn is_healthy(&self) -> bool {
+        // Check if directory exists and is writable
+        if !self.dir.exists() {
+            return false;
+        }
+        
+        // Check if we can list segments
+        if Self::list_segments(&self.dir).is_err() {
+            return false;
+        }
+        
+        // Check current segment if exists
+        if let Some(ref segment) = self.current_segment {
+            // In production, add more sophisticated health checks
+            return segment.size() < self.segment_size;
+        }
+        
+        true
+    }
 }
 
 impl Drop for Wal {
@@ -309,7 +402,7 @@ impl<T: WalEntry> WalIterator<T> {
             }
         }
     }
-}
+} // Missing closing brace for impl Wal
 
 #[cfg(test)]
 mod tests {

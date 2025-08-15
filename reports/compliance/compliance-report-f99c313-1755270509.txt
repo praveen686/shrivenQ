@@ -1,0 +1,47 @@
+ShrivenQuant Compliance Report
+===============================
+Generated: 1755270509
+Commit: f99c313
+
+[FAIL] build - ❌ Release build failed (count: 1)
+[FAIL] numeric_casts - ❌ 32 unannotated numeric casts (max 10)
+First 5 violations:
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/lib.rs:104: max_position_size: constants::trading::MAX_ORDER_SIZE_TICKS as u64,  // 1000 units
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/lib.rs:108: max_order_value: constants::trading::MAX_ORDER_SIZE_TICKS as u64,   // 1M per order
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/lib.rs:319: let order_value = (price.as_i64().unsigned_abs() * order_qty) / constants::fixed_point::SCALE_4 as u64;
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/lib.rs:418: (position.net_qty.unsigned_abs() * position.mark_price.as_i64().unsigned_abs()) / constants::fixed_point::SCALE_4 as u64;
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/lib.rs:455: let percentage = diff.saturating_mul(constants::fixed_point::SCALE_4 as u64) / peak;) (count: 32)
+[OK] panic_unwrap - ✓ No panic/unwrap/expect in production (count: 0)
+[FAIL] std_hashmap - ❌ Found 7 std::HashMap usages (prefer FxHashMap)
+First 5 violations:
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:433: // Proto-generated code requires std::collections::HashMap for metadata field
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:435: metadata: std::collections::HashMap::new(),
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:456: metadata: std::collections::HashMap::new(),
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:492: metadata: std::collections::HashMap::new(),
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:525: metadata: std::collections::HashMap::new(), (count: 7)
+[OK] float_money - ✓ No floating point money in internal calculations (count: 0)
+[FAIL] todos - ❌ Found 3 TODO/FIXME/HACK/XXX markers (count: 3)
+[FAIL] ignored_errors - ❌ Found 82 ignored error patterns (Err(_)) (count: 82)
+[WARN] clones - ⚠️  293 clone() calls in prod — review hot paths (count: 293)
+[WARN] string_allocs - ⚠️  629 string allocation sites — avoid in hot paths (count: 629)
+[OK] underscore_abuse - ✓ Underscore usage acceptable (count: 0)
+[WARN] magic_numbers - ⚠️  377 potential magic numbers — prefer named constants (max 10)
+First 5 violations:
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:157: let segment_bytes = WAL_SEGMENT_SIZE_MB.saturating_mul(1024).saturating_mul(1024);
+  • /home/praveen/ShrivenQuant/services/market-connector/src/main.rs:59: assert_eq!(DEFAULT_PORT, 50052);
+  • /home/praveen/ShrivenQuant/services/market-connector/src/orderbook/book.rs:327: qty: Qty::from_i64(TEST_QUANTITY + 500000), // 150.0 = 100.0 + 50.0
+  • /home/praveen/ShrivenQuant/services/market-connector/src/orderbook/price_levels.rs:172: book.set(0, Px::from_i64(1000000), Qty::from_i64(100000));
+  • /home/praveen/ShrivenQuant/services/market-connector/src/orderbook/price_levels.rs:173: book.set(1, Px::from_i64(995000), Qty::from_i64(200000)); (count: 377)
+[WARN] warning_suppressions - ⚠️  67 #[allow(...)] usages — fix root causes when possible (max 15)
+First 5 suppressions:
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:53: #[allow(clippy::cast_possible_truncation)]
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:54: #[allow(clippy::cast_precision_loss)]
+  • /home/praveen/ShrivenQuant/services/market-connector/src/grpc_service.rs:37: #[allow(clippy::cast_possible_truncation)]
+  • /home/praveen/ShrivenQuant/services/market-connector/src/grpc_service.rs:38: #[allow(clippy::cast_precision_loss)]
+  • /home/praveen/ShrivenQuant/services/market-connector/src/grpc_service.rs:39: #[allow(clippy::cast_possible_truncation)]) (count: 67)
+[OK] doc_dupes - ✓ Doc duplication acceptable (max repeat 3×) (count: 3)
+[WARN] large_functions - ⚠️  Found 3 functions >50 lines (count: 3)
+[WARN] inline_attrs - ⚠️  61 #[inline] attributes (max 50) (count: 61)
+
+Violations: Critical=4 High=1 Medium=2 Low=4
+Score: 0/100  Status: CRITICAL

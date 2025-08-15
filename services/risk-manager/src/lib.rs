@@ -11,10 +11,12 @@ pub mod circuit_breaker;
 pub mod config;
 pub mod limits;
 pub mod monitor;
+pub mod grpc_service;
+pub mod grpc_impl;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::{Px, Qty, Side, Symbol};
+use common::{Px, Qty, Side, Symbol, constants};
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -99,11 +101,13 @@ pub struct RiskLimits {
 impl Default for RiskLimits {
     fn default() -> Self {
         Self {
-            max_position_size: 10_000_000,     // 1000 units
+            // Safe conversion: MAX_ORDER_SIZE_TICKS is always positive
+            max_position_size: constants::trading::MAX_ORDER_SIZE_TICKS.unsigned_abs(),  // 1000 units
             max_position_value: 100_000_000,   // 10M in value
             max_total_exposure: 1_000_000_000, // 100M total
             max_order_size: 1_000_000,         // 100 units
-            max_order_value: 10_000_000,       // 1M per order
+            // Safe conversion: MAX_ORDER_SIZE_TICKS is always positive
+            max_order_value: constants::trading::MAX_ORDER_SIZE_TICKS.unsigned_abs(),   // 1M per order
             max_orders_per_minute: 100,
             max_daily_loss: -5_000_000,    // 500K loss limit
             max_drawdown_pct: 1000,        // 10% drawdown in fixed-point
@@ -122,7 +126,7 @@ pub trait RiskManager: Send + Sync {
 
     /// Update position after fill
     async fn update_position(
-        &mut self,
+        &self,
         symbol: Symbol,
         side: Side,
         qty: Qty,
@@ -139,16 +143,16 @@ pub trait RiskManager: Send + Sync {
     async fn get_metrics(&self) -> RiskMetrics;
 
     /// Update market prices
-    async fn update_mark_price(&mut self, symbol: Symbol, price: Px) -> Result<()>;
+    async fn update_mark_price(&self, symbol: Symbol, price: Px) -> Result<()>;
 
     /// Trigger kill switch
-    async fn activate_kill_switch(&mut self, reason: &str) -> Result<()>;
+    async fn activate_kill_switch(&self, reason: &str) -> Result<()>;
 
     /// Reset kill switch
-    async fn deactivate_kill_switch(&mut self) -> Result<()>;
+    async fn deactivate_kill_switch(&self) -> Result<()>;
 
     /// Reset daily metrics
-    async fn reset_daily_metrics(&mut self) -> Result<()>;
+    async fn reset_daily_metrics(&self) -> Result<()>;
 }
 
 /// Per-symbol risk tracking
@@ -210,6 +214,34 @@ impl RiskManagerService {
             kill_switch: AtomicBool::new(false),
             order_timestamps: Arc::new(RwLock::new(Vec::with_capacity(1000))),
         }
+    }
+    
+    /// Check if kill switch is active
+    pub fn is_kill_switch_active(&self) -> bool {
+        self.kill_switch.load(Ordering::Relaxed)
+    }
+    
+    /// Activate kill switch
+    pub fn activate_kill_switch(&self, reason: &str) -> bool {
+        let was_active = self.kill_switch.swap(true, Ordering::SeqCst);
+        if !was_active {
+            tracing::error!("KILL SWITCH ACTIVATED: {}", reason);
+        }
+        !was_active // Return true if we actually activated it (wasn't already active)
+    }
+    
+    /// Deactivate kill switch
+    pub fn deactivate_kill_switch(&self, reason: &str) -> bool {
+        let was_active = self.kill_switch.swap(false, Ordering::SeqCst);
+        if was_active {
+            tracing::warn!("Kill switch deactivated: {}", reason);
+        }
+        was_active // Return true if we actually deactivated it (was active)
+    }
+    
+    /// Get current metrics synchronously
+    pub async fn get_metrics(&self) -> RiskMetrics {
+        RiskManager::get_metrics(self).await
     }
 
     /// Check rate limits
@@ -286,7 +318,8 @@ impl RiskManager for RiskManagerService {
         }
 
         // Check order value limits
-        let order_value = (price.as_i64().unsigned_abs() * order_qty) / 10000;
+        // Safe conversion: SCALE_4 is always positive
+        let order_value = (price.as_i64().unsigned_abs() * order_qty) / constants::fixed_point::SCALE_4.unsigned_abs();
         if order_value > self.limits.max_order_value {
             warn!(
                 "Order rejected for {:?}: Value {} exceeds limit {}",
@@ -353,7 +386,7 @@ impl RiskManager for RiskManagerService {
     }
 
     async fn update_position(
-        &mut self,
+        &self,
         symbol: Symbol,
         side: Side,
         qty: Qty,
@@ -385,7 +418,8 @@ impl RiskManager for RiskManagerService {
 
         // Update exposure
         let new_value =
-            (position.net_qty.unsigned_abs() * position.mark_price.as_i64().unsigned_abs()) / 10000;
+            // Safe conversion: SCALE_4 is always positive
+            (position.net_qty.unsigned_abs() * position.mark_price.as_i64().unsigned_abs()) / constants::fixed_point::SCALE_4.unsigned_abs();
         let old_value = position.position_value;
         position.position_value = new_value;
 
@@ -418,11 +452,12 @@ impl RiskManager for RiskManagerService {
         let daily_pnl = self.daily_pnl.load(Ordering::Relaxed);
         let peak = self.peak_value.load(Ordering::Relaxed);
 
-        // Calculate drawdown in fixed-point (10000 = 100%)
+        // Calculate drawdown in fixed-point (SCALE_4 = 100%)
         let current_drawdown = if peak > 0 && peak > total_exposure {
             let diff = peak - total_exposure;
-            // Calculate percentage: (diff * 10000) / peak with overflow protection
-            let percentage = diff.saturating_mul(10000) / peak;
+            // Calculate percentage: (diff * SCALE_4) / peak with overflow protection
+            // Safe conversion: SCALE_4 is always positive
+            let percentage = diff.saturating_mul(constants::fixed_point::SCALE_4.unsigned_abs()) / peak;
             i32::try_from(percentage).unwrap_or(i32::MAX)
         } else {
             0
@@ -439,7 +474,7 @@ impl RiskManager for RiskManagerService {
         }
     }
 
-    async fn update_mark_price(&mut self, symbol: Symbol, price: Px) -> Result<()> {
+    async fn update_mark_price(&self, symbol: Symbol, price: Px) -> Result<()> {
         if let Some(risk) = self.symbol_risks.get(&symbol) {
             let mut position = risk.position.write();
             position.mark_price = price;
@@ -448,25 +483,25 @@ impl RiskManager for RiskManagerService {
             if position.net_qty != 0 {
                 let mark_value = position.net_qty * price.as_i64();
                 let cost_basis = position.net_qty * position.avg_price.as_i64();
-                position.unrealized_pnl = (mark_value - cost_basis) / 10000;
+                position.unrealized_pnl = (mark_value - cost_basis) / constants::fixed_point::SCALE_4;
             }
         }
         Ok(())
     }
 
-    async fn activate_kill_switch(&mut self, reason: &str) -> Result<()> {
+    async fn activate_kill_switch(&self, reason: &str) -> Result<()> {
         self.kill_switch.store(true, Ordering::Relaxed);
         error!("KILL SWITCH ACTIVATED: {}", reason);
         Ok(())
     }
 
-    async fn deactivate_kill_switch(&mut self) -> Result<()> {
+    async fn deactivate_kill_switch(&self) -> Result<()> {
         self.kill_switch.store(false, Ordering::Relaxed);
         info!("Kill switch deactivated");
         Ok(())
     }
 
-    async fn reset_daily_metrics(&mut self) -> Result<()> {
+    async fn reset_daily_metrics(&self) -> Result<()> {
         self.daily_pnl.store(0, Ordering::Relaxed);
         self.orders_today.store(0, Ordering::Relaxed);
         self.order_timestamps.write().clear();
@@ -494,7 +529,7 @@ mod tests {
         // Test order within limits
         let result = risk_manager
             .check_order(
-                Symbol::from(1),
+                Symbol(1),
                 Side::Bid,
                 Qty::from_qty_i32(100_0000),
                 Px::from_price_i32(100_0000),
@@ -514,7 +549,7 @@ mod tests {
         // Check order should be rejected
         let result = risk_manager
             .check_order(
-                Symbol::from(1),
+                Symbol(1),
                 Side::Bid,
                 Qty::from_qty_i32(100_0000),
                 Px::from_price_i32(100_0000),

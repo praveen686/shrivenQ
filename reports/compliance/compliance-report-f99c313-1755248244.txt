@@ -1,0 +1,46 @@
+ShrivenQuant Compliance Report
+===============================
+Generated: 1755248244
+Commit: f99c313
+
+[OK] build - ✓ Release build successful (count: 0)
+[FAIL] numeric_casts - ❌ 46 unannotated numeric casts (max 10)
+First 5 violations:
+  • /home/praveen/ShrivenQuant/services/market-connector/src/grpc_service.rs:40: scaled.clamp(i64::MIN as f64, i64::MAX as f64) as i64
+  • /home/praveen/ShrivenQuant/services/market-connector/src/grpc_service.rs:50: scaled.clamp(0.0, i64::MAX as f64) as i64
+  • /home/praveen/ShrivenQuant/services/market-connector/src/grpc_service.rs:58: if sequence <= i64::MAX as u64 {
+  • /home/praveen/ShrivenQuant/services/market-connector/src/grpc_service.rs:59: sequence as i64
+  • /home/praveen/ShrivenQuant/services/market-connector/src/grpc_service.rs:65: /// Get current timestamp in nanoseconds as i64 for proto) (count: 46)
+[OK] panic_unwrap - ✓ No panic/unwrap/expect in production (count: 0)
+[FAIL] std_hashmap - ❌ Found 5 std::HashMap usages (prefer FxHashMap)
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:292: // Proto-generated code requires std::collections::HashMap for metadata field
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:294: metadata: std::collections::HashMap::new(),
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:314: metadata: std::collections::HashMap::new(),
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:340: metadata: std::collections::HashMap::new(),
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:370: metadata: std::collections::HashMap::new(), (count: 5)
+[OK] float_money - ✓ No floating point money in internal calculations (count: 0)
+[FAIL] todos - ❌ Found 1 TODO/FIXME/HACK/XXX markers (count: 1)
+[FAIL] ignored_errors - ❌ Found 60 ignored error patterns (Err(_)) (count: 60)
+[WARN] clones - ⚠️  260 clone() calls in prod — review hot paths (count: 260)
+[WARN] string_allocs - ⚠️  601 string allocation sites — avoid in hot paths (count: 601)
+[OK] underscore_abuse - ✓ Underscore usage acceptable (count: 0)
+[WARN] magic_numbers - ⚠️  377 potential magic numbers — prefer named constants (max 10)
+First 5 violations:
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:156: let segment_bytes = WAL_SEGMENT_SIZE_MB.saturating_mul(1024).saturating_mul(1024);
+  • /home/praveen/ShrivenQuant/services/market-connector/src/main.rs:59: assert_eq!(DEFAULT_PORT, 50052);
+  • /home/praveen/ShrivenQuant/services/market-connector/src/orderbook/book.rs:327: qty: Qty::from_i64(TEST_QUANTITY + 500000), // 150.0 = 100.0 + 50.0
+  • /home/praveen/ShrivenQuant/services/market-connector/src/orderbook/price_levels.rs:172: book.set(0, Px::from_i64(1000000), Qty::from_i64(100000));
+  • /home/praveen/ShrivenQuant/services/market-connector/src/orderbook/price_levels.rs:173: book.set(1, Px::from_i64(995000), Qty::from_i64(200000)); (count: 377)
+[WARN] warning_suppressions - ⚠️  63 #[allow(...)] usages — fix root causes when possible (max 15)
+First 5 suppressions:
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:52: #[allow(clippy::cast_possible_truncation)]
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:53: #[allow(clippy::cast_precision_loss)]
+  • /home/praveen/ShrivenQuant/services/market-connector/src/instruments/types.rs:187: #[allow(clippy::struct_field_names)] // External API format
+  • /home/praveen/ShrivenQuant/services/market-connector/src/exchanges/zerodha/mod.rs:453: #[allow(clippy::cast_precision_loss)] // Protocol conversion from paise to rupees
+  • /home/praveen/ShrivenQuant/services/market-connector/src/exchanges/zerodha/mod.rs:460: #[allow(clippy::cast_precision_loss)] // Protocol OHLC conversion) (count: 63)
+[OK] doc_dupes - ✓ Doc duplication acceptable (max repeat 3×) (count: 3)
+[WARN] large_functions - ⚠️  Found 3 functions >50 lines (count: 3)
+[WARN] inline_attrs - ⚠️  61 #[inline] attributes (max 50) (count: 61)
+
+Violations: Critical=3 High=1 Medium=2 Low=4
+Score: 5/100  Status: CRITICAL

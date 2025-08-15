@@ -47,6 +47,8 @@ fn create_test_config() -> GatewayConfig {
             requests_per_minute: 1000,
             burst_size: 100,
             per_ip_limit: 100,
+            // Test configuration uses std::collections::HashMap
+            #[allow(clippy::disallowed_types)] // Test configuration, not performance critical
             per_endpoint_limits: std::collections::HashMap::new(),
         },
         cors: api_gateway::CorsConfig {

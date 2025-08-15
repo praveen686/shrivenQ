@@ -5,6 +5,7 @@
 
 pub mod connectors;
 pub mod exchanges;
+pub mod grpc_service;
 pub mod instruments;
 pub mod models;
 pub mod orderbook;
@@ -15,7 +16,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 /// Market data types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum MarketDataType {
     /// Order book updates
     OrderBook,

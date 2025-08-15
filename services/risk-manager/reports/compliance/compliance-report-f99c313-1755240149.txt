@@ -1,0 +1,36 @@
+ShrivenQuant Compliance Report
+===============================
+Generated: 1755240149
+Commit: f99c313
+
+[OK] build - ✓ Release build successful (count: 0)
+[FAIL] numeric_casts - ❌ 15 unannotated numeric casts (max 10)
+First 5 violations:
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_service.rs:169: window: Arc::new(RwLock::new(Vec::with_capacity(max_rps as usize))),
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_service.rs:180: if window.len() >= self.max_requests_per_second as usize {
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_service.rs:373: .set(metrics.total_exposure as f64);
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_service.rs:377: .set(metrics.daily_pnl as f64);
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_service.rs:383: .set(position.position_value as f64);) (count: 15)
+[OK] panic_unwrap - ✓ No panic/unwrap/expect in production (count: 0)
+[FAIL] std_hashmap - ❌ Found 1 std::HashMap usages (prefer FxHashMap)
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_impl.rs:198: metadata: std::collections::HashMap::new(), (count: 1)
+[OK] float_money - ✓ No floating point money in internal calculations (count: 0)
+[OK] todos - ✓ No outstanding TODO/FIXME markers (count: 0)
+[FAIL] ignored_errors - ❌ Found 2 ignored error patterns (Err(_)) (count: 2)
+[OK] clones - ✓ Clone usage reasonable (9 calls) (count: 9)
+[OK] string_allocs - ✓ String allocations reasonable (18 sites) (count: 18)
+[OK] underscore_abuse - ✓ Underscore usage acceptable (count: 0)
+[WARN] magic_numbers - ⚠️  22 potential magic numbers — prefer named constants (max 10)
+First 5 violations:
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_service.rs:204: 30000,  // timeout in milliseconds
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_service.rs:207: // Create rate limiter (1000 requests per second)
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_service.rs:208: let rate_limiter = Arc::new(RateLimiter::new(1000));
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_service.rs:217: let (event_tx, mut event_rx) = mpsc::channel(10000);
+  • /home/praveen/ShrivenQuant/services/risk-manager/src/grpc_service.rs:360: if metrics.current_drawdown > 2000 {  // More than 20% drawdown (count: 22)
+[OK] warning_suppressions - ✓ Warning suppressions acceptable (0 found) (count: 0)
+[OK] doc_dupes - ✓ Doc duplication acceptable (max repeat 1×) (count: 1)
+[OK] large_functions - ✓ Function lengths look reasonable (count: 0)
+[OK] inline_attrs - ✓ Inline attribute usage reasonable (0 uses) (count: 0)
+
+Violations: Critical=2 High=1 Medium=0 Low=1
+Score: 39/100  Status: CRITICAL

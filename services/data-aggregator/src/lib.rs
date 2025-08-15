@@ -371,6 +371,16 @@ impl DataAggregatorService {
                         );
                         count += 1;
                     }
+                    DataEvent::OrderBook(orderbook_event) => {
+                        debug!(
+                            "Replayed orderbook: {:?} with {} bids, {} asks (seq: {})",
+                            orderbook_event.symbol, 
+                            orderbook_event.bid_levels.len(),
+                            orderbook_event.ask_levels.len(),
+                            orderbook_event.sequence
+                        );
+                        count += 1;
+                    }
                 }
 
                 // Prevent memory buildup during large replays

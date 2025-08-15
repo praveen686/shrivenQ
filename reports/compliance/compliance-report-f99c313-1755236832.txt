@@ -1,0 +1,41 @@
+ShrivenQuant Compliance Report
+===============================
+Generated: 1755236832
+Commit: f99c313
+
+[FAIL] build - ❌ Build timeout after 60s (count: 1)
+[FAIL] numeric_casts - ❌ 18 unannotated numeric casts (max 10)
+First 5 violations:
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:132: let segment_size = Some((WAL_SEGMENT_SIZE_MB * 1024 * 1024) as u64);
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:210: let bid_price_fixed = (bid_price * FIXED_POINT_MULTIPLIER as f64) as i64;
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:211: let ask_price_fixed = (ask_price * FIXED_POINT_MULTIPLIER as f64) as i64;
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:212: let bid_qty_fixed = (bid_qty * FIXED_POINT_MULTIPLIER as f64) as i64;
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:213: let ask_qty_fixed = (ask_qty * FIXED_POINT_MULTIPLIER as f64) as i64;) (count: 18)
+[OK] panic_unwrap - ✓ No panic/unwrap/expect in production (count: 0)
+[OK] std_hashmap - ✓ No std::HashMap usage in prod paths (count: 0)
+[OK] float_money - ✓ No floating point money in internal calculations (count: 0)
+[OK] todos - ✓ No outstanding TODO/FIXME markers (count: 0)
+[OK] ignored_errors - ✓ No ignored error patterns in prod (count: 0)
+[WARN] clones - ⚠️  247 clone() calls in prod — review hot paths (count: 247)
+[WARN] string_allocs - ⚠️  561 string allocation sites — avoid in hot paths (count: 561)
+[OK] underscore_abuse - ✓ Underscore usage acceptable (count: 0)
+[WARN] magic_numbers - ⚠️  375 potential magic numbers — prefer named constants (max 10)
+First 5 violations:
+  • /home/praveen/ShrivenQuant/services/market-connector/src/bin/live_market_data.rs:132: let segment_size = Some((WAL_SEGMENT_SIZE_MB * 1024 * 1024) as u64);
+  • /home/praveen/ShrivenQuant/services/market-connector/src/main.rs:59: assert_eq!(DEFAULT_PORT, 50052);
+  • /home/praveen/ShrivenQuant/services/market-connector/src/orderbook/book.rs:327: qty: Qty::from_i64(TEST_QUANTITY + 500000), // 150.0 = 100.0 + 50.0
+  • /home/praveen/ShrivenQuant/services/market-connector/src/orderbook/price_levels.rs:172: book.set(0, Px::from_i64(1000000), Qty::from_i64(100000));
+  • /home/praveen/ShrivenQuant/services/market-connector/src/orderbook/price_levels.rs:173: book.set(1, Px::from_i64(995000), Qty::from_i64(200000)); (count: 375)
+[WARN] warning_suppressions - ⚠️  54 #[allow(...)] usages — fix root causes when possible (max 15)
+First 5 suppressions:
+  • /home/praveen/ShrivenQuant/services/market-connector/src/instruments/types.rs:187: #[allow(clippy::struct_field_names)] // External API format
+  • /home/praveen/ShrivenQuant/services/market-connector/src/exchanges/zerodha/mod.rs:453: #[allow(clippy::cast_precision_loss)] // Protocol conversion from paise to rupees
+  • /home/praveen/ShrivenQuant/services/market-connector/src/exchanges/zerodha/mod.rs:460: #[allow(clippy::cast_precision_loss)] // Protocol OHLC conversion
+  • /home/praveen/ShrivenQuant/services/market-connector/src/exchanges/zerodha/mod.rs:463: #[allow(clippy::cast_precision_loss)] // Protocol OHLC conversion
+  • /home/praveen/ShrivenQuant/services/market-connector/src/exchanges/zerodha/mod.rs:466: #[allow(clippy::cast_precision_loss)] // Protocol OHLC conversion) (count: 54)
+[OK] doc_dupes - ✓ Doc duplication acceptable (max repeat 3×) (count: 3)
+[WARN] large_functions - ⚠️  Found 2 functions >50 lines (count: 2)
+[WARN] inline_attrs - ⚠️  61 #[inline] attributes (max 50) (count: 61)
+
+Violations: Critical=2 High=0 Medium=2 Low=4
+Score: 40/100  Status: CRITICAL

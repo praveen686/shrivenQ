@@ -18,6 +18,8 @@ pub enum DataEvent {
     VolumeProfile(VolumeProfileEvent),
     /// Market microstructure event
     Microstructure(MicrostructureEvent),
+    /// OrderBook snapshot or update
+    OrderBook(OrderBookEvent),
     /// System event
     System(SystemEvent),
 }
@@ -29,6 +31,7 @@ impl WalEntry for DataEvent {
             DataEvent::Trade(e) => e.ts,
             DataEvent::VolumeProfile(e) => e.ts,
             DataEvent::Microstructure(e) => e.ts,
+            DataEvent::OrderBook(e) => e.ts,
             DataEvent::System(e) => e.ts,
         }
     }
@@ -119,6 +122,32 @@ impl WalEntry for SystemEvent {
     fn timestamp(&self) -> Ts {
         self.ts
     }
+}
+
+/// OrderBook event for snapshots and updates
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrderBookEvent {
+    pub ts: Ts,
+    pub symbol: Symbol,
+    pub event_type: OrderBookEventType,
+    pub sequence: u64,
+    pub bid_levels: Vec<(Px, Qty, u32)>, // (price, quantity, order_count)
+    pub ask_levels: Vec<(Px, Qty, u32)>,
+    pub checksum: u32,
+}
+
+impl WalEntry for OrderBookEvent {
+    fn timestamp(&self) -> Ts {
+        self.ts
+    }
+}
+
+/// OrderBook event types
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum OrderBookEventType {
+    Snapshot,
+    Update,
+    Clear,
 }
 
 /// System event types
