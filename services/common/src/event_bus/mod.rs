@@ -1,4 +1,4 @@
-//! Enhanced Event Bus for ShrivenQuant Microservices
+//! Enhanced Event Bus for `ShrivenQuant` Microservices
 //!
 //! High-performance, lock-free event bus for inter-service communication
 //! with support for:
@@ -134,7 +134,7 @@ pub enum EventBusError {
 /// Result type for event bus operations
 pub type BusResult<T> = std::result::Result<T, EventBusError>;
 
-/// Common ShrivenQuant message types
+/// Common `ShrivenQuant` message types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ShrivenQuantMessage {
     /// Market data update
@@ -209,19 +209,19 @@ pub enum ShrivenQuantMessage {
 impl BusMessage for ShrivenQuantMessage {
     fn topic(&self) -> &str {
         match self {
-            ShrivenQuantMessage::MarketData { .. } => "market_data",
-            ShrivenQuantMessage::OrderEvent { .. } => "orders",
-            ShrivenQuantMessage::FillEvent { .. } => "fills",
-            ShrivenQuantMessage::PositionUpdate { .. } => "positions",
-            ShrivenQuantMessage::RiskAlert { .. } => "risk_alerts",
-            ShrivenQuantMessage::PerformanceMetrics { .. } => "performance",
-            ShrivenQuantMessage::HealthCheck { .. } => "health",
+            Self::MarketData { .. } => "market_data",
+            Self::OrderEvent { .. } => "orders",
+            Self::FillEvent { .. } => "fills",
+            Self::PositionUpdate { .. } => "positions",
+            Self::RiskAlert { .. } => "risk_alerts",
+            Self::PerformanceMetrics { .. } => "performance",
+            Self::HealthCheck { .. } => "health",
         }
     }
 
     fn priority(&self) -> u8 {
         match self {
-            ShrivenQuantMessage::RiskAlert { level, .. } => {
+            Self::RiskAlert { level, .. } => {
                 match level.as_str() {
                     "EMERGENCY" => 0, // Highest priority
                     "CRITICAL" => 32,
@@ -229,12 +229,12 @@ impl BusMessage for ShrivenQuantMessage {
                     _ => 96,
                 }
             }
-            ShrivenQuantMessage::FillEvent { .. } => 16, // Very high
-            ShrivenQuantMessage::OrderEvent { .. } => 32, // High
-            ShrivenQuantMessage::MarketData { .. } => 48, // Medium-high
-            ShrivenQuantMessage::PositionUpdate { .. } => 64, // Medium
-            ShrivenQuantMessage::PerformanceMetrics { .. } => 128, // Normal
-            ShrivenQuantMessage::HealthCheck { .. } => 160, // Low
+            Self::FillEvent { .. } => 16, // Very high
+            Self::OrderEvent { .. } => 32, // High
+            Self::MarketData { .. } => 48, // Medium-high
+            Self::PositionUpdate { .. } => 64, // Medium
+            Self::PerformanceMetrics { .. } => 128, // Normal
+            Self::HealthCheck { .. } => 160, // Low
         }
     }
 }
@@ -244,7 +244,7 @@ pub struct EventBusFactory;
 
 impl EventBusFactory {
     /// Create a new event bus with default configuration
-    pub fn create_default() -> EventBus<ShrivenQuantMessage> {
+    #[must_use] pub fn create_default() -> EventBus<ShrivenQuantMessage> {
         let config = EventBusConfig {
             capacity: 10000,
             enable_metrics: true,
@@ -257,7 +257,7 @@ impl EventBusFactory {
     }
 
     /// Create a high-performance event bus for trading
-    pub fn create_high_performance() -> EventBus<ShrivenQuantMessage> {
+    #[must_use] pub fn create_high_performance() -> EventBus<ShrivenQuantMessage> {
         let config = EventBusConfig {
             capacity: 100000, // Large capacity for high throughput
             enable_metrics: true,
@@ -270,7 +270,7 @@ impl EventBusFactory {
     }
 
     /// Create a reliable event bus with full features
-    pub fn create_reliable() -> EventBus<ShrivenQuantMessage> {
+    #[must_use] pub fn create_reliable() -> EventBus<ShrivenQuantMessage> {
         let config = EventBusConfig {
             capacity: 50000,
             enable_metrics: true,
@@ -367,7 +367,7 @@ pub struct MetricsMiddleware {
 }
 
 impl MetricsMiddleware {
-    pub fn new(metrics: std::sync::Arc<BusMetrics>) -> Self {
+    pub const fn new(metrics: std::sync::Arc<BusMetrics>) -> Self {
         Self { metrics }
     }
 }

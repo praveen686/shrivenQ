@@ -2,12 +2,16 @@
 
 pub mod clients;
 pub mod config;
-pub mod constants;
+// Use constants from types module instead of separate constants.rs
 pub mod errors;
 pub mod event_bus;
+pub mod proto;
+pub mod types;
 
 pub use clients::*;
 pub use config::*;
-pub use constants::*;
 pub use errors::*;
 pub use event_bus::*;
+// Re-export proto without auth to avoid conflict
+pub use proto::{execution, marketdata, risk};
+pub use types::*;

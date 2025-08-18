@@ -1,7 +1,7 @@
 //! Example usage of DataAggregatorClient with WAL persistence
 
 use anyhow::Result;
-use common::{Px, Qty, Symbol, Ts};
+use services_common::{Px, Qty, Symbol, Ts};
 use data_aggregator::Timeframe;
 use services_common::clients::DataAggregatorClient;
 use std::path::Path;

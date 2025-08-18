@@ -7,7 +7,7 @@
 //! - Cache-aligned structures
 
 use crate::orderbook::price_levels::{DEPTH, SideBook};
-use common::{L2Update, LOBUpdate, Px, Qty, Side, Symbol, Ts};
+use services_common::{L2Update, LOBUpdate, Px, Qty, Side, Symbol, Ts};
 
 /// Full order book for a single symbol
 ///

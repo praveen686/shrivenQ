@@ -16,7 +16,7 @@ pub mod grpc_impl;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::{Px, Qty, Side, Symbol, constants};
+use services_common::{Px, Qty, Side, Symbol, constants};
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -46,9 +46,9 @@ pub struct Position {
     pub avg_price: Px,
     /// Current market price
     pub mark_price: Px,
-    /// Unrealized PnL
+    /// Unrealized `PnL`
     pub unrealized_pnl: i64,
-    /// Realized PnL
+    /// Realized `PnL`
     pub realized_pnl: i64,
     /// Position value
     pub position_value: u64,
@@ -61,7 +61,7 @@ pub struct RiskMetrics {
     pub total_exposure: u64,
     /// Current drawdown from peak (fixed-point: 1000 = 10%)
     pub current_drawdown: i32,
-    /// Daily PnL
+    /// Daily `PnL`
     pub daily_pnl: i64,
     /// Number of open positions
     pub open_positions: u32,
@@ -165,7 +165,7 @@ struct SymbolRisk {
 }
 
 impl SymbolRisk {
-    fn new(symbol: Symbol) -> Self {
+    const fn new(symbol: Symbol) -> Self {
         Self {
             position: RwLock::new(Position {
                 symbol,
@@ -203,7 +203,7 @@ pub struct RiskManagerService {
 
 impl RiskManagerService {
     /// Create new risk manager
-    pub fn new(limits: RiskLimits) -> Self {
+    #[must_use] pub fn new(limits: RiskLimits) -> Self {
         Self {
             limits,
             symbol_risks: Arc::new(DashMap::new()),

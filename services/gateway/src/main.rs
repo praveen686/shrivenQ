@@ -1,4 +1,4 @@
-//! ShrivenQuant API Gateway - Main Entry Point
+//! `ShrivenQuant` API Gateway - Main Entry Point
 
 use anyhow::Result;
 use clap::{Arg, Command};

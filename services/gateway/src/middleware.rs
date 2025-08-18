@@ -288,27 +288,24 @@ fn is_public_endpoint(path: &str) -> bool {
 /// Extract client IP from request
 fn get_client_ip(request: &Request) -> String {
     // Try X-Forwarded-For first (common in load balancers/proxies)
-    if let Some(forwarded_for) = request.headers().get("X-Forwarded-For") {
-        if let Ok(forwarded_str) = forwarded_for.to_str() {
-            if let Some(first_ip) = forwarded_str.split(',').next() {
+    if let Some(forwarded_for) = request.headers().get("X-Forwarded-For")
+        && let Ok(forwarded_str) = forwarded_for.to_str()
+            && let Some(first_ip) = forwarded_str.split(',').next() {
                 return first_ip.trim().to_string();
             }
-        }
-    }
 
     // Try X-Real-IP
-    if let Some(real_ip) = request.headers().get("X-Real-IP") {
-        if let Ok(real_ip_str) = real_ip.to_str() {
+    if let Some(real_ip) = request.headers().get("X-Real-IP")
+        && let Ok(real_ip_str) = real_ip.to_str() {
             return real_ip_str.to_string();
         }
-    }
 
     // Fallback to connection info (though this might not be available in Axum)
     "unknown".to_string()
 }
 
 /// Permission checking helper
-pub fn check_permission(user_context: &UserContext, required_permission: &str) -> bool {
+#[must_use] pub fn check_permission(user_context: &UserContext, required_permission: &str) -> bool {
     user_context
         .permissions
         .contains(&"PERMISSION_ADMIN".to_string())
@@ -334,7 +331,7 @@ pub fn get_user_context_from_headers(headers: &HeaderMap) -> Option<UserContext>
 
     // For now, create a dummy validation - in production, use proper JWT validation
     let validation = Validation::default();
-    let decoding_key = DecodingKey::from_secret("dummy_secret".as_bytes());
+    let decoding_key = DecodingKey::from_secret(b"dummy_secret");
 
     match decode::<Claims>(token, &decoding_key, &validation) {
         Ok(token_data) => {

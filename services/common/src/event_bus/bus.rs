@@ -57,7 +57,7 @@ pub struct EventBus<T: BusMessage> {
 
 impl<T: BusMessage> EventBus<T> {
     /// Create a new event bus with configuration
-    pub fn new(config: EventBusConfig) -> Self {
+    #[must_use] pub fn new(config: EventBusConfig) -> Self {
         let (dead_letter_tx, dead_letter_rx) = if config.enable_dead_letter_queue {
             let (tx, rx) = mpsc::unbounded_channel();
             (Some(tx), Some(rx))
@@ -95,7 +95,7 @@ impl<T: BusMessage> EventBus<T> {
     }
 
     /// Get bus capacity
-    pub fn capacity(&self) -> usize {
+    #[must_use] pub const fn capacity(&self) -> usize {
         self.config.capacity
     }
 
@@ -138,7 +138,7 @@ impl<T: BusMessage> EventBus<T> {
                 // SAFETY: u128 to u64 - milliseconds since epoch fits in u64
                 .as_millis() as u64;
             // SAFETY: u64 arithmetic result to u64
-            let message_age = (now - metadata.timestamp / 1_000_000) as u64;
+            let message_age = now - metadata.timestamp / 1_000_000;
 
             if message_age > ttl_ms {
                 warn!(
@@ -159,26 +159,23 @@ impl<T: BusMessage> EventBus<T> {
         let broadcaster = self.get_or_create_broadcaster(&topic);
 
         // Send to subscribers
-        match broadcaster.send(envelope.clone()) {
-            Ok(subscriber_count) => {
-                debug!(
-                    message_id = %envelope.metadata.message_id,
-                    topic = %topic,
-                    subscribers = subscriber_count,
-                    "Message published"
-                );
-                self.metrics.record_publish_success(&topic);
-                Ok(())
-            }
-            Err(broadcast::error::SendError(_)) => {
-                warn!(
-                    message_id = %envelope.metadata.message_id,
-                    topic = %topic,
-                    "No subscribers for topic"
-                );
-                self.metrics.record_no_subscribers(&topic);
-                Err(EventBusError::NoSubscribers { topic })
-            }
+        if let Ok(subscriber_count) = broadcaster.send(envelope.clone()) {
+            debug!(
+                message_id = %envelope.metadata.message_id,
+                topic = %topic,
+                subscribers = subscriber_count,
+                "Message published"
+            );
+            self.metrics.record_publish_success(&topic);
+            Ok(())
+        } else {
+            warn!(
+                message_id = %envelope.metadata.message_id,
+                topic = %topic,
+                "No subscribers for topic"
+            );
+            self.metrics.record_no_subscribers(&topic);
+            Err(EventBusError::NoSubscribers { topic })
         }
     }
 
@@ -197,7 +194,7 @@ impl<T: BusMessage> EventBus<T> {
         H: MessageHandler<T> + 'static,
     {
         let mut handlers = self.handlers.write();
-        let topic_handlers = handlers.entry(topic.to_string()).or_insert_with(Vec::new);
+        let topic_handlers = handlers.entry(topic.to_string()).or_default();
         topic_handlers.push(Arc::new(handler));
 
         debug!(
@@ -290,21 +287,20 @@ impl<T: BusMessage> EventBus<T> {
     }
 
     /// Get metrics for the event bus
-    pub fn metrics(&self) -> Arc<super::metrics::BusMetrics> {
+    #[must_use] pub fn metrics(&self) -> Arc<super::metrics::BusMetrics> {
         Arc::clone(&self.metrics)
     }
 
     /// Get current subscriber count for a topic
-    pub fn subscriber_count(&self, topic: &str) -> usize {
+    #[must_use] pub fn subscriber_count(&self, topic: &str) -> usize {
         let broadcasters = self.broadcasters.read();
         broadcasters
             .get(topic)
-            .map(|b| b.receiver_count())
-            .unwrap_or(0)
+            .map_or(0, tokio::sync::broadcast::Sender::receiver_count)
     }
 
     /// List all active topics
-    pub fn topics(&self) -> Vec<String> {
+    #[must_use] pub fn topics(&self) -> Vec<String> {
         let broadcasters = self.broadcasters.read();
         broadcasters.keys().cloned().collect()
     }
@@ -377,7 +373,7 @@ pub struct EventBusSubscriber<T: BusMessage> {
 
 impl<T: BusMessage> EventBusSubscriber<T> {
     /// Create a new subscriber
-    pub fn new(bus: Arc<EventBus<T>>) -> Self {
+    #[must_use] pub const fn new(bus: Arc<EventBus<T>>) -> Self {
         Self { bus }
     }
 }

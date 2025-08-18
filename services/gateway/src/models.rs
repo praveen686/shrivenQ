@@ -226,7 +226,7 @@ impl<T> ApiResponse<T> {
         }
     }
 
-    pub fn error(error: ErrorResponse) -> Self {
+    #[must_use] pub fn error(error: ErrorResponse) -> Self {
         Self {
             success: false,
             data: None,

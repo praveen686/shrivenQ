@@ -3,8 +3,8 @@
 //! Handles crash recovery, state reconciliation, and order replay.
 
 use anyhow::Result;
-use chrono::{DateTime, Utc};
-use common::{Px, Qty, Symbol};
+use chrono::Utc;
+use services_common::{Px, Qty, Symbol};
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
 use tracing::{debug, error, info, warn};
@@ -81,7 +81,7 @@ pub enum RecoveryAction {
 
 impl RecoveryManager {
     /// Create new recovery manager
-    pub fn new(db_pool: PgPool) -> Self {
+    #[must_use] pub fn new(db_pool: PgPool) -> Self {
         let persistence = PersistenceManager::new(db_pool.clone());
         Self {
             db_pool,
@@ -133,7 +133,7 @@ impl RecoveryManager {
     /// Load orders for recovery
     async fn load_orders_for_recovery(&self) -> Result<Vec<Order>> {
         let rows = sqlx::query(
-            r#"
+            r"
             SELECT 
                 id, client_order_id, parent_order_id, symbol, side,
                 order_type, time_in_force, quantity, executed_quantity,
@@ -143,7 +143,7 @@ impl RecoveryManager {
             FROM orders
             WHERE status NOT IN ('Filled', 'Cancelled', 'Rejected', 'Expired')
             ORDER BY created_at DESC
-            "#
+            "
         )
         .fetch_all(&self.db_pool)
         .await?;
@@ -187,13 +187,13 @@ impl RecoveryManager {
     /// Load fills for recovery
     async fn load_fills_for_recovery(&self) -> Result<HashMap<Uuid, Vec<Fill>>> {
         let rows = sqlx::query(
-            r#"
+            r"
             SELECT 
                 id, order_id, execution_id, quantity, price,
                 commission, commission_currency, timestamp, liquidity
             FROM fills
             ORDER BY timestamp DESC
-            "#
+            "
         )
         .fetch_all(&self.db_pool)
         .await?;
@@ -215,7 +215,7 @@ impl RecoveryManager {
             
             let order_id: Uuid = row.get("order_id");
             fills_by_order.entry(order_id)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(fill);
         }
         
@@ -297,7 +297,7 @@ impl RecoveryManager {
         }
         
         // Check for orphaned fills
-        for (order_id, _) in fills {
+        for order_id in fills.keys() {
             if !orders.iter().any(|o| o.id == *order_id) {
                 discrepancies.push(OrderDiscrepancy {
                     order_id: *order_id,
@@ -352,11 +352,11 @@ impl RecoveryManager {
     /// Recalculate order quantities
     async fn recalculate_order_quantities(&self, order_id: Uuid) -> Result<()> {
         let fills_row = sqlx::query(
-            r#"
+            r"
             SELECT SUM(quantity) as total_filled
             FROM fills
             WHERE order_id = $1
-            "#
+            "
         )
         .bind(order_id)
         .fetch_one(&self.db_pool)
@@ -365,9 +365,9 @@ impl RecoveryManager {
         let total_filled: i64 = fills_row.get::<Option<i64>, _>("total_filled").unwrap_or(0);
         
         let order_row = sqlx::query(
-            r#"
+            r"
             SELECT quantity FROM orders WHERE id = $1
-            "#
+            "
         )
         .bind(order_id)
         .fetch_one(&self.db_pool)
@@ -377,13 +377,13 @@ impl RecoveryManager {
         let remaining = quantity - total_filled;
         
         sqlx::query(
-            r#"
+            r"
             UPDATE orders SET
                 executed_quantity = $2,
                 remaining_quantity = $3,
                 updated_at = $4
             WHERE id = $1
-            "#
+            "
         )
         .bind(order_id)
         .bind(total_filled)
@@ -399,15 +399,15 @@ impl RecoveryManager {
     /// Update order status
     async fn update_order_status(&self, order_id: Uuid, status: OrderStatus) -> Result<()> {
         sqlx::query(
-            r#"
+            r"
             UPDATE orders SET
                 status = $2,
                 updated_at = $3
             WHERE id = $1
-            "#
+            "
         )
         .bind(order_id)
-        .bind(format!("{:?}", status))
+        .bind(format!("{status:?}"))
         .bind(Utc::now())
         .execute(&self.db_pool)
         .await?;
@@ -422,10 +422,10 @@ impl RecoveryManager {
         
         // Log cancellation in audit trail
         sqlx::query(
-            r#"
+            r"
             INSERT INTO audit_log (id, event_type, event_data, timestamp)
             VALUES ($1, 'OrderCancelled', $2, $3)
-            "#
+            "
         )
         .bind(Uuid::new_v4())
         .bind(serde_json::json!({
@@ -448,9 +448,9 @@ impl RecoveryManager {
             // Verify parent-child relationships
             if let Some(parent_id) = order.parent_order_id {
                 let parent_exists_row = sqlx::query(
-                    r#"
+                    r"
                     SELECT COUNT(*) as count FROM orders WHERE id = $1
-                    "#
+                    "
                 )
                 .bind(parent_id)
                 .fetch_one(&self.db_pool)
@@ -482,12 +482,12 @@ impl RecoveryManager {
         let checkpoint_id = Uuid::new_v4().to_string();
         
         sqlx::query(
-            r#"
+            r"
             INSERT INTO recovery_checkpoints (id, created_at, order_count, fill_count)
             SELECT $1, $2,
                 (SELECT COUNT(*) FROM orders WHERE status NOT IN ('Filled', 'Cancelled', 'Rejected', 'Expired')),
                 (SELECT COUNT(*) FROM fills)
-            "#
+            "
         )
         .bind(checkpoint_id.clone())
         .bind(Utc::now())

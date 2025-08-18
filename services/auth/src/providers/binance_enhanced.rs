@@ -32,7 +32,7 @@ pub enum BinanceEndpoint {
 
 impl BinanceEndpoint {
     /// Get the base URL for this endpoint
-    pub fn base_url(&self, testnet: bool) -> &str {
+    #[must_use] pub const fn base_url(&self, testnet: bool) -> &str {
         if testnet {
             match self {
                 Self::Spot => "https://testnet.binance.vision",
@@ -48,7 +48,7 @@ impl BinanceEndpoint {
     }
 
     /// Get WebSocket URL for this endpoint
-    pub fn ws_url(&self, testnet: bool) -> &str {
+    #[must_use] pub const fn ws_url(&self, testnet: bool) -> &str {
         if testnet {
             match self {
                 Self::Spot => "wss://testnet.binance.vision/ws",
@@ -83,7 +83,7 @@ pub struct BinanceConfig {
 
 impl BinanceConfig {
     /// Create new Binance configuration
-    pub fn new(api_key: String, api_secret: String, endpoint: BinanceEndpoint) -> Self {
+    #[must_use] pub const fn new(api_key: String, api_secret: String, endpoint: BinanceEndpoint) -> Self {
         Self {
             api_key,
             api_secret,
@@ -126,13 +126,13 @@ impl BinanceConfig {
     }
 
     /// Enable testnet mode
-    pub fn with_testnet(mut self, testnet: bool) -> Self {
+    #[must_use] pub const fn with_testnet(mut self, testnet: bool) -> Self {
         self.testnet = testnet;
         self
     }
 
     /// Set receive window
-    pub fn with_recv_window(mut self, recv_window: u64) -> Self {
+    #[must_use] pub const fn with_recv_window(mut self, recv_window: u64) -> Self {
         self.recv_window = recv_window;
         self
     }
@@ -276,7 +276,7 @@ pub struct BinanceAuth {
 
 impl BinanceAuth {
     /// Create new Binance authentication handler
-    pub fn new(config: BinanceConfig) -> Self {
+    #[must_use] pub fn new(config: BinanceConfig) -> Self {
         let http_client = Client::builder()
             .timeout(config.timeout)
             .build()
@@ -325,7 +325,7 @@ impl BinanceAuth {
         // Build query string
         let query_string: String = params
             .iter()
-            .map(|(k, v)| format!("{}={}", k, v))
+            .map(|(k, v)| format!("{k}={v}"))
             .collect::<Vec<_>>()
             .join("&");
 
@@ -613,7 +613,7 @@ impl BinanceAuth {
             if self.listen_key.read().await.is_some() {
                 // Try to keepalive existing key
                 match self.keepalive_listen_key().await {
-                    Ok(_) => info!("Listen key renewed"),
+                    Ok(()) => info!("Listen key renewed"),
                     Err(e) => {
                         // Create new key if keepalive fails
                         debug!("Listen key keepalive failed: {}, creating new key", e);
@@ -634,7 +634,7 @@ impl BinanceAuth {
     }
 
     /// Get WebSocket URL for market data
-    pub fn get_market_ws_url(&self, streams: &[&str]) -> String {
+    #[must_use] pub fn get_market_ws_url(&self, streams: &[&str]) -> String {
         format!(
             "{}/{}",
             self.config.endpoint.ws_url(self.config.testnet),
@@ -743,12 +743,12 @@ impl BinanceAuth {
     }
 
     /// Get API key
-    pub fn get_api_key(&self) -> &str {
+    #[must_use] pub fn get_api_key(&self) -> &str {
         &self.config.api_key
     }
 
     /// Get API secret
-    pub fn get_api_secret(&self) -> &str {
+    #[must_use] pub fn get_api_secret(&self) -> &str {
         &self.config.api_secret
     }
 

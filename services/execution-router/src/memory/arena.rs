@@ -6,7 +6,7 @@
 //! - Cache-line aligned
 //! - Fast reset for reuse
 
-use common::constants::memory::CACHE_LINE_SIZE;
+use services_common::constants::memory::CACHE_LINE_SIZE;
 use std::alloc::{Layout, alloc, dealloc};
 use std::mem::{align_of, size_of};
 use std::ptr::NonNull;
@@ -36,7 +36,7 @@ impl Arena {
     /// Create arena with specified chunk size
     ///
     /// Pre-allocates first chunk
-    /// All chunks are cache-line aligned (CACHE_LINE_SIZE bytes)
+    /// All chunks are cache-line aligned (`CACHE_LINE_SIZE` bytes)
     pub fn new(chunk_size: usize) -> Result<Self, String> {
         let mut chunks = Vec::with_capacity(16);
 
@@ -47,12 +47,12 @@ impl Arena {
             let size = (chunk_size + ALIGN - 1) & !(ALIGN - 1); // Round up to alignment
 
             let layout = Layout::from_size_align(size, ALIGN)
-                .map_err(|e| format!("Invalid layout: {}", e))?;
+                .map_err(|e| format!("Invalid layout: {e}"))?;
 
             let data = unsafe {
                 let ptr = alloc(layout);
                 if ptr.is_null() {
-                    return Err(format!("Failed to allocate {} bytes for arena chunk", size));
+                    return Err(format!("Failed to allocate {size} bytes for arena chunk"));
                 }
                 NonNull::new_unchecked(ptr)
             };
@@ -110,7 +110,7 @@ impl Arena {
                     )
                     .is_ok()
                 {
-                    let ptr = unsafe { chunk.data.as_ptr().add(aligned_offset) as *mut T };
+                    let ptr = unsafe { chunk.data.as_ptr().add(aligned_offset).cast::<T>() };
                     return Some(unsafe { &mut *ptr });
                 }
             }

@@ -2,7 +2,7 @@
 //!
 //! All events use fixed-point arithmetic and pre-allocated structures
 
-use common::{Px, Qty, Symbol, Ts};
+use services_common::{Px, Qty, Symbol, Ts};
 use serde::{Deserialize, Serialize};
 
 use super::wal::WalEntry;
@@ -18,7 +18,7 @@ pub enum DataEvent {
     VolumeProfile(VolumeProfileEvent),
     /// Market microstructure event
     Microstructure(MicrostructureEvent),
-    /// OrderBook snapshot or update
+    /// `OrderBook` snapshot or update
     OrderBook(OrderBookEvent),
     /// System event
     System(SystemEvent),
@@ -27,12 +27,12 @@ pub enum DataEvent {
 impl WalEntry for DataEvent {
     fn timestamp(&self) -> Ts {
         match self {
-            DataEvent::Candle(e) => e.ts,
-            DataEvent::Trade(e) => e.ts,
-            DataEvent::VolumeProfile(e) => e.ts,
-            DataEvent::Microstructure(e) => e.ts,
-            DataEvent::OrderBook(e) => e.ts,
-            DataEvent::System(e) => e.ts,
+            Self::Candle(e) => e.ts,
+            Self::Trade(e) => e.ts,
+            Self::VolumeProfile(e) => e.ts,
+            Self::Microstructure(e) => e.ts,
+            Self::OrderBook(e) => e.ts,
+            Self::System(e) => e.ts,
         }
     }
 }
@@ -124,7 +124,7 @@ impl WalEntry for SystemEvent {
     }
 }
 
-/// OrderBook event for snapshots and updates
+/// `OrderBook` event for snapshots and updates
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderBookEvent {
     pub ts: Ts,
@@ -142,7 +142,7 @@ impl WalEntry for OrderBookEvent {
     }
 }
 
-/// OrderBook event types
+/// `OrderBook` event types
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum OrderBookEventType {
     Snapshot,
@@ -163,11 +163,11 @@ pub enum SystemEventType {
 impl std::fmt::Display for SystemEventType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SystemEventType::Start => write!(f, "START"),
-            SystemEventType::Stop => write!(f, "STOP"),
-            SystemEventType::Checkpoint => write!(f, "CHECKPOINT"),
-            SystemEventType::Error => write!(f, "ERROR"),
-            SystemEventType::Info => write!(f, "INFO"),
+            Self::Start => write!(f, "START"),
+            Self::Stop => write!(f, "STOP"),
+            Self::Checkpoint => write!(f, "CHECKPOINT"),
+            Self::Error => write!(f, "ERROR"),
+            Self::Info => write!(f, "INFO"),
         }
     }
 }

@@ -27,7 +27,7 @@ pub struct ServiceRegistry {
 
 impl ServiceRegistry {
     /// Create new service registry
-    pub fn new(health_check_interval: u64) -> Self {
+    #[must_use] pub fn new(health_check_interval: u64) -> Self {
         Self {
             instances: Arc::new(RwLock::new(FxHashMap::default())),
             health_check_interval,
@@ -181,7 +181,7 @@ pub struct DiscoveryClient {
 
 impl DiscoveryClient {
     /// Create new discovery client
-    pub fn new(registry_url: &str, service_name: &str, instance_id: &str) -> Self {
+    #[must_use] pub fn new(registry_url: &str, service_name: &str, instance_id: &str) -> Self {
         Self {
             _registry_url: registry_url.to_string(),
             service_name: service_name.to_string(),

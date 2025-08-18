@@ -1,7 +1,7 @@
 //! Integration tests for reporting service with event bus
 
 use anyhow::Result;
-use common::{Px, Qty, Symbol, Ts};
+use services_common::{Px, Qty, Symbol, Ts};
 use reporting::*;
 use services_common::event_bus::*;
 use std::sync::Arc;

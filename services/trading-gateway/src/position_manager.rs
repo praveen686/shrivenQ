@@ -1,7 +1,7 @@
 //! Position Manager - Real-time position and P&L tracking
 
 use anyhow::Result;
-use common::{Px, Qty, Symbol};
+use services_common::{Px, Qty, Symbol};
 use dashmap::DashMap;
 use std::sync::Arc;
 use tracing::{debug, info};

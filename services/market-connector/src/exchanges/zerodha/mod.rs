@@ -8,8 +8,8 @@ pub use config::ZerodhaConfig;
 pub use market_data_pipeline::{MarketDataPipeline, PipelineConfig};
 
 use crate::connectors::adapter::{FeedAdapter, FeedConfig};
-use auth::ZerodhaAuth;
-use common::{L2Update, Px, Qty, Side, Symbol, Ts};
+use services_common::ZerodhaAuth;
+use services_common::{L2Update, Px, Qty, Side, Symbol, Ts};
 use futures_util::{SinkExt, StreamExt};
 use rustc_hash::FxHashMap;
 use serde::Deserialize;

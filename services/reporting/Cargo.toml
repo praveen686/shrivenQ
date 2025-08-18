@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 # Core dependencies
-common = { path = "../../crates/core/common" }
 services-common = { path = "../common" }
 anyhow = "1.0"
 thiserror = "1.0"

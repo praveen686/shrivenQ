@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package ml_inference;
+
+// ML Inference Service
+service MlInference {
+    // Get prediction for a symbol
+    rpc Predict(PredictRequest) returns (PredictResponse);
+    
+    // Update features with new market data
+    rpc UpdateFeatures(UpdateFeaturesRequest) returns (UpdateFeaturesResponse);
+    
+    // Get available models
+    rpc GetModels(GetModelsRequest) returns (GetModelsResponse);
+}
+
+// Prediction request
+message PredictRequest {
+    string symbol = 1;
+    repeated double custom_features = 2; // Optional custom features
+}
+
+// Prediction response
+message PredictResponse {
+    string symbol = 1;
+    repeated Prediction predictions = 2;
+    double confidence = 3;
+    string model_version = 4;
+    int64 timestamp = 5;
+}
+
+// Individual prediction
+message Prediction {
+    string name = 1;
+    double value = 2;
+}
+
+// Feature update request
+message UpdateFeaturesRequest {
+    string symbol = 1;
+    double price = 2;
+    double volume = 3;
+    double bid = 4;
+    double ask = 5;
+}
+
+// Feature update response
+message UpdateFeaturesResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// Get models request
+message GetModelsRequest {}
+
+// Get models response
+message GetModelsResponse {
+    repeated ModelInfo models = 1;
+}
+
+// Model information
+message ModelInfo {
+    string name = 1;
+    string version = 2;
+    string model_type = 3;
+    uint64 training_samples = 4;
+    int64 last_updated = 5;
+}

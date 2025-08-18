@@ -7,7 +7,7 @@
 
 use crate::{RebalanceChange, position::PositionTracker};
 use anyhow::Result;
-use common::{Qty, Side, Symbol};
+use services_common::{Qty, Side, Symbol};
 use rustc_hash::FxHashMap;
 
 /// Portfolio rebalancer

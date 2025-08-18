@@ -6,7 +6,7 @@
 //! - Fixed-point arithmetic only
 
 use anyhow::{Result, anyhow};
-use common::Ts;
+use services_common::Ts;
 use serde::{Serialize, de::DeserializeOwned};
 use std::fs;
 use std::marker::PhantomData;
@@ -76,8 +76,7 @@ impl Wal {
             || self
                 .current_segment
                 .as_ref()
-                .map(|s| s.is_full(data.len()))
-                .unwrap_or(false)
+                .is_some_and(|s| s.is_full(data.len()))
         {
             self.rotate_segment()?;
         }
@@ -175,7 +174,7 @@ impl Wal {
         }
         
         // Sort by timestamp
-        entries.sort_by_key(|entry| entry.timestamp());
+        entries.sort_by_key(WalEntry::timestamp);
         Ok(entries)
     }
     
@@ -204,7 +203,7 @@ impl Wal {
         }
         
         info!("Read {} entries from WAL", entries.len());
-        entries.sort_by_key(|entry| entry.timestamp());
+        entries.sort_by_key(WalEntry::timestamp);
         Ok(entries)
     }
 
@@ -298,7 +297,7 @@ impl Wal {
     }
     
     /// Check WAL health status
-    pub fn is_healthy(&self) -> bool {
+    #[must_use] pub fn is_healthy(&self) -> bool {
         // Check if directory exists and is writable
         if !self.dir.exists() {
             return false;

@@ -9,8 +9,8 @@ use axum::{
     response::Json,
     routing::{get, post},
 };
-// use common::{L2Update, Symbol}; // Not needed for this demo
-use common::constants::{
+// use services_common::{L2Update, Symbol}; // Not needed for this demo
+use services_common::constants::{
     demo::{
         DEFAULT_DEMO_RATE_LIMIT, DEMO_CHANNEL_CAPACITY, DEMO_DISPLAY_LIMIT, DEMO_EVENT_BUFFER_SIZE,
     },
@@ -214,7 +214,7 @@ async fn connect_exchange(
 
     // Call start() to connect all configured connectors
     match market.start().await {
-        Ok(_) => {
+        Ok(()) => {
             info!("Started market connector service for: {}", exchange);
             Ok(Json(serde_json::json!({
                 "status": "connected",
@@ -286,7 +286,7 @@ async fn get_market_data(State(state): State<AppState>) -> Json<Vec<String>> {
 mod uuid {
     pub struct Uuid;
     impl Uuid {
-        pub fn new_v4() -> Self {
+        pub const fn new_v4() -> Self {
             Self
         }
     }

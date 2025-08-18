@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package sentiment;
+
+// Sentiment Analysis Service
+service SentimentService {
+    // Get sentiment for a specific symbol
+    rpc GetSentiment(GetSentimentRequest) returns (GetSentimentResponse);
+    
+    // Get all current sentiment signals
+    rpc GetAllSignals(GetAllSignalsRequest) returns (GetAllSignalsResponse);
+}
+
+// Get sentiment request
+message GetSentimentRequest {
+    string symbol = 1;
+}
+
+// Get sentiment response
+message GetSentimentResponse {
+    bool found = 1;
+    Signal signal = 2;
+}
+
+// Get all signals request
+message GetAllSignalsRequest {}
+
+// Get all signals response
+message GetAllSignalsResponse {
+    repeated Signal signals = 1;
+}
+
+// Sentiment signal
+message Signal {
+    string symbol = 1;
+    double sentiment = 2;     // -1.0 to 1.0
+    string signal_type = 3;   // buy, sell, neutral
+    double confidence = 4;    // 0.0 to 1.0
+    int64 timestamp = 5;
+    string source = 6;
+}

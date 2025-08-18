@@ -1,15 +1,15 @@
 //! Order persistence layer
 //!
-//! High-performance persistence with PostgreSQL backend,
+//! High-performance persistence with `PostgreSQL` backend,
 //! optimized for write throughput and crash recovery.
 
 use anyhow::Result;
-use chrono::{DateTime, Utc};
-use common::{Px, Qty, Symbol};
-use sqlx::{PgPool, postgres::PgQueryResult, Row};
+use chrono::Utc;
+use services_common::{Px, Qty, Symbol};
+use sqlx::{PgPool, Row};
 use uuid::Uuid;
 use crate::order::{Order, OrderStatus, OrderSide, OrderType, TimeInForce, Fill, Amendment, LiquidityIndicator};
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
 /// Persistence manager for orders
 pub struct PersistenceManager {
@@ -19,14 +19,14 @@ pub struct PersistenceManager {
 
 impl PersistenceManager {
     /// Create new persistence manager
-    pub fn new(db_pool: PgPool) -> Self {
+    #[must_use] pub const fn new(db_pool: PgPool) -> Self {
         Self { db_pool }
     }
     
     /// Save order to database
     pub async fn save_order(&self, order: &Order) -> Result<()> {
         sqlx::query(
-            r#"
+            r"
             INSERT INTO orders (
                 id, client_order_id, parent_order_id, symbol, side, order_type,
                 time_in_force, quantity, executed_quantity, remaining_quantity,
@@ -42,7 +42,7 @@ impl PersistenceManager {
                 status = EXCLUDED.status,
                 updated_at = EXCLUDED.updated_at,
                 version = EXCLUDED.version
-            "#
+            "
         )
         .bind(order.id)
         .bind(order.client_order_id.as_deref())
@@ -75,12 +75,12 @@ impl PersistenceManager {
     /// Update order status
     pub async fn update_order_status(&self, order: &Order) -> Result<()> {
         sqlx::query(
-            r#"
+            r"
             UPDATE orders SET
                 status = $1,
                 updated_at = $2
             WHERE id = $3
-            "#
+            "
         )
         .bind(format!("{:?}", order.status))
         .bind(order.updated_at)
@@ -94,14 +94,14 @@ impl PersistenceManager {
     /// Update order quantities
     pub async fn update_order_quantities(&self, order: &Order) -> Result<()> {
         sqlx::query(
-            r#"
+            r"
             UPDATE orders SET
                 executed_quantity = $1,
                 remaining_quantity = $2,
                 status = $3,
                 updated_at = $4
             WHERE id = $5
-            "#
+            "
         )
         .bind(order.executed_quantity.as_i64())
         .bind(order.remaining_quantity.as_i64())
@@ -117,7 +117,7 @@ impl PersistenceManager {
     /// Update full order
     pub async fn update_order(&self, order: &Order) -> Result<()> {
         sqlx::query(
-            r#"
+            r"
             UPDATE orders SET
                 quantity = $1,
                 executed_quantity = $2,
@@ -127,7 +127,7 @@ impl PersistenceManager {
                 updated_at = $6,
                 version = $7
             WHERE id = $8
-            "#
+            "
         )
         .bind(order.quantity.as_i64())
         .bind(order.executed_quantity.as_i64())
@@ -146,14 +146,14 @@ impl PersistenceManager {
     /// Save fill
     pub async fn save_fill(&self, fill: &Fill) -> Result<()> {
         sqlx::query(
-            r#"
+            r"
             INSERT INTO fills (
                 id, order_id, execution_id, quantity, price,
                 commission, commission_currency, timestamp, liquidity
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9
             )
-            "#
+            "
         )
         .bind(fill.id)
         .bind(fill.order_id)
@@ -174,13 +174,13 @@ impl PersistenceManager {
     /// Save amendment
     pub async fn save_amendment(&self, amendment: &Amendment) -> Result<()> {
         sqlx::query(
-            r#"
+            r"
             INSERT INTO amendments (
                 id, order_id, new_quantity, new_price, reason, timestamp
             ) VALUES (
                 $1, $2, $3, $4, $5, $6
             )
-            "#
+            "
         )
         .bind(amendment.id)
         .bind(amendment.order_id)
@@ -198,7 +198,7 @@ impl PersistenceManager {
     /// Load active orders
     pub async fn load_active_orders(&self) -> Result<Vec<Order>> {
         let rows = sqlx::query(
-            r#"
+            r"
             SELECT 
                 o.id, o.client_order_id, o.parent_order_id, o.symbol, o.side,
                 o.order_type, o.time_in_force, o.quantity, o.executed_quantity,
@@ -239,7 +239,7 @@ impl PersistenceManager {
             LEFT JOIN amendments a ON o.id = a.order_id
             WHERE o.status NOT IN ('Filled', 'Cancelled', 'Rejected', 'Expired')
             GROUP BY o.id
-            "#
+            "
         )
         .fetch_all(&self.db_pool)
         .await?;
@@ -283,7 +283,7 @@ impl PersistenceManager {
     /// Load order by ID
     pub async fn load_order(&self, order_id: Uuid) -> Result<Option<Order>> {
         let row = sqlx::query(
-            r#"
+            r"
             SELECT 
                 id, client_order_id, parent_order_id, symbol, side,
                 order_type, time_in_force, quantity, executed_quantity,
@@ -292,7 +292,7 @@ impl PersistenceManager {
                 strategy_id, tags, version, sequence_number
             FROM orders
             WHERE id = $1
-            "#
+            "
         )
         .bind(order_id)
         .fetch_optional(&self.db_pool)
@@ -333,14 +333,14 @@ impl PersistenceManager {
     
     /// Delete old orders
     pub async fn delete_old_orders(&self, days: i32) -> Result<u64> {
-        let cutoff = Utc::now() - chrono::Duration::days(days as i64);
+        let cutoff = Utc::now() - chrono::Duration::days(i64::from(days));
         
         let result = sqlx::query(
-            r#"
+            r"
             DELETE FROM orders
             WHERE status IN ('Filled', 'Cancelled', 'Rejected', 'Expired')
             AND updated_at < $1
-            "#
+            "
         )
         .bind(cutoff)
         .execute(&self.db_pool)
@@ -356,7 +356,7 @@ pub async fn run_migrations(pool: &PgPool) -> Result<()> {
     
     // Create tables if they don't exist
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS orders (
             id UUID PRIMARY KEY,
             client_order_id TEXT,
@@ -386,13 +386,13 @@ pub async fn run_migrations(pool: &PgPool) -> Result<()> {
             INDEX idx_orders_parent (parent_order_id),
             INDEX idx_orders_created (created_at DESC)
         )
-        "#
+        "
     )
     .execute(pool)
     .await?;
     
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS fills (
             id UUID PRIMARY KEY,
             order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -407,13 +407,13 @@ pub async fn run_migrations(pool: &PgPool) -> Result<()> {
             INDEX idx_fills_order (order_id),
             INDEX idx_fills_timestamp (timestamp DESC)
         )
-        "#
+        "
     )
     .execute(pool)
     .await?;
     
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS amendments (
             id UUID PRIMARY KEY,
             order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -425,7 +425,7 @@ pub async fn run_migrations(pool: &PgPool) -> Result<()> {
             INDEX idx_amendments_order (order_id),
             INDEX idx_amendments_timestamp (timestamp DESC)
         )
-        "#
+        "
     )
     .execute(pool)
     .await?;
@@ -435,6 +435,7 @@ pub async fn run_migrations(pool: &PgPool) -> Result<()> {
 }
 
 // Helper functions for parsing enums from strings
+/// Parse order side from string representation
 pub fn parse_order_side(s: &str) -> Result<OrderSide> {
     match s {
         "Buy" => Ok(OrderSide::Buy),
@@ -443,6 +444,7 @@ pub fn parse_order_side(s: &str) -> Result<OrderSide> {
     }
 }
 
+/// Parse order type from string representation
 pub fn parse_order_type(s: &str) -> Result<OrderType> {
     match s {
         "Market" => Ok(OrderType::Market),
@@ -457,6 +459,7 @@ pub fn parse_order_type(s: &str) -> Result<OrderType> {
     }
 }
 
+/// Parse order status from string representation
 pub fn parse_order_status(s: &str) -> Result<OrderStatus> {
     match s {
         "New" => Ok(OrderStatus::New),
@@ -472,6 +475,7 @@ pub fn parse_order_status(s: &str) -> Result<OrderStatus> {
     }
 }
 
+/// Parse time in force from string representation
 pub fn parse_time_in_force(s: &str) -> Result<TimeInForce> {
     if s.starts_with("Gtt(") {
         // Parse GTT with timestamp

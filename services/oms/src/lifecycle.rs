@@ -4,7 +4,7 @@ use crate::order::{Order, OrderStatus, OrderType, TimeInForce};
 use anyhow::Result;
 use chrono::Utc;
 use std::collections::HashMap;
-use tracing::{debug, warn};
+use tracing::debug;
 
 /// Order lifecycle manager
 pub struct OrderLifecycleManager {
@@ -12,9 +12,15 @@ pub struct OrderLifecycleManager {
     valid_transitions: HashMap<OrderStatus, Vec<OrderStatus>>,
 }
 
+impl Default for OrderLifecycleManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OrderLifecycleManager {
     /// Create new lifecycle manager
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         let mut valid_transitions = HashMap::new();
         
         // Define valid state transitions
@@ -80,14 +86,10 @@ impl OrderLifecycleManager {
         }
         
         // Validate time in force
-        match order.time_in_force {
-            TimeInForce::Gtt(expiry) => {
-                if expiry <= Utc::now() {
-                    return Err(anyhow::anyhow!("GTT expiry must be in the future"));
-                }
+        if let TimeInForce::Gtt(expiry) = order.time_in_force
+            && expiry <= Utc::now() {
+                return Err(anyhow::anyhow!("GTT expiry must be in the future"));
             }
-            _ => {}
-        }
         
         // Check account and exchange
         if order.account.is_empty() {
@@ -107,12 +109,11 @@ impl OrderLifecycleManager {
         let current_status = order.status;
         
         // Check if transition is valid
-        if let Some(valid_next_states) = self.valid_transitions.get(&current_status) {
-            if valid_next_states.contains(&new_status) {
+        if let Some(valid_next_states) = self.valid_transitions.get(&current_status)
+            && valid_next_states.contains(&new_status) {
                 debug!("Valid transition: {:?} -> {:?}", current_status, new_status);
                 return Ok(());
             }
-        }
         
         Err(anyhow::anyhow!(
             "Invalid state transition: {:?} -> {:?}",
@@ -122,12 +123,12 @@ impl OrderLifecycleManager {
     }
     
     /// Check if order can be cancelled
-    pub fn can_cancel(&self, order: &Order) -> bool {
+    #[must_use] pub const fn can_cancel(&self, order: &Order) -> bool {
         !order.is_terminal()
     }
     
     /// Check if order can be amended
-    pub fn can_amend(&self, order: &Order) -> bool {
+    #[must_use] pub const fn can_amend(&self, order: &Order) -> bool {
         matches!(
             order.status,
             OrderStatus::New | OrderStatus::Pending | OrderStatus::Submitted | OrderStatus::Accepted
@@ -135,7 +136,7 @@ impl OrderLifecycleManager {
     }
     
     /// Check if order should expire
-    pub fn should_expire(&self, order: &Order) -> bool {
+    #[must_use] pub fn should_expire(&self, order: &Order) -> bool {
         if order.is_terminal() {
             return false;
         }
@@ -171,7 +172,7 @@ impl OrderLifecycleManager {
     }
     
     /// Get next valid states
-    pub fn get_valid_transitions(&self, status: OrderStatus) -> Vec<OrderStatus> {
+    #[must_use] pub fn get_valid_transitions(&self, status: OrderStatus) -> Vec<OrderStatus> {
         self.valid_transitions
             .get(&status)
             .cloned()
@@ -202,7 +203,7 @@ impl OrderLifecycleManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::{Px, Qty, Symbol};
+    use services_common::{Px, Qty, Symbol};
     use uuid::Uuid;
     
     fn create_test_order() -> Order {

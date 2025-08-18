@@ -8,10 +8,10 @@
 //! - Health checks and metrics
 
 use anyhow::Result;
-use common::constants;
+use services_common::constants;
 use execution_router::config::ExecutionConfig;
 use execution_router::{ExecutionRouterService, grpc_impl::ExecutionServiceImpl};
-use shrivenquant_proto::execution::v1::execution_service_server::ExecutionServiceServer;
+use services_common::execution::v1::execution_service_server::ExecutionServiceServer;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::broadcast;

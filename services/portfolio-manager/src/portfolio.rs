@@ -5,9 +5,9 @@
 //! - Pre-allocated buffers for calculations
 //! - No allocations in metric calculations
 
-use common::Symbol;
-use common::constants::fixed_point::SCALE_4 as FIXED_POINT_SCALE;
-use common::constants::math::SQRT_TRADING_DAYS;
+use services_common::Symbol;
+use services_common::constants::fixed_point::SCALE_4 as FIXED_POINT_SCALE;
+use services_common::constants::math::SQRT_TRADING_DAYS;
 use serde::{Deserialize, Serialize};
 
 /// Portfolio statistics

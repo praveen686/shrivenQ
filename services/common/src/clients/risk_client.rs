@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use rustc_hash::FxHashMap;
-use shrivenquant_proto::risk::v1::{
+use crate::proto::risk::v1::{
     CheckOrderRequest, CheckOrderResponse, GetMetricsRequest, GetMetricsResponse,
     GetPositionsRequest, GetPositionsResponse, KillSwitchRequest, KillSwitchResponse, RiskAlert,
     StreamAlertsRequest, UpdatePositionRequest, UpdatePositionResponse,
@@ -189,7 +189,7 @@ impl RiskClient {
 
                 // Resubscribe to all active alert subscriptions
                 let subs = self.subscriptions.read().await.clone();
-                for (key, sub) in subs.iter() {
+                for (key, sub) in &subs {
                     if sub.active {
                         info!(
                             "Resubscribing to alerts: {} (retry {})",
@@ -422,7 +422,7 @@ impl RiskClient {
             "alerts:{}",
             levels
                 .iter()
-                .map(|l| l.to_string())
+                .map(std::string::ToString::to_string)
                 .collect::<Vec<_>>()
                 .join(",")
         );
@@ -611,7 +611,7 @@ impl RiskClient {
     }
 
     /// Get endpoint
-    pub fn endpoint(&self) -> &str {
+    #[must_use] pub fn endpoint(&self) -> &str {
         &self.config.endpoint
     }
 }

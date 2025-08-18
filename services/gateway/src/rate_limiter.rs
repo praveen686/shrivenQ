@@ -14,8 +14,8 @@ use tracing::{debug, warn};
 use crate::config::{EndpointRateLimit, RateLimitConfig};
 
 // Safe constants for fallback values
-const DEFAULT_REQUESTS_PER_MINUTE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(60) };
-const DEFAULT_BURST_SIZE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(10) };
+const DEFAULT_REQUESTS_PER_MINUTE: NonZeroU32 = NonZeroU32::new(60).unwrap();
+const DEFAULT_BURST_SIZE: NonZeroU32 = NonZeroU32::new(10).unwrap();
 
 /// Rate limiter for the API Gateway
 pub struct RateLimiter {
@@ -33,7 +33,7 @@ pub struct RateLimiter {
 
 impl RateLimiter {
     /// Create a new rate limiter
-    pub fn new(config: RateLimitConfig) -> Self {
+    #[must_use] pub fn new(config: RateLimitConfig) -> Self {
         // Create global rate limiter
         let global_quota = Quota::per_minute(
             NonZeroU32::new(config.requests_per_minute).unwrap_or(DEFAULT_REQUESTS_PER_MINUTE),

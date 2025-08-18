@@ -21,7 +21,7 @@ pub use smart_router::Router;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::constants::{
+use services_common::constants::{
     financial::PERCENT_SCALE,
     fixed_point::{BASIS_POINTS, SCALE_4},
     trading::{MAKER_FEE_BP, TAKER_FEE_BP},
@@ -61,7 +61,7 @@ const ZERODHA_MODIFY_DELAY_MS: u64 = 18; // Simulated Zerodha modify delay
 
 // Commission calculation constants
 const MAKER_PROBABILITY_PERCENT: u64 = 60; // 60% chance of being a maker
-use common::{Px, Qty, Side, Symbol, Ts};
+use services_common::{Px, Qty, Side, Symbol, Ts};
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
@@ -75,11 +75,11 @@ use tracing::{debug, error, info, warn};
 pub struct OrderId(pub u64);
 
 impl OrderId {
-    pub fn new(id: u64) -> Self {
+    #[must_use] pub const fn new(id: u64) -> Self {
         Self(id)
     }
 
-    pub fn as_u64(&self) -> u64 {
+    #[must_use] pub const fn as_u64(&self) -> u64 {
         self.0
     }
 }
@@ -383,7 +383,7 @@ pub struct ExecutionMetrics {
     pub total_volume: u64,
     /// Total commission paid
     pub total_commission: i64,
-    /// Fill rate percentage (fixed-point: SCALE_4 = 100%)
+    /// Fill rate percentage (fixed-point: `SCALE_4` = 100%)
     pub fill_rate: i32,
     /// Venues used
     pub venues_used: FxHashMap<String, u64>,
@@ -409,7 +409,7 @@ pub struct ExecutionRouterService {
 
 impl ExecutionRouterService {
     /// Create new execution router
-    pub fn new(venue_strategy: VenueStrategy) -> Self {
+    #[must_use] pub fn new(venue_strategy: VenueStrategy) -> Self {
         Self {
             next_order_id: AtomicU64::new(1),
             orders: Arc::new(DashMap::new()),
@@ -426,7 +426,7 @@ impl ExecutionRouterService {
         &self,
         client_order_id: String,
         symbol: Symbol,
-        side: common::Side,
+        side: services_common::Side,
         quantity: Qty,
         venue: String,
         strategy_id: String,
@@ -590,7 +590,7 @@ impl ExecutionRouterService {
         let order_arc_clone = Arc::clone(&order_arc);
         let exchange_order_map = Arc::clone(&self.exchange_order_map);
         let metrics = Arc::clone(&self.metrics);
-        let venue_clone = venue.clone();
+        let venue_clone = venue;
         
         tokio::spawn(async move {
             // Send to exchange based on venue
@@ -627,7 +627,7 @@ impl ExecutionRouterService {
     }
 
     /// Create new execution router from config
-    pub fn from_config(_config: config::ExecutionConfig) -> Self {
+    #[must_use] pub fn from_config(_config: config::ExecutionConfig) -> Self {
         // Use Smart routing as default strategy
         let venue_strategy = VenueStrategy::Smart;
         
@@ -941,7 +941,7 @@ impl ExecutionRouterService {
                 (metrics.filled_orders.saturating_mul(SCALE_4 as u64)) / metrics.total_orders;
             // SAFETY: Explicit bounds check ensures percentage fits in i32
             // Cast is safe because we explicitly check bounds
-            metrics.fill_rate = if percentage <= i32::MAX as u64 {
+            metrics.fill_rate = if i32::try_from(percentage).is_ok() {
                 percentage as i32
             } else {
                 i32::MAX // Cap at maximum
@@ -978,9 +978,7 @@ impl ExecutionRouter for ExecutionRouterService {
         // Select venue - avoid clone by using as_ref()
         let venue = request
             .venue
-            .as_ref()
-            .map(|v| v.to_string())
-            .unwrap_or_else(|| self.select_venue(&request));
+            .as_ref().map_or_else(|| self.select_venue(&request), std::string::ToString::to_string);
 
         // Create order
         let order = Order {
@@ -1024,7 +1022,7 @@ impl ExecutionRouter for ExecutionRouterService {
         // Clone the order for sending (avoiding lock across await)
         let order_for_send = order_arc.read().clone();
         match self.send_order_to_exchange(&order_for_send).await {
-            Ok(_) => {
+            Ok(()) => {
                 info!("Order {} successfully sent to exchange {}", order_id, venue);
                 Ok(order_id)
             }

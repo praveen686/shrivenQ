@@ -95,7 +95,7 @@ pub enum ExecutionError {
     #[error("WebSocket connection failed: {error}")]
     WebSocketConnectionFailed { error: String },
     
-    /// OrderBook parse error
+    /// `OrderBook` parse error
     #[error("OrderBook parse error: {error}")]
     OrderBookParseError { error: String },
     

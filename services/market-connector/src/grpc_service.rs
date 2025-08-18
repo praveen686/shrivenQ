@@ -2,7 +2,7 @@
 
 use crate::{MarketConnectorService, MarketDataEvent as InternalEvent, MarketData, SubscriptionRequest as InternalSubRequest, MarketDataType};
 use anyhow::Result;
-use shrivenquant_proto::marketdata::v1::{
+use services_common::marketdata::v1::{
     market_data_service_server::MarketDataService,
     SubscribeRequest, UnsubscribeRequest, UnsubscribeResponse, GetSnapshotRequest, GetSnapshotResponse,
     GetHistoricalDataRequest, GetHistoricalDataResponse, MarketDataEvent, OrderBookUpdate,
@@ -517,7 +517,7 @@ impl MarketDataGrpcService {
                     count: 1,
                 }).collect();
                 
-                Some(shrivenquant_proto::marketdata::v1::market_data_event::Data::OrderBook(
+                Some(services_common::proto::marketdata::v1::market_data_event::Data::OrderBook(
                     OrderBookUpdate {
                         bids: bid_levels,
                         asks: ask_levels,
@@ -526,7 +526,7 @@ impl MarketDataGrpcService {
                 ))
             },
             MarketData::Trade { price, quantity, side: _, trade_id } => {
-                Some(shrivenquant_proto::marketdata::v1::market_data_event::Data::Trade(
+                Some(services_common::proto::marketdata::v1::market_data_event::Data::Trade(
                     Trade {
                         price: price_to_fixed_point(price),
                         quantity: quantity_to_fixed_point(quantity),
@@ -536,7 +536,7 @@ impl MarketDataGrpcService {
                 ))
             },
             MarketData::Quote { bid_price, bid_size, ask_price, ask_size } => {
-                Some(shrivenquant_proto::marketdata::v1::market_data_event::Data::Quote(
+                Some(services_common::proto::marketdata::v1::market_data_event::Data::Quote(
                     Quote {
                         bid_price: price_to_fixed_point(bid_price),
                         bid_size: quantity_to_fixed_point(bid_size),

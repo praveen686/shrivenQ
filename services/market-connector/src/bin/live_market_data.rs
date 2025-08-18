@@ -13,7 +13,7 @@
 //! - All constants defined
 
 use anyhow::{Context, Result};
-use common::{L2Update, Side, Symbol, Ts};
+use services_common::{L2Update, Side, Symbol, Ts, ZerodhaAuth, ZerodhaConfig};
 use market_connector::{
     connectors::adapter::{FeedAdapter, FeedConfig},
     exchanges::{
@@ -27,10 +27,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicBool, Ordering};
 use std::time::Duration;
-use storage::wal::{Wal, WalEntry};
+use services_common::wal::{Wal, WalEntry};
 use tokio::sync::{RwLock, mpsc, broadcast};
 use tokio::time::interval;
-use tracing::{info, warn, error};
+use tracing::{debug, info, warn, error};
 use colored::*;
 use chrono::{Local, Timelike, Datelike};
 
@@ -136,6 +136,14 @@ impl WalEntry for MarketDataWalEntry {
     fn timestamp(&self) -> Ts {
         self.timestamp
     }
+    
+    fn sequence(&self) -> u64 {
+        self.timestamp.as_nanos() // Use timestamp as sequence for ordering
+    }
+    
+    fn to_bytes(&self) -> anyhow::Result<Vec<u8>> {
+        Ok(serde_json::to_vec(self)?)
+    }
 }
 
 /// Check if Indian markets are open
@@ -155,7 +163,7 @@ fn is_indian_market_open() -> bool {
 async fn init_wal(exchange: &str) -> Result<Arc<RwLock<Wal>>> {
     let dir = PathBuf::from(format!("./data/live_market_data/{}_wal", exchange));
     let segment_bytes = WAL_SEGMENT_SIZE_MB.saturating_mul(1024).saturating_mul(1024);
-    let segment_size = Some(u64::try_from(segment_bytes).unwrap_or(u64::MAX));
+    let segment_size = Some(segment_bytes);
     
     info!("Initializing {} WAL at: {:?}", exchange, dir);
     
@@ -216,6 +224,7 @@ async fn connect_binance_spot(
             
             match connect_async(&ws_url).await {
                 Ok((ws_stream, _)) => {
+                    info!("✅ Connected to Binance Spot WebSocket at: {}", ws_url);
                     info!("✅ Connected to Binance Spot WebSocket");
                     reconnect_attempts = 0;
                     
@@ -231,6 +240,11 @@ async fn connect_binance_spot(
                             Some(msg_result) = read.next() => {
                                 match msg_result {
                                     Ok(Message::Text(text)) => {
+                                        // Log that we received a message
+                                        let msg_preview = if text.len() > 100 { &text[..100] } else { &text };
+                                        debug!("📨 Received Binance message: {}...", msg_preview);
+                                        stats.binance_spot_messages.fetch_add(1, Ordering::Relaxed);
+                                        
                                         // Process market data
                                         if let Err(e) = process_binance_message(
                                             &text,
@@ -308,6 +322,8 @@ async fn process_binance_message(
     // Extract stream and data
     let stream = msg["stream"].as_str().unwrap_or("");
     let data = &msg["data"];
+    
+    debug!("🔍 Processing stream: {}", stream);
     
     if stream.contains("@ticker") {
         // Process 24hr ticker data
@@ -582,7 +598,7 @@ async fn connect_zerodha(
     };
     
     // Get auth from environment
-    let auth_config = auth::ZerodhaConfig::new(
+    let auth_config = ZerodhaConfig::new(
         std::env::var("ZERODHA_USER_ID").context("ZERODHA_USER_ID not set")?,
         std::env::var("ZERODHA_PASSWORD").context("ZERODHA_PASSWORD not set")?,
         std::env::var("ZERODHA_TOTP_SECRET").context("ZERODHA_TOTP_SECRET not set")?,
@@ -590,7 +606,7 @@ async fn connect_zerodha(
         std::env::var("ZERODHA_API_SECRET").context("ZERODHA_API_SECRET not set")?,
     );
     
-    let zerodha_auth = auth::ZerodhaAuth::new(auth_config.clone());
+    let zerodha_auth = ZerodhaAuth::from_config(auth_config.clone());
     
     // Create instrument service
     let instrument_service = InstrumentService::new(instrument_config, Some(zerodha_auth))
@@ -646,7 +662,7 @@ async fn connect_zerodha(
     };
     
     // Create feed with new auth instance
-    let zerodha_auth_feed = auth::ZerodhaAuth::new(auth_config);
+    let zerodha_auth_feed = ZerodhaAuth::from_config(auth_config);
     let mut feed = ZerodhaFeed::new(config, zerodha_auth_feed);
     
     // Connect and subscribe

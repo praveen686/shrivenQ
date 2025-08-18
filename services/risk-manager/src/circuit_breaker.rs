@@ -13,7 +13,7 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
-    pub fn new(threshold: u64, timeout_ms: u64) -> Self {
+    #[must_use] pub const fn new(threshold: u64, timeout_ms: u64) -> Self {
         Self {
             is_open: AtomicBool::new(false),
             failure_count: AtomicU64::new(0),

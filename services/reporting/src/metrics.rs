@@ -6,14 +6,14 @@
 //! - Zero allocations in hot paths
 //! - Fixed-point arithmetic compliance
 
-use common::{Px, Qty, Symbol, Ts};
+use services_common::{Px, Qty, Symbol, Ts};
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 
 #[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::*;
+use std::arch::x86_64::{_mm256_setzero_pd, _mm256_loadu_pd, _mm256_add_pd, _mm256_storeu_pd, _mm256_set1_pd, _mm256_sub_pd, _mm256_mul_pd};
 
 /// SIMD-optimized metrics engine
 #[repr(C, align(64))]
@@ -70,7 +70,7 @@ pub struct SymbolMetrics {
 }
 
 impl SymbolMetrics {
-    fn new(symbol: Symbol) -> Self {
+    const fn new(symbol: Symbol) -> Self {
         Self {
             symbol,
             trades: 0,
@@ -86,7 +86,7 @@ impl SymbolMetrics {
     }
 
     /// Get average spread for this symbol
-    pub fn avg_spread(&self) -> f64 {
+    #[must_use] pub fn avg_spread(&self) -> f64 {
         if self.spread_count > 0 {
             self.spread_sum as f64 / self.spread_count as f64 / 10000.0
         } else {
@@ -97,7 +97,7 @@ impl SymbolMetrics {
 
 impl MetricsEngine {
     /// Create new metrics engine with pre-allocated buffers
-    pub fn new(buffer_capacity: usize) -> Self {
+    #[must_use] pub fn new(buffer_capacity: usize) -> Self {
         let mut returns_buffer = Vec::with_capacity(buffer_capacity);
         // Pre-allocate to avoid allocations in hot paths
         returns_buffer.resize(buffer_capacity, 0.0);
@@ -354,7 +354,7 @@ impl MetricsEngine {
         }
     }
 
-    /// Update PnL and drawdown metrics
+    /// Update `PnL` and drawdown metrics
     pub fn update_pnl(&self, realized_pnl: i64, unrealized_pnl: i64) {
         let total_pnl = realized_pnl + unrealized_pnl;
 
@@ -479,7 +479,7 @@ pub struct TradingMetrics {
 
 impl TradingMetrics {
     /// Get trading duration in seconds
-    pub fn trading_duration_seconds(&self) -> u64 {
+    #[must_use] pub const fn trading_duration_seconds(&self) -> u64 {
         if self.first_trade_time > 0 && self.last_trade_time > self.first_trade_time {
             (self.last_trade_time - self.first_trade_time) / 1_000_000_000
         } else {
@@ -488,7 +488,7 @@ impl TradingMetrics {
     }
 
     /// Get average trade volume
-    pub fn avg_trade_volume(&self) -> f64 {
+    #[must_use] pub fn avg_trade_volume(&self) -> f64 {
         if self.total_trades > 0 {
             self.total_volume as f64 / self.total_trades as f64
         } else {
@@ -497,7 +497,7 @@ impl TradingMetrics {
     }
 
     /// Get buy/sell ratio
-    pub fn buy_sell_ratio(&self) -> f64 {
+    #[must_use] pub fn buy_sell_ratio(&self) -> f64 {
         if self.sell_volume > 0 {
             self.buy_volume as f64 / self.sell_volume as f64
         } else if self.buy_volume > 0 {
@@ -508,7 +508,7 @@ impl TradingMetrics {
     }
 }
 
-/// PnL structure (retained for compatibility)
+/// `PnL` structure (retained for compatibility)
 #[repr(C, align(64))]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct PnL {

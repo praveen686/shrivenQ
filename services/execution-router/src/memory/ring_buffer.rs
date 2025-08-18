@@ -40,7 +40,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
     /// Create new ring buffer
     ///
     /// No allocations - all memory is stack allocated
-    pub const fn new() -> Self {
+    #[must_use] pub const fn new() -> Self {
         // Safety: MaybeUninit doesn't need initialization
         let buffer =
             unsafe { MaybeUninit::<[UnsafeCell<MaybeUninit<T>>; N]>::uninit().assume_init() };

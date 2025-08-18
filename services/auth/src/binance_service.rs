@@ -106,32 +106,29 @@ impl BinanceAuthService {
         }
 
         // Get account information
-        let (can_trade, balances) = match market {
-            "spot" => {
-                let account = auth.get_account_info().await?;
-                let balance_str = account
-                    .balances
-                    .iter()
-                    .filter_map(|b| {
-                        let free = b.free.parse::<f64>().unwrap_or(0.0);
-                        if free > 0.0 {
-                            Some(format!("{}:{}", b.asset, free))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(",");
-                (account.can_trade, balance_str)
-            }
-            _ => {
-                let account = auth.get_futures_account_info().await?;
-                let balance_str = format!(
-                    "wallet:{},available:{}",
-                    account.total_wallet_balance, account.available_balance
-                );
-                (true, balance_str)
-            }
+        let (can_trade, balances) = if market == "spot" {
+            let account = auth.get_account_info().await?;
+            let balance_str = account
+                .balances
+                .iter()
+                .filter_map(|b| {
+                    let free = b.free.parse::<f64>().unwrap_or(0.0);
+                    if free > 0.0 {
+                        Some(format!("{}:{}", b.asset, free))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            (account.can_trade, balance_str)
+        } else {
+            let account = auth.get_futures_account_info().await?;
+            let balance_str = format!(
+                "wallet:{},available:{}",
+                account.total_wallet_balance, account.available_balance
+            );
+            (true, balance_str)
         };
 
         // Create listen key for WebSocket
@@ -140,10 +137,10 @@ impl BinanceAuthService {
         // Build API keys map
         let mut api_keys = FxHashMap::default();
         api_keys.insert(
-            format!("binance_{}_api_key", market),
+            format!("binance_{market}_api_key"),
             auth.get_api_key().to_string(),
         );
-        api_keys.insert(format!("binance_{}_listen_key", market), listen_key);
+        api_keys.insert(format!("binance_{market}_listen_key"), listen_key);
 
         // Build metadata
         let mut metadata = FxHashMap::default();
@@ -224,7 +221,7 @@ impl AuthService for BinanceAuthService {
             "exp".to_string(),
             // SAFETY: Explicit bounds check ensures token_expiry fits in i64
             (chrono::Utc::now().timestamp()
-                + if self.token_expiry <= i64::MAX as u64 {
+                + if i64::try_from(self.token_expiry).is_ok() {
                     // SAFETY: Bounds checked above
                     self.token_expiry as i64
                 } else {

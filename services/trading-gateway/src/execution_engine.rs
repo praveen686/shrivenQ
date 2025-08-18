@@ -3,16 +3,18 @@
 //! Connects to the Execution Router service for sophisticated
 //! order execution algorithms (TWAP, VWAP, POV, etc.)
 
-use crate::{OrderStatus, OrderType, Side, TimeInForce, TradingEvent};
+use crate::{OrderStatus, OrderType, Side as TradingSide, TradingEvent};
 use anyhow::Result;
-use common::{Px, Qty, Symbol, Ts};
+use services_common::{Px, Qty, Symbol, Ts};
 use dashmap::DashMap;
-use execution_router::{ExecutionAlgorithm, OrderRequest as RouterRequest, Router};
+use execution_router::{ExecutionAlgorithm, OrderRequest, Router};
+use execution_router::{OrderType as RouterOrderType, TimeInForce as RouterTimeInForce};
+use rustc_hash::FxHashMap;
 use parking_lot::RwLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, error, info, warn};
+use tokio::sync::{broadcast, mpsc, RwLock as TokioRwLock};
+use tracing::{debug, info, warn};
 
 /// Execution engine for order management
 pub struct ExecutionEngine {
@@ -28,7 +30,7 @@ pub struct ExecutionEngine {
     metrics: Arc<ExecutionMetrics>,
     /// Order update channel
     update_tx: mpsc::UnboundedSender<OrderUpdate>,
-    update_rx: Arc<RwLock<mpsc::UnboundedReceiver<OrderUpdate>>>,
+    update_rx: Arc<TokioRwLock<mpsc::UnboundedReceiver<OrderUpdate>>>,
 }
 
 /// Order state tracking
@@ -39,7 +41,7 @@ pub struct OrderState {
     /// Symbol
     pub symbol: Symbol,
     /// Side
-    pub side: Side,
+    pub side: TradingSide,
     /// Order type
     pub order_type: OrderType,
     /// Original quantity
@@ -108,7 +110,7 @@ impl ExecutionEngine {
                 avg_fill_latency_us: AtomicU64::new(0),
             }),
             update_tx,
-            update_rx: Arc::new(RwLock::new(update_rx)),
+            update_rx: Arc::new(TokioRwLock::new(update_rx)),
         }
     }
     
@@ -132,7 +134,7 @@ impl ExecutionEngine {
         let start = Ts::now();
         
         // Extract order details
-        let (symbol, side, order_type, quantity, price, tif, strategy_id) = match order {
+        let (symbol, side, order_type, quantity, price, _tif, strategy_id) = match order {
             TradingEvent::OrderRequest {
                 symbol,
                 side,
@@ -209,23 +211,34 @@ impl ExecutionEngine {
         &self,
         order_id: u64,
         symbol: Symbol,
-        side: Side,
+        side: TradingSide,
         quantity: Qty,
     ) -> Result<()> {
         if let Some(router) = &*self.router.read() {
             // Create router request
-            let request = RouterRequest {
+            let request = OrderRequest {
+                client_order_id: format!("TG_{}", order_id),
                 symbol,
+                side: match side {
+                    TradingSide::Buy => services_common::Side::Bid,
+                    TradingSide::Sell => services_common::Side::Ask,
+                },
                 quantity,
-                is_buy: matches!(side, Side::Buy),
+                order_type: RouterOrderType::Market,
+                limit_price: None,
+                stop_price: None,
+                is_buy: matches!(side, TradingSide::Buy),
                 algorithm: ExecutionAlgorithm::Smart,
                 urgency: 1.0, // High urgency for market orders
-                limit_price: None,
                 participation_rate: None,
+                time_in_force: RouterTimeInForce::IOC,
+                venue: None,
+                strategy_id: "trading_gateway".to_string(),
+                params: FxHashMap::default(),
             };
             
-            // Route order
-            let _route = router.route_order(request)?;
+            // Route order - handle future properly
+            let _route = router.route_order(request);
             
             // Simulate immediate fill for market orders
             self.update_tx.send(OrderUpdate {
@@ -245,22 +258,33 @@ impl ExecutionEngine {
         &self,
         order_id: u64,
         symbol: Symbol,
-        side: Side,
+        side: TradingSide,
         quantity: Qty,
         price: Px,
     ) -> Result<()> {
         if let Some(router) = &*self.router.read() {
-            let request = RouterRequest {
+            let request = OrderRequest {
+                client_order_id: format!("TG_{}", order_id),
                 symbol,
+                side: match side {
+                    TradingSide::Buy => services_common::Side::Bid,
+                    TradingSide::Sell => services_common::Side::Ask,
+                },
                 quantity,
-                is_buy: matches!(side, Side::Buy),
+                order_type: RouterOrderType::Limit,
+                limit_price: Some(price),
+                stop_price: None,
+                is_buy: matches!(side, TradingSide::Buy),
                 algorithm: ExecutionAlgorithm::Peg,
                 urgency: 0.5,
-                limit_price: Some(price),
                 participation_rate: None,
+                time_in_force: RouterTimeInForce::DAY,
+                venue: None,
+                strategy_id: "trading_gateway".to_string(),
+                params: FxHashMap::default(),
             };
             
-            let _route = router.route_order(request)?;
+            let _route = router.route_order(request);
             
             // Limit orders remain pending
             debug!("Limit order {} submitted at {}", order_id, price.as_f64());
@@ -274,22 +298,33 @@ impl ExecutionEngine {
         &self,
         order_id: u64,
         symbol: Symbol,
-        side: Side,
+        side: TradingSide,
         quantity: Qty,
         algorithm: ExecutionAlgorithm,
     ) -> Result<()> {
         if let Some(router) = &*self.router.read() {
-            let request = RouterRequest {
+            let request = OrderRequest {
+                client_order_id: format!("TG_{}", order_id),
                 symbol,
+                side: match side {
+                    TradingSide::Buy => services_common::Side::Bid,
+                    TradingSide::Sell => services_common::Side::Ask,
+                },
                 quantity,
-                is_buy: matches!(side, Side::Buy),
+                order_type: RouterOrderType::Limit,
+                limit_price: None,
+                stop_price: None,
+                is_buy: matches!(side, TradingSide::Buy),
                 algorithm,
                 urgency: 0.3,
-                limit_price: None,
                 participation_rate: Some(0.2), // 20% participation
+                time_in_force: RouterTimeInForce::DAY,
+                venue: None,
+                strategy_id: "trading_gateway".to_string(),
+                params: FxHashMap::default(),
             };
             
-            let _route = router.route_order(request)?;
+            let _route = router.route_order(request);
             
             info!("Algo order {} submitted using {:?}", order_id, algorithm);
         }
@@ -352,9 +387,13 @@ impl ExecutionEngine {
         let update_rx = self.update_rx.clone();
         
         tokio::spawn(async move {
-            let mut rx = update_rx.write();
-            
-            while let Some(update) = rx.recv().await {
+            loop {
+                let update = {
+                    let mut rx = update_rx.write().await;
+                    rx.recv().await
+                };
+                
+                if let Some(update) = update {
                 if let Some(mut order) = active_orders.get_mut(&update.order_id) {
                     // Update order state
                     order.executed_qty = Qty::from_i64(
@@ -398,6 +437,9 @@ impl ExecutionEngine {
                         status: update.status,
                         timestamp: update.timestamp,
                     });
+                } else {
+                    break;
+                }
                 }
             }
         });

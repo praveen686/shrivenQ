@@ -6,7 +6,7 @@
 //! - Fixed-point arithmetic only
 //! - Cache-line aligned structures
 
-use common::{Px, Qty, Side, Symbol, Ts};
+use services_common::{Px, Qty, Side, Symbol, Ts};
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};

@@ -1,5 +1,6 @@
-# cargo-deny configuration for ShrivenQ
-# This ensures we maintain control over our dependency tree
+# cargo-deny configuration for ShrivenQuant
+# Security and supply chain audit for all dependencies
+# Run: cargo deny check
 
 [bans]
 # Lint level for when multiple versions of the same crate are detected
@@ -37,3 +38,17 @@ allow = [
 [sources]
 # Ensure we only use crates.io and our own code
 allow-git = []
+unknown-registry = "deny"
+unknown-git = "deny"
+
+[advisories]
+# Security vulnerability database to use
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# Deny crates with security vulnerabilities
+vulnerability = "deny"
+unmaintained = "warn"
+yanked = "deny"
+notice = "warn"
+# Ignore specific advisories that don't affect us
+ignore = []

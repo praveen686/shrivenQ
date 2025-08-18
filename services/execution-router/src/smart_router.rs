@@ -12,7 +12,7 @@ use crate::{
 };
 use rand;
 use anyhow::Result;
-use common::{Px, Qty, Side, Symbol};
+use services_common::{Px, Qty, Side, Symbol};
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -145,9 +145,15 @@ pub struct RoutingMetrics {
     pub fill_rate: AtomicU64,
 }
 
+impl Default for Router {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Router {
     /// Create new router
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         let mut algo_engines: HashMap<ExecutionAlgorithm, Box<dyn AlgorithmEngine>> = HashMap::new();
         
         // Initialize algorithm engines
@@ -235,7 +241,7 @@ impl Router {
             
             Ok(())
         } else {
-            Err(ExecutionError::VenueNotFound { venue: child.venue.clone() })
+            Err(ExecutionError::VenueNotFound { venue: child.venue })
         }
     }
     
@@ -263,7 +269,7 @@ impl Router {
             (Some(bid), Some(ask)) => Some(Px::from_i64((bid.as_i64() + ask.as_i64()) / 2)),
             (Some(bid), None) => Some(bid),
             (None, Some(ask)) => Some(ask),
-            (None, None) => return Err(ExecutionError::NoMarketData { symbol: symbol.0 as u32 }),
+            (None, None) => return Err(ExecutionError::NoMarketData { symbol: symbol.0 }),
         };
         
         let spread = match (best_bid, best_ask) {
@@ -280,7 +286,7 @@ impl Router {
             symbol, latency, best_bid, best_ask, available_venues.len()
         );
         
-        Ok(MarketContext {
+        let context = MarketContext {
             bid: best_bid,
             ask: best_ask,
             mid,
@@ -288,7 +294,10 @@ impl Router {
             volume: total_volume,
             volatility,
             venues: available_venues,
-        })
+        };
+        
+        debug!("Market context fetch completed in {:?}", start.elapsed());
+        Ok(context)
     }
     
     /// Fetch real market data from orderbook service and market connector
@@ -318,13 +327,28 @@ impl Router {
                 }
                 Err(e) => {
                     warn!("Failed to fetch market data from venue {}: {:?}", venue_name, e);
-                    // Continue with other venues
+                    
+                    // Try simulated fallback prices if venue is known
+                    if let Some(venues_map) = self.venues.try_read() {
+                        if let Some(venue_conn) = venues_map.get(venue_name) {
+                            if let Some(sim_bid) = self.simulate_venue_bid(venue_conn, symbol) {
+                                if best_bid.is_none() || sim_bid.as_i64() > best_bid.unwrap().as_i64() {
+                                    best_bid = Some(sim_bid);
+                                }
+                            }
+                            if let Some(sim_ask) = self.simulate_venue_ask(venue_conn, symbol) {
+                                if best_ask.is_none() || sim_ask.as_i64() < best_ask.unwrap().as_i64() {
+                                    best_ask = Some(sim_ask);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
         
         if best_bid.is_none() && best_ask.is_none() {
-            return Err(ExecutionError::NoMarketData { symbol: symbol.0 as u32 });
+            return Err(ExecutionError::NoMarketData { symbol: symbol.0 });
         }
         
         Ok((best_bid, best_ask, total_volume))
@@ -338,7 +362,7 @@ impl Router {
         // In production, this connects to the market connector service which maintains WebSocket connections
         info!("Fetching real orderbook data from {} for symbol {:?}", venue, symbol);
         
-        match venue {
+        let result = match venue {
             "Binance" => {
                 self.fetch_binance_orderbook_direct(symbol).await
             }
@@ -352,7 +376,10 @@ impl Router {
                 warn!("Unknown venue: {}", venue);
                 Err(ExecutionError::VenueNotFound { venue: venue.to_string() })
             }
-        }
+        }?;
+        
+        debug!("Orderbook query from {} completed in {:?}", venue, start.elapsed());
+        Ok(result)
     }
     
     /// Direct Binance WebSocket orderbook fetch
@@ -389,7 +416,7 @@ impl Router {
                     }
                     Ok(Some(Err(e))) => {
                         error!("WebSocket error from Binance: {}", e);
-                        Err(ExecutionError::WebSocketConnectionFailed { error: format!("Binance: {}", e) })
+                        Err(ExecutionError::WebSocketConnectionFailed { error: format!("Binance: {e}") })
                     }
                     Ok(None) => {
                         error!("Binance WebSocket stream ended unexpectedly");
@@ -403,7 +430,7 @@ impl Router {
             }
             Err(e) => {
                 error!("Failed to connect to Binance WebSocket: {}", e);
-                Err(ExecutionError::WebSocketConnectionFailed { error: format!("Binance: {}", e) })
+                Err(ExecutionError::WebSocketConnectionFailed { error: format!("Binance: {e}") })
             }
         }
     }
@@ -419,21 +446,21 @@ impl Router {
         let asks = data["asks"].as_array().ok_or_else(|| anyhow::anyhow!("Missing asks array"))?;
         
         // Get best bid (highest price)
-        let best_bid = if !bids.is_empty() {
+        let best_bid = if bids.is_empty() {
+            None
+        } else {
             let bid_price_str = bids[0][0].as_str().ok_or_else(|| anyhow::anyhow!("Invalid bid price"))?;
             let bid_price: f64 = bid_price_str.parse()?;
             Some(Px::new(bid_price))
-        } else {
-            None
         };
         
         // Get best ask (lowest price)
-        let best_ask = if !asks.is_empty() {
+        let best_ask = if asks.is_empty() {
+            None
+        } else {
             let ask_price_str = asks[0][0].as_str().ok_or_else(|| anyhow::anyhow!("Invalid ask price"))?;
             let ask_price: f64 = ask_price_str.parse()?;
             Some(Px::new(ask_price))
-        } else {
-            None
         };
         
         // Calculate total volume from all levels
@@ -468,7 +495,7 @@ impl Router {
                 
                 if let Err(e) = ws_stream.send(Message::Text(subscribe_msg.to_string())).await {
                     error!("Failed to subscribe to Coinbase channel: {}", e);
-                    return Err(ExecutionError::WebSocketConnectionFailed { error: format!("Subscribe failed: {}", e) });
+                    return Err(ExecutionError::WebSocketConnectionFailed { error: format!("Subscribe failed: {e}") });
                 }
                 
                 // Read subscription confirmation and then orderbook snapshot
@@ -488,7 +515,7 @@ impl Router {
                         Ok(Some(Ok(_))) => continue, // Skip non-text messages
                         Ok(Some(Err(e))) => {
                             error!("Coinbase WebSocket error: {}", e);
-                            return Err(ExecutionError::WebSocketConnectionFailed { error: format!("Coinbase: {}", e) });
+                            return Err(ExecutionError::WebSocketConnectionFailed { error: format!("Coinbase: {e}") });
                         }
                         Ok(None) => {
                             error!("Coinbase WebSocket stream ended");
@@ -503,7 +530,7 @@ impl Router {
             }
             Err(e) => {
                 error!("Failed to connect to Coinbase WebSocket: {}", e);
-                Err(ExecutionError::WebSocketConnectionFailed { error: format!("Coinbase: {}", e) })
+                Err(ExecutionError::WebSocketConnectionFailed { error: format!("Coinbase: {e}") })
             }
         }
     }
@@ -531,13 +558,37 @@ impl Router {
                 .and_then(|price_str| price_str.parse::<f64>().ok())
                 .map(Px::new);
             
-            let total_volume: i64 = bids.iter()
-                .flatten()
-                .chain(asks.iter().flatten())
-                .filter_map(|level| {
-                    level[1].as_str()?.parse::<f64>().ok().map(|qty| (qty * 10000.0) as i64)
-                })
-                .sum();
+            let mut total_volume: i64 = 0;
+            
+            // Process bids
+            if let Some(bid_levels) = bids {
+                for level in bid_levels {
+                    if let serde_json::Value::Array(level_array) = level {
+                        if level_array.len() >= 2 {
+                            if let Some(qty_str) = level_array[1].as_str() {
+                                if let Ok(qty) = qty_str.parse::<f64>() {
+                                    total_volume += (qty * 10000.0) as i64;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Process asks  
+            if let Some(ask_levels) = asks {
+                for level in ask_levels {
+                    if let serde_json::Value::Array(level_array) = level {
+                        if level_array.len() >= 2 {
+                            if let Some(qty_str) = level_array[1].as_str() {
+                                if let Ok(qty) = qty_str.parse::<f64>() {
+                                    total_volume += (qty * 10000.0) as i64;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             
             Ok((best_bid, best_ask, total_volume))
         } else {
@@ -570,7 +621,7 @@ impl Router {
                 
                 if let Err(e) = ws_stream.send(Message::Text(subscribe_msg.to_string())).await {
                     error!("Failed to subscribe to Kraken channel: {}", e);
-                    return Err(ExecutionError::WebSocketConnectionFailed { error: format!("Subscribe failed: {}", e) });
+                    return Err(ExecutionError::WebSocketConnectionFailed { error: format!("Subscribe failed: {e}") });
                 }
                 
                 let timeout_duration = std::time::Duration::from_secs(10);
@@ -588,7 +639,7 @@ impl Router {
                         Ok(Some(Ok(_))) => continue,
                         Ok(Some(Err(e))) => {
                             error!("Kraken WebSocket error: {}", e);
-                            return Err(ExecutionError::WebSocketConnectionFailed { error: format!("Kraken: {}", e) });
+                            return Err(ExecutionError::WebSocketConnectionFailed { error: format!("Kraken: {e}") });
                         }
                         Ok(None) => {
                             error!("Kraken WebSocket stream ended");
@@ -603,7 +654,7 @@ impl Router {
             }
             Err(e) => {
                 error!("Failed to connect to Kraken WebSocket: {}", e);
-                Err(ExecutionError::WebSocketConnectionFailed { error: format!("Kraken: {}", e) })
+                Err(ExecutionError::WebSocketConnectionFailed { error: format!("Kraken: {e}") })
             }
         }
     }
@@ -633,13 +684,37 @@ impl Router {
                         .and_then(|price_str| price_str.parse::<f64>().ok())
                         .map(Px::new);
                     
-                    let total_volume: i64 = bids.iter()
-                        .flatten()
-                        .chain(asks.iter().flatten())
-                        .filter_map(|level| {
-                            level[1].as_str()?.parse::<f64>().ok().map(|qty| (qty * 10000.0) as i64)
-                        })
-                        .sum();
+                    let mut total_volume: i64 = 0;
+                    
+                    // Process bids
+                    if let Some(bid_levels) = bids {
+                        for level in bid_levels {
+                            if let serde_json::Value::Array(level_array) = level {
+                                if level_array.len() >= 2 {
+                                    if let Some(qty_str) = level_array[1].as_str() {
+                                        if let Ok(qty) = qty_str.parse::<f64>() {
+                                            total_volume += (qty * 10000.0) as i64;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Process asks
+                    if let Some(ask_levels) = asks {
+                        for level in ask_levels {
+                            if let serde_json::Value::Array(level_array) = level {
+                                if level_array.len() >= 2 {
+                                    if let Some(qty_str) = level_array[1].as_str() {
+                                        if let Ok(qty) = qty_str.parse::<f64>() {
+                                            total_volume += (qty * 10000.0) as i64;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     
                     return Ok((best_bid, best_ask, total_volume));
                 }
@@ -691,7 +766,7 @@ impl Router {
         let mut recent_prices = Vec::new();
         
         // Sample current prices from each venue to build price series
-        for (venue_name, venue) in venues.iter() {
+        for (venue_name, venue) in venues {
             if venue.is_connected {
                 match self.sample_current_price(symbol, venue_name).await {
                     Ok(price) => {
@@ -727,6 +802,7 @@ impl Router {
             symbol, annualized_volatility, recent_prices.len(), latency
         );
         
+        debug!("Volatility calculation completed in {:?}", start.elapsed());
         Ok(annualized_volatility)
     }
     
@@ -739,7 +815,7 @@ impl Router {
                     (Some(b), Some(a)) => Ok(Px::from_i64((b.as_i64() + a.as_i64()) / 2)),
                     (Some(b), None) => Ok(b),
                     (None, Some(a)) => Ok(a),
-                    (None, None) => Err(ExecutionError::NoMarketData { symbol: symbol.0 as u32 }),
+                    (None, None) => Err(ExecutionError::NoMarketData { symbol: symbol.0 }),
                 }
             }
             Err(e) => Err(e),
@@ -761,7 +837,7 @@ impl Router {
         let venue_volatility_factor: f64 = venues.values()
             .map(|venue| {
                 // Higher latency venues contribute to higher volatility
-                let latency_factor = 1.0 + (venue.latency_us as f64 / 1000.0) * 0.001;
+                let latency_factor = (venue.latency_us as f64 / 1000.0).mul_add(0.001, 1.0);
                 
                 // Lower liquidity venues contribute to higher volatility
                 let liquidity_factor = if venue.liquidity < 500000.0 {
@@ -779,7 +855,7 @@ impl Router {
         base_volatility * venue_volatility_factor
     }
     
-    /// Simulate venue-specific bid price based on venue characteristics
+    /// Simulate venue-specific bid price based on venue characteristics (fallback)
     fn simulate_venue_bid(&self, venue: &VenueConnection, _symbol: &Symbol) -> Option<Px> {
         if !venue.is_connected {
             return None;
@@ -801,7 +877,7 @@ impl Router {
         Some(Px::from_i64(base_price + venue_adjustment - latency_penalty))
     }
     
-    /// Simulate venue-specific ask price based on venue characteristics  
+    /// Simulate venue-specific ask price based on venue characteristics (fallback)
     fn simulate_venue_ask(&self, venue: &VenueConnection, _symbol: &Symbol) -> Option<Px> {
         if !venue.is_connected {
             return None;
@@ -824,6 +900,7 @@ impl Router {
     }
     
     /// Calculate market volatility based on venue spread characteristics
+    #[allow(dead_code)]
     fn calculate_market_volatility(&self, venues: &std::collections::HashMap<String, VenueConnection>, spread: Option<i64>) -> f64 {
         let base_volatility = 0.02; // 2% base volatility
         
@@ -886,7 +963,7 @@ impl Router {
 struct SmartAlgo;
 
 impl SmartAlgo {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self
     }
 }
@@ -922,7 +999,7 @@ impl AlgorithmEngine for SmartAlgo {
         Ok(child_orders)
     }
     
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Smart"
     }
     
@@ -935,7 +1012,7 @@ impl AlgorithmEngine for SmartAlgo {
 struct TwapAlgo;
 
 impl TwapAlgo {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self
     }
 }
@@ -967,7 +1044,7 @@ impl AlgorithmEngine for TwapAlgo {
         Ok(child_orders)
     }
     
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "TWAP"
     }
     
@@ -980,7 +1057,7 @@ impl AlgorithmEngine for TwapAlgo {
 struct VwapAlgo;
 
 impl VwapAlgo {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self
     }
 }
@@ -1014,7 +1091,7 @@ impl AlgorithmEngine for VwapAlgo {
                     0
                 } else {
                     // Low volume periods - be more conservative
-                    if request.side == Side::Buy { 100 } else { -100 }
+                    if request.side == Side::Bid { 100 } else { -100 }
                 };
                 
                 let limit_price = market_context.mid.map(|mid| 
@@ -1036,7 +1113,7 @@ impl AlgorithmEngine for VwapAlgo {
         Ok(child_orders)
     }
     
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "VWAP"
     }
     
@@ -1049,7 +1126,7 @@ impl AlgorithmEngine for VwapAlgo {
 struct PovAlgo;
 
 impl PovAlgo {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self
     }
 }
@@ -1057,14 +1134,14 @@ impl PovAlgo {
 impl AlgorithmEngine for PovAlgo {
     fn execute(
         &self,
-        request: &OrderRequest,
+        _request: &OrderRequest,
         _market_context: &MarketContext,
     ) -> Result<Vec<ChildOrder>> {
         // POV: Maintain percentage of market volume
         Ok(vec![])
     }
     
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "POV"
     }
     
@@ -1077,7 +1154,7 @@ impl AlgorithmEngine for PovAlgo {
 struct IcebergAlgo;
 
 impl IcebergAlgo {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self
     }
 }
@@ -1102,7 +1179,7 @@ impl AlgorithmEngine for IcebergAlgo {
         }])
     }
     
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Iceberg"
     }
     
@@ -1115,7 +1192,7 @@ impl AlgorithmEngine for IcebergAlgo {
 struct PegAlgo;
 
 impl PegAlgo {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self
     }
 }
@@ -1138,7 +1215,7 @@ impl AlgorithmEngine for PegAlgo {
         }])
     }
     
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Peg"
     }
     

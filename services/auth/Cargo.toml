@@ -23,7 +23,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # gRPC
 tonic = { workspace = true }
 prost = { workspace = true }
-shrivenquant-proto = { path = "../../crates/core/proto" }
+
 
 # Auth specific
 jsonwebtoken = "9.3"
@@ -48,7 +48,7 @@ base64 = { workspace = true }
 reqwest = { version = "0.12", features = ["json", "cookies"] }
 rustc-hash = "2.1"
 chrono = { workspace = true }
-common = { path = "../../crates/core/common" }
+services-common = { path = "../common" }
 totp-rs = "5.5"
 hex = "0.4"
 dotenv = "0.15"

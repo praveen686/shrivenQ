@@ -3,7 +3,7 @@
 //! High-performance order matching with price-time priority.
 
 use anyhow::Result;
-use common::{Px, Qty, Symbol};
+use services_common::{Px, Qty, Symbol};
 use crossbeam::queue::SegQueue;
 use fxhash::FxHashMap;
 use parking_lot::RwLock;
@@ -11,10 +11,10 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::Arc;
-use tracing::{debug, info};
+use tracing::debug;
 use uuid::Uuid;
 
-use crate::order::{Order, OrderSide, OrderType, OrderStatus, Fill, LiquidityIndicator};
+use crate::order::{Order, OrderSide, OrderType, Fill, LiquidityIndicator};
 
 /// Matching engine for order execution
 pub struct MatchingEngine {
@@ -81,9 +81,15 @@ pub struct Match {
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
+impl Default for MatchingEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MatchingEngine {
     /// Create new matching engine
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             order_books: Arc::new(RwLock::new(FxHashMap::default())),
             match_sequence: AtomicU64::new(1),
@@ -486,7 +492,7 @@ pub struct OrderBookDepth {
 }
 
 /// Convert match to fill
-pub fn match_to_fills(m: &Match) -> (Fill, Fill) {
+#[must_use] pub fn match_to_fills(m: &Match) -> (Fill, Fill) {
     // Aggressive order fill (taker)
     let aggressive_fill = Fill {
         id: Uuid::new_v4(),

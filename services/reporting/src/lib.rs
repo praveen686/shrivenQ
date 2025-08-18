@@ -14,7 +14,7 @@ pub mod performance;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::{Px, Qty, Symbol, Ts};
+use services_common::{Px, Qty, Symbol, Ts};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -126,7 +126,7 @@ impl Default for ReportingConfig {
 
 impl ReportingServiceImpl {
     /// Create new reporting service
-    pub fn new(config: ReportingConfig) -> Self {
+    #[must_use] pub fn new(config: ReportingConfig) -> Self {
         let (event_broadcaster, _) = tokio::sync::broadcast::channel(1000);
 
         Self {

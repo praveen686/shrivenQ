@@ -2,8 +2,8 @@
 
 use crate::{AuthService as AuthTrait, Permission as InternalPermission};
 use anyhow::Result;
-use common::constants::time::DEFAULT_TOKEN_EXPIRY_SECS;
-use shrivenquant_proto::auth::v1::{
+use services_common::constants::time::DEFAULT_TOKEN_EXPIRY_SECS;
+use services_common::proto::auth::v1::{
     GetPermissionsRequest, GetPermissionsResponse, LoginRequest, LoginResponse,
     Permission as ProtoPermission, RefreshTokenRequest, RefreshTokenResponse, RevokeTokenRequest,
     RevokeTokenResponse, ValidateTokenRequest, ValidateTokenResponse,
@@ -22,7 +22,7 @@ impl AuthServiceGrpc {
         Self { inner: service }
     }
 
-    fn internal_to_proto_permission(perm: &InternalPermission) -> ProtoPermission {
+    const fn internal_to_proto_permission(perm: &InternalPermission) -> ProtoPermission {
         match perm {
             InternalPermission::ReadMarketData => ProtoPermission::ReadMarketData,
             InternalPermission::PlaceOrders => ProtoPermission::PlaceOrders,
@@ -56,12 +56,9 @@ impl GrpcAuthService for AuthServiceGrpc {
                     .map(|p| {
                         // Safe conversion: Permission enum to i32 (proto-generated requirement)
                         let proto_perm = Self::internal_to_proto_permission(p);
-                        match i32::try_from(proto_perm as u32) {
-                            Ok(val) => val,
-                            Err(_) => {
-                                tracing::error!("Permission {:?} exceeds i32 range", proto_perm);
-                                0 // UNSPECIFIED permission
-                            }
+                        if let Ok(val) = i32::try_from(proto_perm as u32) { val } else {
+                            tracing::error!("Permission {:?} exceeds i32 range", proto_perm);
+                            0 // UNSPECIFIED permission
                         }
                     })
                     .collect();
@@ -93,12 +90,9 @@ impl GrpcAuthService for AuthServiceGrpc {
                     .map(|p| {
                         // Safe conversion: Permission enum to i32 (proto-generated requirement)
                         let proto_perm = Self::internal_to_proto_permission(p);
-                        match i32::try_from(proto_perm as u32) {
-                            Ok(val) => val,
-                            Err(_) => {
-                                tracing::error!("Permission {:?} exceeds i32 range", proto_perm);
-                                0 // UNSPECIFIED permission
-                            }
+                        if let Ok(val) = i32::try_from(proto_perm as u32) { val } else {
+                            tracing::error!("Permission {:?} exceeds i32 range", proto_perm);
+                            0 // UNSPECIFIED permission
                         }
                     })
                     .collect();
@@ -149,8 +143,7 @@ impl GrpcAuthService for AuthServiceGrpc {
                 Ok(Response::new(response))
             }
             Err(e) => Err(Status::unauthenticated(format!(
-                "Invalid refresh token: {}",
-                e
+                "Invalid refresh token: {e}"
             ))),
         }
     }
@@ -162,7 +155,7 @@ impl GrpcAuthService for AuthServiceGrpc {
         let req = request.into_inner();
 
         match self.inner.revoke_token(&req.token).await {
-            Ok(_) => {
+            Ok(()) => {
                 let response = RevokeTokenResponse { success: true };
                 Ok(Response::new(response))
             }

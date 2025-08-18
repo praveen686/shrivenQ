@@ -18,7 +18,7 @@ thiserror = { workspace = true }
 async-trait = "0.1"
 
 # Internal dependencies
-common = { path = "../../crates/core/common" }
+services-common = { path = "../common" }
 execution-router = { path = "../execution-router" }
 risk-manager = { path = "../risk-manager" }
 

@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use common::{Px, Qty};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 use crate::order::{Order, OrderStatus, Fill, Amendment};
@@ -76,7 +75,7 @@ pub enum AuditEvent {
 
 impl AuditTrail {
     /// Create new audit trail
-    pub fn new(db_pool: PgPool) -> Self {
+    #[must_use] pub const fn new(db_pool: PgPool) -> Self {
         Self { db_pool }
     }
     
@@ -105,8 +104,8 @@ impl AuditTrail {
     ) -> Result<()> {
         let event = AuditEvent::StatusChanged {
             order_id,
-            old_status: format!("{:?}", old_status),
-            new_status: format!("{:?}", new_status),
+            old_status: format!("{old_status:?}"),
+            new_status: format!("{new_status:?}"),
             reason: None,
         };
         
@@ -203,13 +202,13 @@ impl AuditTrail {
         let event_data = serde_json::to_value(&event)?;
         
         sqlx::query(
-            r#"
+            r"
             INSERT INTO audit_log (
                 id, event_type, event_data, user_id, timestamp
             ) VALUES (
                 $1, $2, $3, $4, $5
             )
-            "#
+            "
         )
         .bind(Uuid::new_v4())
         .bind(event_type)
@@ -241,29 +240,29 @@ impl AuditTrail {
         
         if let Some(order_id) = order_id {
             param_count += 1;
-            query.push_str(&format!(" AND event_data->>'order_id' = ${}", param_count));
+            query.push_str(&format!(" AND event_data->>'order_id' = ${param_count}"));
             params.push(order_id.to_string());
         }
         
         if let Some(event_type) = event_type {
             param_count += 1;
-            query.push_str(&format!(" AND event_type = ${}", param_count));
+            query.push_str(&format!(" AND event_type = ${param_count}"));
             params.push(event_type.to_string());
         }
         
         if let Some(start_time) = start_time {
             param_count += 1;
-            query.push_str(&format!(" AND timestamp >= ${}", param_count));
+            query.push_str(&format!(" AND timestamp >= ${param_count}"));
             params.push(start_time.to_string());
         }
         
         if let Some(end_time) = end_time {
             param_count += 1;
-            query.push_str(&format!(" AND timestamp <= ${}", param_count));
+            query.push_str(&format!(" AND timestamp <= ${param_count}"));
             params.push(end_time.to_string());
         }
         
-        query.push_str(&format!(" ORDER BY timestamp DESC LIMIT {}", limit));
+        query.push_str(&format!(" ORDER BY timestamp DESC LIMIT {limit}"));
         
         // Execute dynamic query
         // Note: In production, use prepared statements or query builder
@@ -275,7 +274,7 @@ impl AuditTrail {
     /// Create audit tables
     pub async fn create_tables(&self) -> Result<()> {
         sqlx::query(
-            r#"
+            r"
             CREATE TABLE IF NOT EXISTS audit_log (
                 id UUID PRIMARY KEY,
                 event_type TEXT NOT NULL,
@@ -283,7 +282,7 @@ impl AuditTrail {
                 user_id TEXT,
                 timestamp TIMESTAMPTZ NOT NULL
             )
-            "#
+            "
         )
         .execute(&self.db_pool)
         .await?;
@@ -304,15 +303,15 @@ impl AuditTrail {
     
     /// Archive old audit records
     pub async fn archive_old_records(&self, days: i32) -> Result<u64> {
-        let cutoff = Utc::now() - chrono::Duration::days(days as i64);
+        let cutoff = Utc::now() - chrono::Duration::days(i64::from(days));
         
         // First, copy to archive table
         sqlx::query(
-            r#"
+            r"
             INSERT INTO audit_log_archive
             SELECT * FROM audit_log
             WHERE timestamp < $1
-            "#
+            "
         )
         .bind(cutoff)
         .execute(&self.db_pool)
@@ -320,10 +319,10 @@ impl AuditTrail {
         
         // Then delete from main table
         let result = sqlx::query(
-            r#"
+            r"
             DELETE FROM audit_log
             WHERE timestamp < $1
-            "#
+            "
         )
         .bind(cutoff)
         .execute(&self.db_pool)
@@ -356,7 +355,7 @@ pub struct ComplianceReporter {
 
 impl ComplianceReporter {
     /// Create new compliance reporter
-    pub fn new(audit_trail: AuditTrail) -> Self {
+    #[must_use] pub const fn new(audit_trail: AuditTrail) -> Self {
         Self { audit_trail }
     }
     
@@ -386,11 +385,10 @@ impl ComplianceReporter {
                 "OrderCreated" => orders_created += 1,
                 "OrderFilled" => {
                     orders_filled += 1;
-                    if let Some(qty) = record.event_data.get("quantity") {
-                        if let Some(q) = qty.as_i64() {
+                    if let Some(qty) = record.event_data.get("quantity")
+                        && let Some(q) = qty.as_i64() {
                             total_volume += q;
                         }
-                    }
                 }
                 "OrderCancelled" => orders_cancelled += 1,
                 "RiskCheckFailed" => risk_violations += 1,

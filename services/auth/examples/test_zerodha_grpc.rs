@@ -1,7 +1,7 @@
 //! Test Zerodha gRPC authentication with correct API key
 
 use anyhow::Result;
-use shrivenquant_proto::auth::v1::{
+use services_common::auth::v1::{
     LoginRequest, ValidateTokenRequest, auth_service_client::AuthServiceClient,
 };
 use tracing::{error, info};

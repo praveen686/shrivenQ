@@ -167,7 +167,7 @@ impl Segment {
     }
 
     /// Check if segment has room for more data
-    pub const fn is_full(&self, next_entry_size: usize) -> bool {
+    #[must_use] pub const fn is_full(&self, next_entry_size: usize) -> bool {
         self.size
             .saturating_add(8)
             // SAFETY: usize to u64 widening conversion is always safe
@@ -198,12 +198,12 @@ impl Segment {
     }
 
     /// Get the number of entries in the segment
-    pub const fn entry_count(&self) -> u64 {
+    #[must_use] pub const fn entry_count(&self) -> u64 {
         self.entries
     }
 
     /// Get the current size of the segment
-    pub const fn size(&self) -> u64 {
+    #[must_use] pub const fn size(&self) -> u64 {
         self.size
     }
 }
@@ -253,12 +253,12 @@ impl SegmentReader {
     }
 
     /// Get the total number of entries
-    pub const fn entry_count(&self) -> u64 {
+    #[must_use] pub const fn entry_count(&self) -> u64 {
         self.entries
     }
 
     /// Get the current position
-    pub const fn current_position(&self) -> u64 {
+    #[must_use] pub const fn current_position(&self) -> u64 {
         self.current
     }
 
@@ -275,7 +275,7 @@ impl SegmentReader {
         // Skip entries until we reach the target
         while self.current < entry_num {
             // SAFETY: u32 to u64 widening conversion is always safe
-            let length = self.reader.read_u32::<LittleEndian>()? as u64;
+            let length = u64::from(self.reader.read_u32::<LittleEndian>()?);
             // SAFETY: u64 to i64 - length is from u32 so fits in i64
             self.reader.seek(SeekFrom::Current(4 + length as i64))?; // Skip CRC + data
             self.current += 1;

@@ -14,7 +14,7 @@ pub struct MessageEnvelope<T: BusMessage> {
 
 impl<T: BusMessage> MessageEnvelope<T> {
     /// Create a new message envelope
-    pub fn new(message: T, metadata: MessageMetadata) -> Self {
+    pub const fn new(message: T, metadata: MessageMetadata) -> Self {
         Self { message, metadata }
     }
 
@@ -46,7 +46,7 @@ impl<T: BusMessage> MessageEnvelope<T> {
                 // SAFETY: u128 to u64 - milliseconds since epoch fits in u64
                 .as_millis() as u64;
             // SAFETY: u64 arithmetic result to u64
-            let message_age = (now - self.metadata.timestamp / 1_000_000) as u64;
+            let message_age = now - self.metadata.timestamp / 1_000_000;
             message_age > ttl_ms
         } else {
             false
@@ -61,7 +61,7 @@ impl<T: BusMessage> MessageEnvelope<T> {
             // SAFETY: u128 to u64 - milliseconds since epoch fits in u64
             .as_millis() as u64;
         // SAFETY: u64 arithmetic result to u64
-        (now - self.metadata.timestamp / 1_000_000) as u64
+        now - self.metadata.timestamp / 1_000_000
     }
 }
 
@@ -89,14 +89,14 @@ pub enum MessageType {
 impl std::fmt::Display for MessageType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MessageType::MarketData => write!(f, "market_data"),
-            MessageType::Order => write!(f, "order"),
-            MessageType::Fill => write!(f, "fill"),
-            MessageType::Position => write!(f, "position"),
-            MessageType::Risk => write!(f, "risk"),
-            MessageType::Performance => write!(f, "performance"),
-            MessageType::Health => write!(f, "health"),
-            MessageType::Custom => write!(f, "custom"),
+            Self::MarketData => write!(f, "market_data"),
+            Self::Order => write!(f, "order"),
+            Self::Fill => write!(f, "fill"),
+            Self::Position => write!(f, "position"),
+            Self::Risk => write!(f, "risk"),
+            Self::Performance => write!(f, "performance"),
+            Self::Health => write!(f, "health"),
+            Self::Custom => write!(f, "custom"),
         }
     }
 }

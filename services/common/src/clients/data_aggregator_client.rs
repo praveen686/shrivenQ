@@ -3,8 +3,8 @@
 //! Client for interacting with the data aggregator service
 
 use anyhow::Result;
-use common::{Px, Qty, Symbol, Ts};
-use data_aggregator::{Candle, DataAggregator, DataAggregatorService, Timeframe};
+use crate::{Px, Qty, Symbol, Ts};
+// use crate::{Candle, DataAggregator, DataAggregatorService, Timeframe};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;

@@ -3,9 +3,9 @@
 //! Inspired by institutional risk management systems that prevent
 //! catastrophic losses through multi-layered validation.
 
-use crate::{GatewayConfig, OrderType, Side, TradingEvent};
+use crate::{GatewayConfig, Side, TradingEvent};
 use anyhow::Result;
-use common::{Px, Qty, Symbol};
+use services_common::{Px, Qty, Symbol};
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};

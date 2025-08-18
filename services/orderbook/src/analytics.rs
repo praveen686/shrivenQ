@@ -11,7 +11,7 @@
 //! - Realized Spread
 //! - Implementation Shortfall
 
-use common::{Px, Qty, Ts};
+use services_common::{Px, Qty, Ts};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use parking_lot::RwLock;
@@ -40,18 +40,22 @@ pub struct MicrostructureAnalytics {
     kyles_lambda: AtomicI64,
     
     /// Amihud illiquidity measure
+    #[allow(dead_code)]
     amihud_illiquidity: AtomicI64,
     
     /// Order flow imbalance
     flow_imbalance: AtomicI64,
     
     /// Realized spread (in basis points)
+    #[allow(dead_code)]
     realized_spread_bps: AtomicI64,
     
     /// Effective spread (in basis points)
+    #[allow(dead_code)]
     effective_spread_bps: AtomicI64,
     
     /// Quote slope (market depth metric)
+    #[allow(dead_code)]
     quote_slope: AtomicI64,
     
     /// Probability of informed trading (PIN)
@@ -70,9 +74,15 @@ pub struct MicrostructureAnalytics {
     last_calc: AtomicU64,
 }
 
+impl Default for MicrostructureAnalytics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MicrostructureAnalytics {
     /// Create a new analytics engine
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             volume_buckets: RwLock::new(VecDeque::with_capacity(MAX_BUCKETS)),
             kyles_lambda: AtomicI64::new(0),
@@ -189,7 +199,7 @@ impl MicrostructureAnalytics {
         // Recalculate other metrics
         self.calculate_vpin();
         self.calculate_flow_metrics();
-        self.last_calc.store(timestamp.as_nanos() as u64, Ordering::Release);
+        self.last_calc.store(timestamp.as_nanos(), Ordering::Release);
     }
 
     /// Calculate VPIN (Volume-Synchronized Probability of Informed Trading)
@@ -294,7 +304,7 @@ pub struct ImbalanceCalculator;
 
 impl ImbalanceCalculator {
     /// Calculate volume imbalance at various depths
-    pub fn calculate_imbalances(
+    #[must_use] pub fn calculate_imbalances(
         bid_levels: &[(Px, Qty, u64)],
         ask_levels: &[(Px, Qty, u64)],
     ) -> ImbalanceMetrics {
@@ -380,10 +390,7 @@ impl ImbalanceMetrics {
     fn calculate_pressure(&mut self) {
         // Weighted average of imbalances
         let weighted = 
-            self.top_level_imbalance * 0.4 +
-            self.three_level_imbalance * 0.3 +
-            self.five_level_imbalance * 0.2 +
-            self.ten_level_imbalance * 0.1;
+            self.ten_level_imbalance.mul_add(0.1, self.five_level_imbalance.mul_add(0.2, self.top_level_imbalance.mul_add(0.4, self.three_level_imbalance * 0.3)));
             
         if weighted > 0.0 {
             self.buy_pressure = weighted.min(100.0);
@@ -403,9 +410,15 @@ pub struct ToxicityDetector {
     toxicity_score: AtomicI64,
 }
 
+impl Default for ToxicityDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ToxicityDetector {
     /// Create a new toxicity detector
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             recent_trades: RwLock::new(VecDeque::with_capacity(1000)),
             toxicity_score: AtomicI64::new(0),
@@ -456,7 +469,7 @@ impl ToxicityDetector {
         }
         
         // Toxicity score based on directional persistence
-        let score = ((same_direction_runs * 10) + (max_run * 2)).min(100) as i64;
+        let score = i64::from(((same_direction_runs * 10) + (max_run * 2)).min(100));
         self.toxicity_score.store(score, Ordering::Release);
     }
 

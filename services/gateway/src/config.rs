@@ -192,7 +192,7 @@ impl GatewayConfig {
     }
 
     /// Get server address
-    pub fn server_address(&self) -> String {
+    #[must_use] pub fn server_address(&self) -> String {
         format!("{}:{}", self.server.host, self.server.port)
     }
 }

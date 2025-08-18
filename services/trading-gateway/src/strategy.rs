@@ -5,13 +5,13 @@
 use crate::{ComponentHealth, Side, SignalType, TradingEvent, TradingStrategy};
 use anyhow::Result;
 use async_trait::async_trait;
-use common::{Px, Qty, Ts};
+use services_common::{Px, Qty, Ts};
 use parking_lot::RwLock;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{debug, info};
+use tracing::info;
 
 /// Momentum trading strategy
 pub struct MomentumStrategy {
@@ -118,7 +118,7 @@ impl TradingStrategy for MomentumStrategy {
             // Update price history
             {
                 let mut history = self.price_history.write();
-                history.push_back((mid, *timestamp));
+                history.push_back((*mid, *timestamp));
                 if history.len() > 200 {
                     history.pop_front();
                 }
@@ -128,7 +128,7 @@ impl TradingStrategy for MomentumStrategy {
             self.calculate_moving_averages();
             
             // Check for signal
-            if let Some((side, strength, confidence)) = self.detect_signal(mid) {
+            if let Some((side, strength, confidence)) = self.detect_signal(*mid) {
                 // Rate limit signals (max 1 per second)
                 {
                     let mut last_signal = self.last_signal.write();
@@ -233,7 +233,7 @@ impl ArbitrageStrategy {
                 let confidence = (strength * 10.0).min(1.0);
                 
                 // Calculate optimal size based on available liquidity
-                let size = bid_qty.min(ask_qty);
+                let _size = bid_qty.min(ask_qty);
                 
                 return Some((Side::Buy, strength, confidence));
             }

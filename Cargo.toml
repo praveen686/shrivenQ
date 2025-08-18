@@ -1,26 +1,5 @@
 [workspace]
 members = [
-    # Core functionality
-    "crates/core/common",
-    "crates/core/proto",
-
-    # Market data handling
-    "crates/market-data/lob",
-    "crates/market-data/feeds",
-
-    # Trading systems
-    "crates/trading/engine",
-    "crates/trading/sim",
-
-    # Infrastructure
-    "crates/infra/auth",
-    "crates/infra/bus",
-    "crates/infra/storage",
-
-    # Tools and utilities
-    "crates/tools/cli",
-    "crates/tools/perf",
-    
     # Microservices
     "services/common",
     "services/discovery",
@@ -36,6 +15,12 @@ members = [
     "services/orderbook",
     "services/trading-gateway",
     "services/oms",
+    "services/options-engine",
+    "services/monitoring",
+    "services/secrets-manager",
+    "services/ml-inference",
+    "services/sentiment-analyzer",
+    "services/logging",
 ]
 resolver = "2"
 exclude = [
@@ -71,6 +56,7 @@ memmap2 = "0.9"
 byteorder = "1.5"
 criterion = "0.5"
 chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.12", features = ["json"] }
 rand = "0.8"
 rand_distr = "0.4"
 tempfile = { version = "3.20", default-features = false }

@@ -18,7 +18,7 @@ serde_json = { workspace = true }
 async-trait = "0.1"
 
 # Internal dependencies
-common = { path = "../common" }
+services-common = { path = "../common" }
 risk-manager = { path = "../risk-manager" }
 market-connector = { path = "../market-connector" }
 
@@ -39,7 +39,7 @@ chrono = { workspace = true }
 
 # gRPC dependencies
 tonic = { workspace = true }
-shrivenquant-proto = { path = "../../crates/core/proto" }
+
 tokio-stream = "0.1"
 async-stream = "0.3"
 

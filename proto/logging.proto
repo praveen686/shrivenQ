@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package logging;
+
+// Single log request
+message LogRequest {
+    string service = 1;
+    string level = 2;  // TRACE, DEBUG, INFO, WARN, ERROR
+    string message = 3;
+    string fields = 4;  // JSON encoded fields
+    string trace_id = 5;
+    string span_id = 6;
+    string correlation_id = 7;
+}
+
+// Batch of logs
+message LogBatch {
+    repeated LogRequest logs = 1;
+}
+
+// Log response
+message LogResponse {
+    bool success = 1;
+}
+
+// Log entry in response
+message LogEntry {
+    int64 timestamp = 1;
+    string level = 2;
+    string service = 3;
+    string message = 4;
+    string fields = 5;
+    string trace_id = 6;
+    string span_id = 7;
+    string correlation_id = 8;
+}
+
+// Get logs request
+message GetLogsRequest {
+    string service = 1;
+    int32 limit = 2;
+    int64 since_timestamp = 3;  // Unix timestamp in milliseconds
+    string level_filter = 4;    // Minimum level to return
+}
+
+// Get logs response
+message GetLogsResponse {
+    repeated LogEntry logs = 1;
+}
+
+// Logging service for centralized log collection
+service LoggingService {
+    // Send a single log entry
+    rpc Log(LogRequest) returns (LogResponse);
+    
+    // Send a batch of log entries
+    rpc BatchLog(LogBatch) returns (LogResponse);
+    
+    // Query logs for a service
+    rpc GetLogs(GetLogsRequest) returns (GetLogsResponse);
+}

@@ -2,7 +2,7 @@
 
 use crate::OrderRequest;
 use chrono::{DateTime, Duration, Utc};
-use common::{Px, Qty};
+use services_common::{Px, Qty};
 use serde::{Deserialize, Serialize};
 
 /// Algorithm type
@@ -72,7 +72,7 @@ pub struct TwapAlgorithm {
 
 impl TwapAlgorithm {
     /// Create new TWAP algorithm
-    pub fn new(parent_order: OrderRequest, params: AlgorithmParams) -> Self {
+    #[must_use] pub fn new(parent_order: OrderRequest, params: AlgorithmParams) -> Self {
         let duration = params.end_time - params.start_time;
         let total_slices = u32::try_from((duration.num_seconds() / 60).max(1)).unwrap_or(u32::MAX);
         let slice_interval = duration / i32::try_from(total_slices).unwrap_or(i32::MAX);
@@ -146,7 +146,7 @@ pub struct VwapAlgorithm {
 
 impl VwapAlgorithm {
     /// Create new VWAP algorithm
-    pub fn new(parent_order: OrderRequest, params: AlgorithmParams) -> Self {
+    #[must_use] pub fn new(parent_order: OrderRequest, params: AlgorithmParams) -> Self {
         // Default volume curve (U-shaped for typical trading day)
         let volume_curve = vec![
             150, 120, 100, 80, 70, 60, 50, 45, 40, 35, // Morning
@@ -225,7 +225,7 @@ pub struct IcebergAlgorithm {
 
 impl IcebergAlgorithm {
     /// Create new iceberg algorithm
-    pub fn new(parent_order: OrderRequest, params: AlgorithmParams, display_qty: Qty) -> Self {
+    #[must_use] pub const fn new(parent_order: OrderRequest, params: AlgorithmParams, display_qty: Qty) -> Self {
         let state = AlgorithmState {
             remaining_qty: parent_order.quantity,
             executed_qty: Qty::ZERO,

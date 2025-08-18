@@ -7,8 +7,8 @@ use auth_service::{
     AuthService, binance_service::create_binance_service, grpc::AuthServiceGrpc,
     zerodha_service::create_auth_service,
 };
-use common::constants::network::DEFAULT_GRPC_PORT;
-use shrivenquant_proto::auth::v1::auth_service_server::AuthServiceServer;
+use services_common::constants::network::DEFAULT_GRPC_PORT;
+use services_common::proto::auth::v1::auth_service_server::AuthServiceServer;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tonic::transport::Server;
@@ -100,22 +100,19 @@ impl AuthService for MultiExchangeAuthService {
             if let Some(binance) = &self.binance_service {
                 info!("🔄 Routing to Binance service for: {}", username);
                 return binance.authenticate(username, password).await;
-            } else {
-                return Err(anyhow::anyhow!("Binance service not configured"));
             }
+            return Err(anyhow::anyhow!("Binance service not configured"));
         } else if username == "zerodha" || username.contains("zerodha") {
             if let Some(zerodha) = &self.zerodha_service {
                 info!("🔄 Routing to Zerodha service for: {}", username);
                 return zerodha.authenticate(username, password).await;
-            } else {
-                return Err(anyhow::anyhow!("Zerodha service not configured"));
             }
-        } else {
-            // Try Zerodha as default for unknown usernames
-            if let Some(zerodha) = &self.zerodha_service {
-                info!("🔄 Defaulting to Zerodha service for: {}", username);
-                return zerodha.authenticate(username, password).await;
-            }
+            return Err(anyhow::anyhow!("Zerodha service not configured"));
+        }
+        // Try Zerodha as default for unknown usernames
+        if let Some(zerodha) = &self.zerodha_service {
+            info!("🔄 Defaulting to Zerodha service for: {}", username);
+            return zerodha.authenticate(username, password).await;
         }
 
         Err(anyhow::anyhow!(
@@ -182,13 +179,13 @@ impl AuthService for MultiExchangeAuthService {
 
         if let Some(binance) = &self.binance_service {
             if let Err(e) = binance.revoke_token(token).await {
-                errors.push(format!("Binance: {}", e));
+                errors.push(format!("Binance: {e}"));
             }
         }
 
         if let Some(zerodha) = &self.zerodha_service {
             if let Err(e) = zerodha.revoke_token(token).await {
-                errors.push(format!("Zerodha: {}", e));
+                errors.push(format!("Zerodha: {e}"));
             }
         }
 
@@ -221,7 +218,7 @@ async fn main() -> Result<()> {
     let grpc_service = AuthServiceGrpc::new(auth_service);
 
     // Start gRPC server
-    let grpc_addr: SocketAddr = format!("0.0.0.0:{}", DEFAULT_GRPC_PORT).parse()?;
+    let grpc_addr: SocketAddr = format!("0.0.0.0:{DEFAULT_GRPC_PORT}").parse()?;
 
     info!("Starting gRPC server on {}", grpc_addr);
 

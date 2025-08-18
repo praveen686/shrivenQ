@@ -23,7 +23,7 @@ pub struct TopicRouter {
 
 impl TopicRouter {
     /// Create a new topic router
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             routes: Arc::new(RwLock::new(FxHashMap::default())),
         }
@@ -37,7 +37,7 @@ impl TopicRouter {
         let mut routes = self.routes.write();
         routes
             .entry(pattern.clone())
-            .or_insert_with(FxHashSet::default)
+            .or_default()
             .insert(target.clone());
 
         debug!(
@@ -65,7 +65,7 @@ impl TopicRouter {
     }
 
     /// Get all targets for a pattern
-    pub fn get_targets(&self, pattern: &str) -> Vec<String> {
+    #[must_use] pub fn get_targets(&self, pattern: &str) -> Vec<String> {
         let routes = self.routes.read();
         routes
             .get(pattern)
@@ -74,7 +74,7 @@ impl TopicRouter {
     }
 
     /// List all routing patterns
-    pub fn list_patterns(&self) -> Vec<String> {
+    #[must_use] pub fn list_patterns(&self) -> Vec<String> {
         let routes = self.routes.read();
         routes.keys().cloned().collect()
     }
@@ -86,13 +86,11 @@ impl TopicRouter {
             return true;
         }
 
-        if pattern.ends_with("*") {
-            let prefix = &pattern[..pattern.len() - 1];
+        if let Some(prefix) = pattern.strip_suffix('*') {
             return topic.starts_with(prefix);
         }
 
-        if pattern.starts_with("*") {
-            let suffix = &pattern[1..];
+        if let Some(suffix) = pattern.strip_prefix('*') {
             return topic.ends_with(suffix);
         }
 
@@ -144,7 +142,7 @@ pub struct ContentBasedRouter<T: BusMessage> {
 
 impl<T: BusMessage> ContentBasedRouter<T> {
     /// Create a new content-based router
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             rules: Arc::new(RwLock::new(Vec::new())),
         }
@@ -212,7 +210,7 @@ pub struct PriorityRouter {
 
 impl PriorityRouter {
     /// Create a new priority router
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             priority_routes: Arc::new(RwLock::new(Vec::new())),
         }
@@ -285,7 +283,7 @@ pub struct LoadBalancingRouter {
 
 impl LoadBalancingRouter {
     /// Create a new load balancing router
-    pub fn new(targets: Vec<String>) -> Self {
+    #[must_use] pub fn new(targets: Vec<String>) -> Self {
         Self {
             targets: Arc::new(RwLock::new(targets)),
             current_index: Arc::new(parking_lot::Mutex::new(0)),
@@ -354,7 +352,7 @@ pub struct CompositeRouter<T: BusMessage> {
 
 impl<T: BusMessage> CompositeRouter<T> {
     /// Create a new composite router
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             routers: Vec::new(),
         }

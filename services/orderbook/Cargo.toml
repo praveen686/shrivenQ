@@ -35,8 +35,8 @@ metrics = "0.23"
 hdrhistogram = "7.5"
 
 # Internal
-common = { path = "../../crates/core/common" }
-shrivenquant-proto = { path = "../../crates/core/proto" }
+services-common = { path = "../common" }
+
 
 # For live analytics example
 tokio = { version = "1.47", features = ["full"] }

@@ -7,8 +7,8 @@
 
 use crate::{OptimizationStrategy, PortfolioConstraints, RebalanceChange};
 use anyhow::Result;
-use common::Symbol;
-use common::constants::fixed_point::SCALE_4;
+use services_common::Symbol;
+use services_common::constants::fixed_point::SCALE_4;
 use nalgebra::{DMatrix, DVector};
 use rustc_hash::FxHashMap;
 
@@ -352,7 +352,7 @@ impl Default for PortfolioOptimizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::Symbol;
+    use services_common::Symbol;
 
     #[tokio::test]
     async fn test_equal_weight_optimization() {

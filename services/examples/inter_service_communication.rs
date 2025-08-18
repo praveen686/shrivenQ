@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
     info!("Connecting to risk service...");
     let mut risk_client = RiskClient::new(&endpoints.risk_service).await?;
     
-    let risk_check = shrivenquant_proto::risk::v1::CheckRiskRequest {
+    let risk_check = services_common::proto::risk::v1::CheckRiskRequest {
         symbol: "BTCUSDT".to_string(),
         side: "BUY".to_string(),
         quantity: 100_0000, // 100 units
@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
         info!("Connecting to execution service...");
         let mut exec_client = ExecutionClient::new(&endpoints.execution_service).await?;
         
-        let order_request = shrivenquant_proto::execution::v1::SubmitOrderRequest {
+        let order_request = services_common::proto::execution::v1::SubmitOrderRequest {
             client_order_id: "demo_order_001".to_string(),
             symbol: "BTCUSDT".to_string(),
             side: "BUY".to_string(),

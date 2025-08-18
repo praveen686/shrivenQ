@@ -2,12 +2,12 @@
 
 use crate::{OrderType, Side, SignalType, TimeInForce, TradingEvent};
 use anyhow::Result;
-use common::{Px, Qty, Symbol};
+use services_common::{Qty, Symbol};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tracing::{debug, info};
+use tracing::info;
 
 /// Signal aggregator for combining strategy signals
 pub struct SignalAggregator {

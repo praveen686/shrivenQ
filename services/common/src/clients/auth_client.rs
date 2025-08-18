@@ -1,7 +1,7 @@
 //! Auth service gRPC client wrapper
 
 use anyhow::Result;
-use shrivenquant_proto::auth::v1::{
+use crate::proto::auth::v1::{
     LoginRequest, LoginResponse, ValidateTokenRequest, ValidateTokenResponse,
     auth_service_client::AuthServiceClient as GrpcClient,
 };

@@ -3,7 +3,7 @@
 //! This module provides ultra-low-latency metrics collection specifically
 //! designed for orderbook operations with nanosecond precision.
 
-use common::{Qty, Ts};
+use services_common::{Qty, Ts};
 use std::sync::atomic::{AtomicU64, AtomicI64, Ordering};
 use parking_lot::RwLock;
 use hdrhistogram::Histogram;
@@ -19,6 +19,7 @@ pub struct PerformanceMetrics {
     orders_modified: AtomicU64,
     orders_canceled: AtomicU64,
     trades_executed: AtomicU64,
+    #[allow(dead_code)]
     snapshots_processed: AtomicU64,
     
     /// Volume metrics
@@ -208,7 +209,7 @@ impl PerformanceMetrics {
     /// Update frequency counter
     #[inline]
     fn update_frequency(&self) {
-        let now = Ts::now().as_nanos() as u64;
+        let now = Ts::now().as_nanos();
         let last = self.last_update_time.load(Ordering::Acquire);
         
         // Reset counter every second
@@ -275,9 +276,15 @@ pub struct LatencyTracker {
     sample_counts: [AtomicU64; 7],
 }
 
+impl Default for LatencyTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LatencyTracker {
     /// Create new latency tracker
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         let histograms = [
             Histogram::new(3).unwrap(),
             Histogram::new(3).unwrap(),
@@ -311,7 +318,7 @@ impl LatencyTracker {
         let mut stats = LatencyStats::default();
         
         for (i, hist) in histograms.iter().enumerate() {
-            if hist.len() > 0 {
+            if !hist.is_empty() {
                 let op_stats = OperationLatency {
                     count: self.sample_counts[i].load(Ordering::Acquire),
                     min: hist.min(),
@@ -355,26 +362,42 @@ impl LatencyTracker {
 /// Latency statistics for an operation type
 #[derive(Debug, Clone, Default)]
 pub struct OperationLatency {
+    /// Total number of operations measured
     pub count: u64,
+    /// Minimum latency observed in nanoseconds
     pub min: u64,
+    /// Maximum latency observed in nanoseconds
     pub max: u64,
+    /// Mean latency in nanoseconds
     pub mean: u64,
+    /// 50th percentile latency in nanoseconds
     pub p50: u64,
+    /// 90th percentile latency in nanoseconds
     pub p90: u64,
+    /// 95th percentile latency in nanoseconds
     pub p95: u64,
+    /// 99th percentile latency in nanoseconds
     pub p99: u64,
+    /// 99.9th percentile latency in nanoseconds
     pub p999: u64,
 }
 
 /// Complete latency statistics
 #[derive(Debug, Clone, Default)]
 pub struct LatencyStats {
+    /// Latency statistics for order add operations
     pub order_add: Option<OperationLatency>,
+    /// Latency statistics for order modify operations
     pub order_modify: Option<OperationLatency>,
+    /// Latency statistics for order cancel operations
     pub order_cancel: Option<OperationLatency>,
+    /// Latency statistics for trade operations
     pub trade: Option<OperationLatency>,
+    /// Latency statistics for snapshot operations
     pub snapshot: Option<OperationLatency>,
+    /// Latency statistics for checksum operations
     pub checksum: Option<OperationLatency>,
+    /// Latency statistics for replay operations
     pub replay: Option<OperationLatency>,
 }
 
@@ -404,7 +427,7 @@ pub struct MetricsSnapshot {
 
 impl MetricsSnapshot {
     /// Format metrics as a report
-    pub fn format_report(&self) -> String {
+    #[must_use] pub fn format_report(&self) -> String {
         let mut report = String::new();
         report.push_str(&format!("=== Orderbook Metrics: {} ===\n", self.symbol));
         report.push_str(&format!("Orders: {} added, {} modified, {} canceled\n", 
@@ -422,13 +445,13 @@ impl MetricsSnapshot {
         
         // Add latency stats
         if let Some(ref add) = self.latency_stats.order_add {
-            report.push_str(&format!("\nOrder Add Latency (ns):\n"));
+            report.push_str("\nOrder Add Latency (ns):\n");
             report.push_str(&format!("  p50: {}, p90: {}, p99: {}, p99.9: {}\n",
                 add.p50, add.p90, add.p99, add.p999));
         }
         
         if let Some(ref trade) = self.latency_stats.trade {
-            report.push_str(&format!("\nTrade Latency (ns):\n"));
+            report.push_str("\nTrade Latency (ns):\n");
             report.push_str(&format!("  p50: {}, p90: {}, p99: {}, p99.9: {}\n",
                 trade.p50, trade.p90, trade.p99, trade.p999));
         }

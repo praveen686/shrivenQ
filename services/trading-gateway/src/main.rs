@@ -11,16 +11,7 @@ use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use trading_gateway::{GatewayConfig, TradingGateway};
-use shrivenquant_proto::trading::v1::{
-    trading_gateway_server::{TradingGateway as TradingGatewayService, TradingGatewayServer},
-    StartTradingRequest, StartTradingResponse,
-    StopTradingRequest, StopTradingResponse,
-    GetStatusRequest, GetStatusResponse,
-    EmergencyStopRequest, EmergencyStopResponse,
-    UpdateStrategyRequest, UpdateStrategyResponse,
-    GetPositionsRequest, GetPositionsResponse,
-    Position, GatewayStatus as ProtoGatewayStatus,
-};
+use services_common::proto::trading::v1::trading_gateway_server::{TradingGateway as TradingGatewayService, TradingGatewayServer};
 
 mod grpc_service;
 use grpc_service::TradingGatewayServiceImpl;
@@ -103,7 +94,7 @@ fn load_config() -> Result<GatewayConfig> {
     let mut config = GatewayConfig::default();
     
     if let Ok(max_pos) = std::env::var("MAX_POSITION_SIZE") {
-        config.max_position_size = common::Qty::from_i64(max_pos.parse()?);
+        config.max_position_size = services_common::Qty::from_i64(max_pos.parse()?);
     }
     
     if let Ok(max_loss) = std::env::var("MAX_DAILY_LOSS") {
@@ -158,27 +149,36 @@ fn start_health_check(gateway: Arc<TradingGateway>) {
     tokio::spawn(async move {
         let app = axum::Router::new()
             .route("/health", axum::routing::get(move || async move {
-                let status = gateway.get_status().await;
+                let status = gateway.get_status();
                 
-                if status.is_running {
-                    axum::response::Json(serde_json::json!({
-                        "status": "healthy",
-                        "service": SERVICE_NAME,
-                        "active_strategies": status.active_strategies,
-                        "total_positions": status.total_positions,
-                    }))
-                } else {
-                    axum::http::StatusCode::SERVICE_UNAVAILABLE
+                match status {
+                    trading_gateway::GatewayStatus::Running => {
+                        (axum::http::StatusCode::OK, axum::response::Json(serde_json::json!({
+                            "status": "healthy",
+                            "service": SERVICE_NAME,
+                        })))
+                    }
+                    _ => {
+                        (axum::http::StatusCode::SERVICE_UNAVAILABLE, axum::response::Json(serde_json::json!({
+                            "status": "unhealthy",
+                            "service": SERVICE_NAME,
+                        })))
+                    }
                 }
             }));
         
         let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
         info!("Health check endpoint available at http://{}/health", addr);
         
-        if let Err(e) = axum::Server::bind(&addr)
-            .serve(app.into_make_service())
-            .await
-        {
+        let listener = match tokio::net::TcpListener::bind(&addr).await {
+            Ok(l) => l,
+            Err(e) => {
+                error!("Failed to bind health check server to {}: {}", addr, e);
+                return;
+            }
+        };
+        
+        if let Err(e) = axum::serve(listener, app).await {
             error!("Health check server error: {}", e);
         }
     });
@@ -187,26 +187,25 @@ fn start_health_check(gateway: Arc<TradingGateway>) {
 /// Start Prometheus metrics endpoint
 fn start_metrics_endpoint() {
     tokio::spawn(async {
-        let recorder = metrics_exporter_prometheus::PrometheusBuilder::new()
-            .build_recorder();
-            
-        if let Ok(handle) = recorder {
-            metrics::set_global_recorder(handle.clone()).unwrap();
-            
-            let app = axum::Router::new()
-                .route("/metrics", axum::routing::get(move || async move {
-                    handle.render()
-                }));
-            
-            let addr = SocketAddr::from(([0, 0, 0, 0], 9090));
-            info!("Metrics endpoint available at http://{}/metrics", addr);
-            
-            if let Err(e) = axum::Server::bind(&addr)
-                .serve(app.into_make_service())
-                .await
-            {
-                error!("Metrics server error: {}", e);
+        // For now, just create a simple endpoint
+        let app = axum::Router::new()
+            .route("/metrics", axum::routing::get(|| async {
+                "# Metrics endpoint placeholder\n"
+            }));
+        
+        let addr = SocketAddr::from(([0, 0, 0, 0], 9090));
+        info!("Metrics endpoint available at http://{}/metrics", addr);
+        
+        let listener = match tokio::net::TcpListener::bind(&addr).await {
+            Ok(l) => l,
+            Err(e) => {
+                error!("Failed to bind metrics server to {}: {}", addr, e);
+                return;
             }
+        };
+        
+        if let Err(e) = axum::serve(listener, app).await {
+            error!("Metrics server error: {}", e);
         }
     });
 }

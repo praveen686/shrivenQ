@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package options;
+
+// Option type
+enum OptionType {
+    CALL = 0;
+    PUT = 1;
+}
+
+// Indian index options
+enum IndexOption {
+    NIFTY50 = 0;
+    BANKNIFTY = 1;
+    FINNIFTY = 2;
+    MIDCAPNIFTY = 3;
+}
+
+// Greeks for option pricing
+message Greeks {
+    double delta = 1;
+    double gamma = 2;
+    double theta = 3;
+    double vega = 4;
+    double rho = 5;
+    double lambda = 6;
+    double vanna = 7;
+    double charm = 8;
+}
+
+// Option contract details
+message OptionContract {
+    IndexOption index = 1;
+    OptionType option_type = 2;
+    double strike = 3;
+    string expiry = 4;
+    uint32 lot_size = 5;
+    double premium = 6;
+    uint64 open_interest = 7;
+    uint64 volume = 8;
+    double implied_volatility = 9;
+    Greeks greeks = 10;
+}
+
+// Pricing request
+message PricingRequest {
+    OptionType option_type = 1;
+    double spot = 2;
+    double strike = 3;
+    double rate = 4;
+    double volatility = 5;
+    double time_to_expiry = 6;
+}
+
+// Pricing response
+message PricingResponse {
+    double price = 1;
+    Greeks greeks = 2;
+    double implied_volatility = 3;
+}
+
+// Strategy request
+message StrategyRequest {
+    string strategy_type = 1;
+    IndexOption index = 2;
+    double spot = 3;
+    repeated OptionContract legs = 4;
+}
+
+// Strategy response
+message StrategyResponse {
+    string strategy_name = 1;
+    double max_profit = 2;
+    double max_loss = 3;
+    repeated double breakeven_points = 4;
+    Greeks aggregate_greeks = 5;
+    double margin_required = 6;
+}
+
+// Options Engine Service
+service OptionsEngine {
+    // Calculate option price and Greeks
+    rpc CalculatePrice(PricingRequest) returns (PricingResponse);
+    
+    // Get implied volatility
+    rpc GetImpliedVolatility(PricingRequest) returns (PricingResponse);
+    
+    // Analyze option strategy
+    rpc AnalyzeStrategy(StrategyRequest) returns (StrategyResponse);
+    
+    // Get option chain
+    rpc GetOptionChain(OptionChainRequest) returns (OptionChainResponse);
+    
+    // Stream real-time Greeks updates
+    rpc StreamGreeks(StreamGreeksRequest) returns (stream Greeks);
+}
+
+// Option chain request
+message OptionChainRequest {
+    IndexOption index = 1;
+    string expiry = 2;
+}
+
+// Option chain response
+message OptionChainResponse {
+    repeated OptionContract options = 1;
+    double spot_price = 2;
+    string timestamp = 3;
+}
+
+// Stream Greeks request
+message StreamGreeksRequest {
+    repeated OptionContract contracts = 1;
+}

@@ -32,20 +32,20 @@ pub struct ExecutionHandlers {
 }
 
 impl ExecutionHandlers {
-    pub fn new(grpc_clients: Arc<GrpcClients>) -> Self {
+    pub const fn new(grpc_clients: Arc<GrpcClients>) -> Self {
         Self { grpc_clients }
     }
 
     /// Submit order endpoint
     pub async fn submit_order(
-        State(handlers): State<ExecutionHandlers>,
+        State(handlers): State<Self>,
         headers: HeaderMap,
         Json(order_request): Json<SubmitOrderRequest>,
     ) -> Result<Json<ApiResponse<SubmitOrderResponse>>, StatusCode> {
         // Check permissions
         let user_context = get_user_context_from_headers(&headers);
-        if let Some(user) = user_context {
-            if !check_permission(&user, "PLACE_ORDERS") {
+        if let Some(user) = user_context
+            && !check_permission(&user, "PLACE_ORDERS") {
                 let error_response = ErrorResponse {
                     error: "PERMISSION_DENIED".to_string(),
                     message: "Insufficient permissions to place orders".to_string(),
@@ -53,7 +53,6 @@ impl ExecutionHandlers {
                 };
                 return Ok(Json(ApiResponse::error(error_response)));
             }
-        }
 
         info!("Submit order request for symbol: {}", order_request.symbol);
 
@@ -70,12 +69,10 @@ impl ExecutionHandlers {
             order_type: string_to_order_type(&order_request.order_type),
             limit_price: order_request
                 .limit_price
-                .map(|p| parse_fixed_point(&p).unwrap_or(0))
-                .unwrap_or(0),
+                .map_or(0, |p| parse_fixed_point(&p).unwrap_or(0)),
             stop_price: order_request
                 .stop_price
-                .map(|p| parse_fixed_point(&p).unwrap_or(0))
-                .unwrap_or(0),
+                .map_or(0, |p| parse_fixed_point(&p).unwrap_or(0)),
             time_in_force: string_to_time_in_force(
                 order_request.time_in_force.as_deref().unwrap_or("GTC"),
             ),
@@ -120,14 +117,14 @@ impl ExecutionHandlers {
 
     /// Cancel order endpoint
     pub async fn cancel_order(
-        State(handlers): State<ExecutionHandlers>,
+        State(handlers): State<Self>,
         headers: HeaderMap,
         Json(cancel_request): Json<CancelOrderRequest>,
     ) -> Result<Json<ApiResponse<bool>>, StatusCode> {
         // Check permissions
         let user_context = get_user_context_from_headers(&headers);
-        if let Some(user) = user_context {
-            if !check_permission(&user, "CANCEL_ORDERS") {
+        if let Some(user) = user_context
+            && !check_permission(&user, "CANCEL_ORDERS") {
                 let error_response = ErrorResponse {
                     error: "PERMISSION_DENIED".to_string(),
                     message: "Insufficient permissions to cancel orders".to_string(),
@@ -135,7 +132,6 @@ impl ExecutionHandlers {
                 };
                 return Ok(Json(ApiResponse::error(error_response)));
             }
-        }
 
         info!("Cancel order request");
 
@@ -166,15 +162,15 @@ impl ExecutionHandlers {
 
     /// Get order status endpoint
     pub async fn get_order_status(
-        State(handlers): State<ExecutionHandlers>,
+        State(handlers): State<Self>,
         headers: HeaderMap,
         Path(order_id): Path<i64>,
         Query(query): Query<OrderQuery>,
     ) -> Result<Json<ApiResponse<OrderStatusResponse>>, StatusCode> {
         // Check permissions
         let user_context = get_user_context_from_headers(&headers);
-        if let Some(user) = user_context {
-            if !check_permission(&user, "VIEW_POSITIONS") {
+        if let Some(user) = user_context
+            && !check_permission(&user, "VIEW_POSITIONS") {
                 let error_response = ErrorResponse {
                     error: "PERMISSION_DENIED".to_string(),
                     message: "Insufficient permissions to view orders".to_string(),
@@ -182,7 +178,6 @@ impl ExecutionHandlers {
                 };
                 return Ok(Json(ApiResponse::error(error_response)));
             }
-        }
 
         info!("Get order status request for order: {}", order_id);
 
@@ -257,13 +252,13 @@ impl ExecutionHandlers {
 
     /// Get execution metrics endpoint
     pub async fn get_metrics(
-        State(handlers): State<ExecutionHandlers>,
+        State(handlers): State<Self>,
         headers: HeaderMap,
     ) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
         // Check permissions
         let user_context = get_user_context_from_headers(&headers);
-        if let Some(user) = user_context {
-            if !check_permission(&user, "VIEW_POSITIONS") {
+        if let Some(user) = user_context
+            && !check_permission(&user, "VIEW_POSITIONS") {
                 let error_response = ErrorResponse {
                     error: "PERMISSION_DENIED".to_string(),
                     message: "Insufficient permissions to view metrics".to_string(),
@@ -271,7 +266,6 @@ impl ExecutionHandlers {
                 };
                 return Ok(Json(ApiResponse::error(error_response)));
             }
-        }
 
         let mut client = handlers.grpc_clients.execution.clone();
 
@@ -290,7 +284,7 @@ impl ExecutionHandlers {
                         "total_volume": fixed_point_to_string(metrics.total_volume),
                         "total_commission": fixed_point_to_string(metrics.total_commission),
                         // SAFETY: metrics.fill_rate is i32, safely widens to i64
-                        "fill_rate": fixed_point_to_string(metrics.fill_rate as i64),
+                        "fill_rate": fixed_point_to_string(i64::from(metrics.fill_rate)),
                         "venues_used": &metrics.venues_used,
                     }),
                     None => serde_json::json!({

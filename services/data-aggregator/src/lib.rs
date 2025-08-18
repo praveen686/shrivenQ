@@ -13,8 +13,8 @@ pub mod storage;
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
-use common::constants::memory::WAL_REPLAY_BATCH_SIZE;
-use common::{Px, Qty, Symbol, Ts};
+use services_common::constants::memory::WAL_REPLAY_BATCH_SIZE;
+use services_common::{Px, Qty, Symbol, Ts};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -48,21 +48,21 @@ pub enum Timeframe {
 
 impl Timeframe {
     /// Get duration in seconds
-    pub fn duration_seconds(&self) -> i64 {
+    #[must_use] pub const fn duration_seconds(&self) -> i64 {
         match self {
-            Timeframe::M1 => 60,
-            Timeframe::M5 => 300,
-            Timeframe::M15 => 900,
-            Timeframe::M30 => 1800,
-            Timeframe::H1 => 3600,
-            Timeframe::H4 => 14400,
-            Timeframe::D1 => 86400,
-            Timeframe::W1 => 604800,
+            Self::M1 => 60,
+            Self::M5 => 300,
+            Self::M15 => 900,
+            Self::M30 => 1800,
+            Self::H1 => 3600,
+            Self::H4 => 14400,
+            Self::D1 => 86400,
+            Self::W1 => 604800,
         }
     }
 
     /// Get chrono duration
-    pub fn to_duration(&self) -> Duration {
+    #[must_use] pub const fn to_duration(&self) -> Duration {
         Duration::seconds(self.duration_seconds())
     }
 }
@@ -98,7 +98,7 @@ pub struct Candle {
 
 impl Candle {
     /// Create new candle
-    pub fn new(symbol: Symbol, timeframe: Timeframe, open_time: DateTime<Utc>) -> Self {
+    #[must_use] pub fn new(symbol: Symbol, timeframe: Timeframe, open_time: DateTime<Utc>) -> Self {
         let close_time = open_time + timeframe.to_duration();
         Self {
             symbol,
@@ -143,7 +143,7 @@ impl Candle {
     }
 
     /// Check if candle is complete
-    pub fn is_complete(&self, current_time: DateTime<Utc>) -> bool {
+    #[must_use] pub fn is_complete(&self, current_time: DateTime<Utc>) -> bool {
         current_time >= self.close_time
     }
 }
@@ -263,7 +263,7 @@ pub struct DataAggregatorService {
 
 impl DataAggregatorService {
     /// Create new aggregator service
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             candles: Arc::new(RwLock::new(FxHashMap::default())),
             completed_candles: Arc::new(RwLock::new(FxHashMap::default())),
@@ -485,7 +485,7 @@ impl DataAggregator for DataAggregatorService {
                 let timestamp_secs = current_time.timestamp();
                 let candle_start_secs = (timestamp_secs / duration_secs) * duration_secs;
                 let open_time =
-                    DateTime::from_timestamp(candle_start_secs, 0).unwrap_or_else(|| Utc::now());
+                    DateTime::from_timestamp(candle_start_secs, 0).unwrap_or_else(Utc::now);
 
                 Candle::new(symbol, *timeframe, open_time)
             });

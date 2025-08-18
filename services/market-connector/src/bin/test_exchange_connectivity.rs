@@ -10,7 +10,7 @@
 //! - Proper error handling
 
 use anyhow::{Context, Result};
-use common::{L2Update, Px, Qty, Side, Symbol, Ts};
+use services_common::{L2Update, Px, Qty, Side, Symbol, Ts, ZerodhaAuth, ZerodhaConfig};
 use market_connector::{
     connectors::adapter::{FeedAdapter, FeedConfig},
     exchanges::zerodha::ZerodhaFeed,
@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use storage::wal::{Wal, WalEntry};
+use services_common::wal::{Wal, WalEntry};
 use tokio::sync::{RwLock, mpsc};
 use tokio::time::{Duration, timeout};
 use tracing::{error, info, warn};
@@ -90,6 +90,14 @@ impl WalEntry for MarketDataWalEntry {
     fn timestamp(&self) -> Ts {
         self.timestamp
     }
+    
+    fn sequence(&self) -> u64 {
+        self.sequence
+    }
+    
+    fn to_bytes(&self) -> anyhow::Result<Vec<u8>> {
+        Ok(serde_json::to_vec(self)?)
+    }
 }
 
 /// Initialize market data WAL with proper configuration
@@ -111,14 +119,14 @@ async fn test_zerodha_connectivity(stats: Arc<TestStats>, wal: Arc<RwLock<Wal>>)
     info!("🔗 Testing Zerodha WebSocket connectivity...");
 
     // Initialize authentication
-    let auth_config = auth::ZerodhaConfig::new(
+    let auth_config = ZerodhaConfig::new(
         std::env::var("ZERODHA_USER_ID").context("ZERODHA_USER_ID not set")?,
         std::env::var("ZERODHA_PASSWORD").context("ZERODHA_PASSWORD not set")?,
         std::env::var("ZERODHA_TOTP_SECRET").context("ZERODHA_TOTP_SECRET not set")?,
         std::env::var("ZERODHA_API_KEY").context("ZERODHA_API_KEY not set")?,
         std::env::var("ZERODHA_API_SECRET").context("ZERODHA_API_SECRET not set")?,
     );
-    let zerodha_auth = auth::ZerodhaAuth::new(auth_config);
+    let zerodha_auth = ZerodhaAuth::from_config(auth_config);
 
     // Create feed configuration with real tokens
     let mut symbol_map = FxHashMap::default();

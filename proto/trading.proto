@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package shrivenquant.trading.v1;
+
+// Trading Gateway Service API
+service TradingGateway {
+  // Start trading with specified strategies
+  rpc StartTrading(StartTradingRequest) returns (StartTradingResponse);
+  
+  // Stop trading gracefully
+  rpc StopTrading(StopTradingRequest) returns (StopTradingResponse);
+  
+  // Emergency stop all trading
+  rpc EmergencyStop(EmergencyStopRequest) returns (EmergencyStopResponse);
+  
+  // Get gateway status
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  
+  // Update strategy parameters
+  rpc UpdateStrategy(UpdateStrategyRequest) returns (UpdateStrategyResponse);
+  
+  // Get current positions
+  rpc GetPositions(GetPositionsRequest) returns (GetPositionsResponse);
+}
+
+// Start trading request
+message StartTradingRequest {
+  repeated string strategies = 1;
+  double risk_limit = 2;
+  map<string, string> parameters = 3;
+}
+
+// Start trading response
+message StartTradingResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string active_strategies = 3;
+}
+
+// Stop trading request
+message StopTradingRequest {
+  bool cancel_open_orders = 1;
+  bool close_positions = 2;
+}
+
+// Stop trading response
+message StopTradingResponse {
+  bool success = 1;
+  string message = 2;
+  int32 orders_cancelled = 3;
+  int32 positions_closed = 4;
+}
+
+// Emergency stop request
+message EmergencyStopRequest {
+  string reason = 1;
+}
+
+// Emergency stop response
+message EmergencyStopResponse {
+  bool success = 1;
+  string message = 2;
+  int64 timestamp = 3;
+}
+
+// Get status request
+message GetStatusRequest {}
+
+// Get status response
+message GetStatusResponse {
+  GatewayStatus status = 1;
+  repeated string active_strategies = 2;
+  int32 open_orders = 3;
+  int32 active_positions = 4;
+  double total_pnl = 5;
+  int64 uptime_seconds = 6;
+}
+
+// Gateway status enum
+enum GatewayStatus {
+  GATEWAY_STATUS_UNSPECIFIED = 0;
+  GATEWAY_STATUS_STOPPED = 1;
+  GATEWAY_STATUS_STARTING = 2;
+  GATEWAY_STATUS_RUNNING = 3;
+  GATEWAY_STATUS_STOPPING = 4;
+  GATEWAY_STATUS_ERROR = 5;
+}
+
+// Update strategy request
+message UpdateStrategyRequest {
+  string strategy_name = 1;
+  map<string, string> parameters = 2;
+  bool enabled = 3;
+}
+
+// Update strategy response
+message UpdateStrategyResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Get positions request
+message GetPositionsRequest {
+  string symbol = 1; // Optional filter by symbol
+}
+
+// Get positions response
+message GetPositionsResponse {
+  repeated Position positions = 1;
+  double total_value = 2;
+  double total_pnl = 3;
+}
+
+// Position message
+message Position {
+  string symbol = 1;
+  int64 quantity = 2;  // Fixed-point
+  int64 avg_price = 3; // Fixed-point
+  int64 current_price = 4; // Fixed-point
+  double pnl = 5;
+  double pnl_percent = 6;
+  string side = 7; // "LONG" or "SHORT"
+  int64 opened_at = 8;
+}

@@ -4,8 +4,14 @@ pub struct TradeStatsAggregator {
     // Implementation details
 }
 
+impl Default for TradeStatsAggregator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TradeStatsAggregator {
-    pub fn new() -> Self {
+    #[must_use] pub const fn new() -> Self {
         Self {}
     }
 }

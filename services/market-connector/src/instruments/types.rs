@@ -6,16 +6,16 @@
 //! - FxHashMap for metadata storage
 
 use chrono::Datelike;
-use common::constants::{
+use services_common::constants::{
     calendar::*,
     lot_sizes::DEFAULT_LOT_SIZE,
     market::{NSE_CLOSE_HOUR, NSE_CLOSE_MINUTE, NSE_CLOSE_SECOND},
     numeric::{ZERO_F64, ZERO_I64},
 };
-use common::{Px, Ts};
+use services_common::{Px, Ts};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use storage::wal::WalEntry;
+use services_common::wal::WalEntry;
 
 /// Instrument type classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -177,6 +177,16 @@ impl Instrument {
 impl WalEntry for Instrument {
     fn timestamp(&self) -> Ts {
         Ts::from_nanos(self.last_update)
+    }
+
+    fn sequence(&self) -> u64 {
+        // Placeholder implementation
+        0
+    }
+
+    fn to_bytes(&self) -> anyhow::Result<Vec<u8>> {
+        // Placeholder implementation
+        Ok(Vec::new())
     }
 }
 

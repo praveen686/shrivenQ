@@ -26,12 +26,9 @@ futures-util = "0.3"
 # HTTP
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 
-# Common types from core
-common = { path = "../../crates/core/common" }
-auth = { path = "../../crates/infra/auth" }
-storage = { path = "../../crates/infra/storage" }
-lob = { path = "../../crates/market-data/lob" }
-shrivenquant-proto = { path = "../../crates/core/proto" }
+# Common types from services
+services-common = { path = "../common" }
+
 
 # gRPC dependencies
 tonic = { workspace = true }

@@ -24,7 +24,7 @@ pub struct GatewayMetrics {
 
 impl GatewayMetrics {
     /// Create new metrics instance
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         // Register all metrics with descriptions
         Self::register_metrics();
 
@@ -348,7 +348,7 @@ pub fn get_metrics() -> &'static GatewayMetrics {
 }
 
 /// Initialize metrics system
-pub fn init_metrics() -> &'static GatewayMetrics {
+#[must_use] pub fn init_metrics() -> &'static GatewayMetrics {
     get_metrics()
 }
 

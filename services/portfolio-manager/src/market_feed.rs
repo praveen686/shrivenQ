@@ -7,8 +7,8 @@
 //! - Pre-allocated buffers
 
 use anyhow::{Context, Result};
-use common::constants::fixed_point::SCALE_4 as FIXED_POINT_SCALE;
-use common::{Symbol, Ts};
+use services_common::constants::fixed_point::SCALE_4 as FIXED_POINT_SCALE;
+use services_common::{Symbol, Ts};
 use crossbeam::channel::{Receiver, Sender, bounded};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;

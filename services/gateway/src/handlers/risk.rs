@@ -32,20 +32,20 @@ pub struct RiskHandlers {
 }
 
 impl RiskHandlers {
-    pub fn new(grpc_clients: Arc<GrpcClients>) -> Self {
+    pub const fn new(grpc_clients: Arc<GrpcClients>) -> Self {
         Self { grpc_clients }
     }
 
     /// Check order risk
     pub async fn check_order(
-        State(handlers): State<RiskHandlers>,
+        State(handlers): State<Self>,
         request: axum::extract::Request,
         Json(check_request): Json<CheckOrderRequest>,
     ) -> Result<Json<ApiResponse<CheckOrderResponse>>, StatusCode> {
         // Check permissions
         let user_context = get_user_context(&request);
-        if let Some(user) = user_context {
-            if !check_permission(user, "PLACE_ORDERS") {
+        if let Some(user) = user_context
+            && !check_permission(user, "PLACE_ORDERS") {
                 let error_response = ErrorResponse {
                     error: "PERMISSION_DENIED".to_string(),
                     message: "Insufficient permissions to check orders".to_string(),
@@ -53,7 +53,6 @@ impl RiskHandlers {
                 };
                 return Ok(Json(ApiResponse::error(error_response)));
             }
-        }
 
         info!("Risk check request for symbol: {}", check_request.symbol);
 
@@ -127,14 +126,14 @@ impl RiskHandlers {
 
     /// Get current positions
     pub async fn get_positions(
-        State(handlers): State<RiskHandlers>,
+        State(handlers): State<Self>,
         request: axum::extract::Request,
         Query(query): Query<PositionsQuery>,
     ) -> Result<Json<ApiResponse<PositionResponse>>, StatusCode> {
         // Check permissions
         let user_context = get_user_context(&request);
-        if let Some(user) = user_context {
-            if !check_permission(user, "VIEW_POSITIONS") {
+        if let Some(user) = user_context
+            && !check_permission(user, "VIEW_POSITIONS") {
                 let error_response = ErrorResponse {
                     error: "PERMISSION_DENIED".to_string(),
                     message: "Insufficient permissions to view positions".to_string(),
@@ -142,7 +141,6 @@ impl RiskHandlers {
                 };
                 return Ok(Json(ApiResponse::error(error_response)));
             }
-        }
 
         info!("Get positions request");
 
@@ -192,13 +190,13 @@ impl RiskHandlers {
 
     /// Get risk metrics
     pub async fn get_metrics(
-        State(handlers): State<RiskHandlers>,
+        State(handlers): State<Self>,
         request: axum::extract::Request,
     ) -> Result<Json<ApiResponse<RiskMetrics>>, StatusCode> {
         // Check permissions
         let user_context = get_user_context(&request);
-        if let Some(user) = user_context {
-            if !check_permission(user, "VIEW_POSITIONS") {
+        if let Some(user) = user_context
+            && !check_permission(user, "VIEW_POSITIONS") {
                 let error_response = ErrorResponse {
                     error: "PERMISSION_DENIED".to_string(),
                     message: "Insufficient permissions to view risk metrics".to_string(),
@@ -206,7 +204,6 @@ impl RiskHandlers {
                 };
                 return Ok(Json(ApiResponse::error(error_response)));
             }
-        }
 
         info!("Get risk metrics request");
 
@@ -254,14 +251,14 @@ impl RiskHandlers {
 
     /// Activate or deactivate kill switch
     pub async fn kill_switch(
-        State(handlers): State<RiskHandlers>,
+        State(handlers): State<Self>,
         request: axum::extract::Request,
         Json(kill_switch_request): Json<KillSwitchRequest>,
     ) -> Result<Json<ApiResponse<KillSwitchResponse>>, StatusCode> {
         // Check permissions - only admin can control kill switch
         let user_context = get_user_context(&request);
-        if let Some(user) = user_context {
-            if !check_permission(user, "ADMIN") {
+        if let Some(user) = user_context
+            && !check_permission(user, "ADMIN") {
                 let error_response = ErrorResponse {
                     error: "PERMISSION_DENIED".to_string(),
                     message: "Insufficient permissions to control kill switch".to_string(),
@@ -269,7 +266,6 @@ impl RiskHandlers {
                 };
                 return Ok(Json(ApiResponse::error(error_response)));
             }
-        }
 
         info!(
             "Kill switch request: activate={}",
@@ -364,8 +360,8 @@ fn fixed_point_to_string(value: i64) -> String {
     let fraction = abs_value % 10000;
 
     if is_negative {
-        format!("-{}.{:04}", whole, fraction)
+        format!("-{whole}.{fraction:04}")
     } else {
-        format!("{}.{:04}", whole, fraction)
+        format!("{whole}.{fraction:04}")
     }
 }

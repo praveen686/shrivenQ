@@ -5,7 +5,7 @@ pub mod adapter;
 use crate::{MarketConnector, SubscriptionRequest};
 use anyhow::Result;
 use async_trait::async_trait;
-use auth::ZerodhaAuth;
+use services_common::ZerodhaAuth;
 use std::sync::Arc;
 
 /// Generic connector wrapper that implements MarketConnector trait

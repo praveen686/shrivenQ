@@ -1,8 +1,8 @@
 //! Binance WebSocket implementation with testnet support
 
 use crate::connectors::adapter::{FeedAdapter, FeedConfig};
-use auth::{BinanceAuth, BinanceMarket};
-use common::{L2Update, Px, Qty, Side, Symbol, Ts};
+use services_common::{BinanceAuth, BinanceMarket}; // Disabled during migration
+use services_common::{L2Update, Px, Qty, Side, Symbol, Ts};
 use futures_util::{SinkExt, StreamExt};
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::Deserialize;

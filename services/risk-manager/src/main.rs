@@ -9,11 +9,11 @@
 //! - Distributed tracing support
 
 use anyhow::Result;
-use common::constants;
+use services_common::constants;
 use prometheus::{Encoder, TextEncoder};
 use risk_manager::grpc_service::{RiskManagerGrpcService, RiskEvent};
 use risk_manager::RiskLimits;
-use shrivenquant_proto::risk::v1::risk_service_server::RiskServiceServer;
+use services_common::risk::v1::risk_service_server::RiskServiceServer;
 use std::net::SocketAddr;
 use tokio::sync::broadcast;
 use tonic::transport::Server;
@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
     });
     
     // Start Prometheus metrics server
-    let metrics_addr: SocketAddr = format!("0.0.0.0:{}", DEFAULT_METRICS_PORT)
+    let metrics_addr: SocketAddr = format!("0.0.0.0:{DEFAULT_METRICS_PORT}")
         .parse()
         .map_err(|e| anyhow::anyhow!("Invalid metrics address: {}", e))?;
     
@@ -81,7 +81,7 @@ async fn main() -> Result<()> {
     });
     
     // Configure gRPC server address
-    let grpc_addr: SocketAddr = format!("0.0.0.0:{}", DEFAULT_GRPC_PORT)
+    let grpc_addr: SocketAddr = format!("0.0.0.0:{DEFAULT_GRPC_PORT}")
         .parse()
         .map_err(|e| anyhow::anyhow!("Invalid gRPC address: {}", e))?;
     
@@ -227,12 +227,9 @@ async fn check_service_health_with_risk(risk_service: &RiskManagerGrpcService) -
     
     // Check for high drawdown
     // Safe conversion: comparing drawdown percentages
-    let drawdown_i64 = match i64::try_from(metrics.current_drawdown) {
-        Ok(val) => val,
-        Err(_) => {
-            tracing::warn!("Drawdown {} exceeds i64 range, treating as unhealthy", metrics.current_drawdown);
-            return false; // Treat overflow as unhealthy
-        }
+    let drawdown_i64 = if let Ok(val) = i64::try_from(metrics.current_drawdown) { val } else {
+        tracing::warn!("Drawdown {} exceeds i64 range, treating as unhealthy", metrics.current_drawdown);
+        return false; // Treat overflow as unhealthy
     };
     if drawdown_i64 > HEALTH_CHECK_MAX_DRAWDOWN {
         return false;
@@ -316,10 +313,10 @@ async fn shutdown_signal(shutdown_tx: broadcast::Sender<()>) {
     let terminate = std::future::pending::<()>();
     
     tokio::select! {
-        _ = ctrl_c => {
+        () = ctrl_c => {
             info!("Received Ctrl+C, initiating graceful shutdown");
         }
-        _ = terminate => {
+        () = terminate => {
             info!("Received SIGTERM, initiating graceful shutdown");
         }
     }

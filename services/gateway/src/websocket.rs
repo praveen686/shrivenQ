@@ -21,14 +21,14 @@ pub struct WebSocketHandler {
 }
 
 impl WebSocketHandler {
-    pub fn new(grpc_clients: Arc<GrpcClients>) -> Self {
+    pub const fn new(grpc_clients: Arc<GrpcClients>) -> Self {
         Self { grpc_clients }
     }
 
     /// Handle WebSocket upgrade request
     pub async fn handle_websocket(
         ws: WebSocketUpgrade,
-        State(handler): State<WebSocketHandler>,
+        State(handler): State<Self>,
     ) -> Response {
         info!("WebSocket connection request");
         ws.on_upgrade(move |socket| handler.handle_socket(socket))
@@ -254,7 +254,7 @@ impl WebSocketHandler {
             .unwrap_or(&vec![])
             .iter()
             .filter_map(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .collect::<Vec<_>>();
 
         let exchange = message
@@ -402,7 +402,7 @@ impl WebSocketHandler {
         // Use real gRPC client for execution reports
         let mut client = self.grpc_clients.execution.clone();
         let stream_request = crate::grpc_clients::execution::StreamExecutionReportsRequest {
-            strategy_id: "".to_string(), // Empty string for all strategies
+            strategy_id: String::new(), // Empty string for all strategies
         };
 
         let tx_clone = tx.clone();

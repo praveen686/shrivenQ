@@ -1,6 +1,6 @@
 //! Common feed adapter traits and configuration
 
-use common::{L2Update, Symbol};
+use services_common::{L2Update, Symbol};
 use rustc_hash::FxHashMap;
 use tokio::sync::mpsc;
 

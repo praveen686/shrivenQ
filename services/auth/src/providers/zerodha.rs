@@ -45,9 +45,29 @@ impl ZerodhaConfig {
         api_key: String,
         api_secret: String,
     ) -> Self {
-        // Use project-relative cache directory
-        let cache_dir =
-            std::env::var("SHRIVEN_CACHE_DIR").unwrap_or_else(|_| "./cache/zerodha".to_string());
+        // Use centralized cache directory (absolute path from project root)
+        let cache_dir = std::env::var("SHRIVEN_CACHE_DIR").unwrap_or_else(|_| {
+            // Find workspace root by looking for workspace Cargo.toml
+            let mut current_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            loop {
+                let cargo_toml = current_dir.join("Cargo.toml");
+                if cargo_toml.exists() {
+                    // Check if this is a workspace Cargo.toml (contains [workspace])
+                    if let Ok(content) = std::fs::read_to_string(&cargo_toml) {
+                        if content.contains("[workspace]") {
+                            break;
+                        }
+                    }
+                }
+                if let Some(parent) = current_dir.parent() {
+                    current_dir = parent.to_path_buf();
+                } else {
+                    // Fallback: use absolute path to known location
+                    return "/home/praveen/ShrivenQuant/cache/zerodha".to_string();
+                }
+            }
+            current_dir.join("cache/zerodha").to_string_lossy().to_string()
+        });
 
         Self {
             user_id,
@@ -306,7 +326,7 @@ impl ZerodhaAuth {
             self.authenticate().await?
         };
 
-        let url = format!("https://api.kite.trade/user/profile");
+        let url = "https://api.kite.trade/user/profile".to_string();
 
         let response = self
             .http_client
@@ -371,7 +391,7 @@ impl ZerodhaAuth {
             self.authenticate().await?
         };
 
-        let url = format!("https://api.kite.trade/user/margins");
+        let url = "https://api.kite.trade/user/margins".to_string();
 
         let response = self
             .http_client

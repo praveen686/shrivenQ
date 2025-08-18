@@ -11,18 +11,18 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use common::{
+use services_common::{
     Px, Qty, Symbol, Ts,
     instrument::{Instrument, InstrumentStore, OptionType},
     market::{L2Update, Side},
 };
-use lob::{FeatureCalculatorV2Fixed, OrderBookV2};
+use services_common::{FeatureCalculatorV2Fixed, OrderBookV2};
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
-use storage::{TickEvent, Wal, WalEvent};
+use services_common::{TickEvent, Wal, WalEvent};
 use tokio::sync::RwLock;
 use tokio::time::{Duration, interval};
 use tracing::{error, info};
@@ -147,12 +147,12 @@ impl MarketDataPipeline {
         // Initialize WALs
         let tick_wal = Arc::new(RwLock::new(Wal::new(
             &tick_dir,
-            Some(config.wal_segment_size),
+            Some(config.wal_segment_size as usize),
         )?));
 
         let lob_wal = Arc::new(RwLock::new(Wal::new(
             &lob_dir,
-            Some(config.wal_segment_size),
+            Some(config.wal_segment_size as usize),
         )?));
 
         Ok(Self {
@@ -206,17 +206,15 @@ impl MarketDataPipeline {
                 let symbol = Symbol::new(*token);
 
                 // Create order book with appropriate parameters
-                let tick_size = self.get_tick_size(&spot.exchange_symbol);
-                let lot_size = self.get_lot_size(&spot.exchange_symbol);
+                let _tick_size = self.get_tick_size(&spot.exchange_symbol);
+                let _lot_size = self.get_lot_size(&spot.exchange_symbol);
 
                 order_books.insert(
                     symbol,
                     OrderBookV2::new_with_roi(
                         symbol,
-                        Px::new(tick_size),
-                        Qty::from_units(i64::from(lot_size)),
-                        Px::new(spot.last_price.unwrap_or(25000.0)), // ROI center
-                        Px::new(1000.0),                             // ROI width
+                        spot.last_price.unwrap_or(25000.0), // ROI center
+                        1000.0,                             // ROI width
                     ),
                 );
 
@@ -406,8 +404,12 @@ impl MarketDataPipeline {
             // Create custom snapshot event (you may need to extend WalEvent)
             let tick_event = TickEvent {
                 ts: Ts::now(),
+                timestamp: Ts::now(),
                 venue: "snapshot".to_string(),
                 symbol: *symbol,
+                price: book.best_bid().map(|(px, _)| px).unwrap_or(Px::ZERO),
+                quantity: Qty::ZERO,
+                is_buy: true,
                 bid: book.best_bid().map(|(px, _)| px),
                 ask: book.best_ask().map(|(px, _)| px),
                 last: None,
@@ -439,14 +441,12 @@ impl MarketDataPipeline {
         info!("Reconstructing LOB for symbol {} from ticks", symbol);
 
         // Create new order book
-        let tick_size = 0.05; // Get from instrument
-        let lot_size = 1.0; // Get from instrument
+        let _tick_size = 0.05; // Get from instrument
+        let _lot_size = 1.0; // Get from instrument
         let mut book = OrderBookV2::new_with_roi(
             symbol,
-            Px::new(tick_size),
-            Qty::new(lot_size),
-            Px::new(25000.0), // Center price
-            Px::new(1000.0),  // ROI width
+            25000.0, // Center price
+            1000.0,  // ROI width
         );
 
         // Read tick events from WAL
@@ -459,31 +459,30 @@ impl MarketDataPipeline {
                 break;
             }
 
-            if let WalEvent::Tick(tick) = event {
-                if tick.symbol == symbol {
-                    // Reconstruct LOB update from tick
-                    if let (Some(bid), Some(ask)) = (tick.bid, tick.ask) {
-                        // Create synthetic L2 updates
-                        let updates = vec![
-                            L2Update::new(tick.ts, symbol).with_level_data(
-                                Side::Bid,
-                                bid,
-                                Qty::new(1.0),
-                                0,
-                            ),
-                            L2Update::new(tick.ts, symbol).with_level_data(
-                                Side::Ask,
-                                ask,
-                                Qty::new(1.0),
-                                0,
-                            ),
-                        ];
+            let WalEvent::Tick(tick) = event;
+            if tick.symbol == symbol {
+                // Reconstruct LOB update from tick
+                if let (Some(bid), Some(ask)) = (tick.bid, tick.ask) {
+                    // Create synthetic L2 updates
+                    let updates = vec![
+                        L2Update::new(tick.ts, symbol).with_level_data(
+                            Side::Bid,
+                            bid,
+                            Qty::new(1.0),
+                            0,
+                        ),
+                        L2Update::new(tick.ts, symbol).with_level_data(
+                            Side::Ask,
+                            ask,
+                            Qty::new(1.0),
+                            0,
+                        ),
+                    ];
 
-                        for update in &updates {
-                            book.apply_fast(update);
-                        }
-                        count += 1;
+                    for update in &updates {
+                        book.apply_fast(update);
                     }
+                    count += 1;
                 }
             }
         }

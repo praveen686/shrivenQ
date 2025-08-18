@@ -5,12 +5,11 @@
 
 use anyhow::Result;
 use clap::{Arg, Command};
-use common::{Px, Qty, Ts};
+use services_common::{Px, Qty, Ts};
 use data_aggregator::{DataEvent, Wal};
 use std::collections::BTreeMap;
 use std::path::Path;
 use tracing::{info, warn};
-use tracing_subscriber;
 
 /// Constants for orderbook display
 const MAX_ORDERBOOK_LEVELS: usize = 5;
@@ -36,7 +35,7 @@ struct OrderBook {
 }
 
 impl OrderBook {
-    fn new(symbol: String) -> Self {
+    const fn new(symbol: String) -> Self {
         Self {
             symbol,
             bids: BTreeMap::new(),
@@ -72,7 +71,7 @@ impl OrderBook {
         self.last_update = timestamp;
     }
     
-    /// Get orderbook levels as OrderBookLevel structs
+    /// Get orderbook levels as `OrderBookLevel` structs
     fn get_levels(&self) -> (Vec<OrderBookLevel>, Vec<OrderBookLevel>) {
         let bid_levels: Vec<OrderBookLevel> = self.bids
             .iter()
@@ -157,7 +156,6 @@ impl MarketReplay {
                     .or_insert_with(|| OrderBook::new(symbol));
                     
                 // Build orderbook from trades by accumulating at price levels
-                let price_f64 = trade.price.as_f64();
                 let qty_f64 = trade.quantity.as_f64();
                 let price_ticks = trade.price.as_i64();
                 
@@ -174,7 +172,7 @@ impl MarketReplay {
                     // Also create a bid slightly below for spread
                     let bid_price = price_ticks - 100; // 0.01 below in ticks
                     let existing_bid = book.bids.get(&bid_price).copied().unwrap_or(Qty::new(0.0));
-                    book.bids.insert(bid_price, Qty::new(existing_bid.as_f64() + qty_f64 * 0.5));
+                    book.bids.insert(bid_price, Qty::new(qty_f64.mul_add(0.5, existing_bid.as_f64())));
                 } else {
                     // Sell trade executed - means there was a bid at this price
                     // Add to bids (or update existing)
@@ -184,7 +182,7 @@ impl MarketReplay {
                     // Also create an ask slightly above for spread
                     let ask_price = price_ticks + 100; // 0.01 above in ticks
                     let existing_ask = book.asks.get(&ask_price).copied().unwrap_or(Qty::new(0.0));
-                    book.asks.insert(ask_price, Qty::new(existing_ask.as_f64() + qty_f64 * 0.5));
+                    book.asks.insert(ask_price, Qty::new(qty_f64.mul_add(0.5, existing_ask.as_f64())));
                 }
                 
                 // Keep orderbook size reasonable - remove far levels if too many
@@ -200,7 +198,7 @@ impl MarketReplay {
                 if book.asks.len() > MAX_LEVELS_PER_SIDE {
                     // Keep only the best (lowest) asks
                     let mut ask_prices: Vec<i64> = book.asks.keys().copied().collect();
-                    ask_prices.sort(); // Sort ascending
+                    ask_prices.sort_unstable(); // Sort ascending
                     for price in ask_prices.iter().skip(MAX_LEVELS_PER_SIDE) {
                         book.asks.remove(price);
                     }
@@ -222,18 +220,18 @@ impl MarketReplay {
                     .entry(symbol.clone())
                     .or_insert_with(|| OrderBook::new(symbol));
                 
-                // Update with new levels
-                book.bids.clear();
-                for (price, qty, _count) in &orderbook.bid_levels {
-                    book.bids.insert(price.as_i64(), *qty);
-                }
+                // Convert levels to f64 tuples for update_depth
+                let bids: Vec<(f64, f64)> = orderbook.bid_levels
+                    .iter()
+                    .map(|(price, qty, _)| (price.as_f64(), qty.as_f64()))
+                    .collect();
+                let asks: Vec<(f64, f64)> = orderbook.ask_levels
+                    .iter()
+                    .map(|(price, qty, _)| (price.as_f64(), qty.as_f64()))
+                    .collect();
                 
-                book.asks.clear();
-                for (price, qty, _count) in &orderbook.ask_levels {
-                    book.asks.insert(price.as_i64(), *qty);
-                }
-                
-                book.last_update = orderbook.ts;
+                // Use the update_depth method
+                book.update_depth(bids, asks, orderbook.ts);
             }
             _ => {
                 warn!("📊 Unhandled market event type");
@@ -243,7 +241,7 @@ impl MarketReplay {
     
     /// Display all current orderbooks
     fn display_orderbooks(&self) {
-        for (_symbol, orderbook) in &self.orderbooks {
+        for orderbook in self.orderbooks.values() {
             orderbook.display();
         }
     }

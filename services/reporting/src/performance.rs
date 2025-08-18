@@ -2,7 +2,7 @@
 //!
 //! Advanced performance metrics with statistical analysis
 
-use common::{Px, Qty, Symbol, Ts};
+use services_common::{Px, Qty, Symbol, Ts};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -11,7 +11,7 @@ use std::collections::VecDeque;
 pub struct PerformanceAnalyzer {
     /// Trade history buffer
     trade_history: VecDeque<TradeRecord>,
-    /// Daily PnL tracking
+    /// Daily `PnL` tracking
     daily_pnl: VecDeque<DailyPnL>,
     /// Market price history by symbol
     price_history: FxHashMap<Symbol, VecDeque<PriceRecord>>,
@@ -37,7 +37,7 @@ pub enum TradeSide {
     Sell,
 }
 
-/// Daily PnL record
+/// Daily `PnL` record
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DailyPnL {
     pub date: String, // YYYY-MM-DD format
@@ -68,7 +68,7 @@ pub struct PerformanceReport {
     pub trading_days: u32,
     pub avg_trades_per_day: f64,
 
-    /// PnL metrics
+    /// `PnL` metrics
     pub total_pnl: i64,
     pub daily_pnl: i64,
     pub realized_pnl: i64,
@@ -118,7 +118,7 @@ pub struct SymbolPerformance {
 
 impl PerformanceAnalyzer {
     /// Create new performance analyzer
-    pub fn new(capacity: usize) -> Self {
+    #[must_use] pub fn new(capacity: usize) -> Self {
         Self {
             trade_history: VecDeque::with_capacity(capacity),
             daily_pnl: VecDeque::with_capacity(365), // ~1 year of daily data
@@ -127,7 +127,7 @@ impl PerformanceAnalyzer {
         }
     }
 
-    /// Record a trade and update daily PnL
+    /// Record a trade and update daily `PnL`
     pub fn record_trade(&mut self, qty: Qty, price: Px, timestamp: Ts) {
         let side = if qty.raw() > 0 {
             TradeSide::Buy
@@ -162,7 +162,7 @@ impl PerformanceAnalyzer {
             timestamp: timestamp.nanos(),
             bid: bid.as_i64(),
             ask: ask.as_i64(),
-            mid: (bid.as_i64() + ask.as_i64()) / 2,
+            mid: i64::midpoint(bid.as_i64(), ask.as_i64()),
         };
 
         let price_history = self
@@ -176,7 +176,7 @@ impl PerformanceAnalyzer {
         price_history.push_back(price_record);
     }
 
-    /// Update daily PnL tracking
+    /// Update daily `PnL` tracking
     fn update_daily_pnl(&mut self, trade: &TradeRecord) {
         // Convert timestamp to date string (YYYY-MM-DD)
         let date_string = self.timestamp_to_date_string(trade.timestamp);
@@ -231,25 +231,21 @@ impl PerformanceAnalyzer {
         let month = std::cmp::min(12, (day_of_year / 30) + 1);
         let day = std::cmp::max(1, (day_of_year % 30) + 1);
 
-        format!("{:04}-{:02}-{:02}", year, month, day)
+        format!("{year:04}-{month:02}-{day:02}")
     }
 
-    /// Get daily PnL history
-    pub fn get_daily_pnl_history(&self) -> Vec<DailyPnL> {
+    /// Get daily `PnL` history
+    #[must_use] pub fn get_daily_pnl_history(&self) -> Vec<DailyPnL> {
         self.daily_pnl.iter().cloned().collect()
     }
 
-    /// Get today's PnL
-    pub fn get_todays_pnl(&self) -> Option<DailyPnL> {
-        if let Some(latest) = self.daily_pnl.back() {
-            Some(latest.clone())
-        } else {
-            None
-        }
+    /// Get today's `PnL`
+    #[must_use] pub fn get_todays_pnl(&self) -> Option<DailyPnL> {
+        self.daily_pnl.back().cloned()
     }
 
-    /// Get current daily PnL (real-time calculation)
-    pub fn get_current_daily_pnl(&self) -> i64 {
+    /// Get current daily `PnL` (real-time calculation)
+    #[must_use] pub fn get_current_daily_pnl(&self) -> i64 {
         // Get today's date
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -267,7 +263,7 @@ impl PerformanceAnalyzer {
 
     /// Generate comprehensive performance report
     #[allow(clippy::cast_precision_loss)]
-    pub fn generate_report(&self) -> PerformanceReport {
+    #[must_use] pub fn generate_report(&self) -> PerformanceReport {
         let now = Ts::now().nanos();
         let trades = &self.trade_history;
 
@@ -279,7 +275,7 @@ impl PerformanceAnalyzer {
         let total_trades = u32::try_from(trades.len()).unwrap_or(u32::MAX);
         let total_volume = trades.iter().map(|t| t.volume.unsigned_abs()).sum::<u64>();
         let avg_trade_size = if total_trades > 0 {
-            total_volume as f64 / total_trades as f64
+            total_volume as f64 / f64::from(total_trades)
         } else {
             0.0
         };
@@ -289,21 +285,21 @@ impl PerformanceAnalyzer {
         let (wins, losses): (Vec<_>, Vec<_>) = trades.iter().partition(|t| t.volume > 0);
 
         let win_rate = if total_trades > 0 {
-            wins.len() as f64 / total_trades as f64 * 100.0
+            wins.len() as f64 / f64::from(total_trades) * 100.0
         } else {
             0.0
         };
 
-        let avg_win = if !wins.is_empty() {
-            wins.iter().map(|t| t.volume).sum::<i64>() / wins.len() as i64
-        } else {
+        let avg_win = if wins.is_empty() {
             0
+        } else {
+            wins.iter().map(|t| t.volume).sum::<i64>() / wins.len() as i64
         };
 
-        let avg_loss = if !losses.is_empty() {
-            losses.iter().map(|t| t.volume.abs()).sum::<i64>() / losses.len() as i64
-        } else {
+        let avg_loss = if losses.is_empty() {
             0
+        } else {
+            losses.iter().map(|t| t.volume.abs()).sum::<i64>() / losses.len() as i64
         };
 
         let largest_win = wins.iter().map(|t| t.volume).max().unwrap_or(0);
@@ -340,7 +336,7 @@ impl PerformanceAnalyzer {
             1
         };
 
-        let avg_trades_per_day = total_trades as f64 / trading_days as f64;
+        let avg_trades_per_day = f64::from(total_trades) / f64::from(trading_days);
 
         // Symbol breakdown
         let symbol_performance = self.calculate_symbol_performance(trades);
@@ -357,7 +353,7 @@ impl PerformanceAnalyzer {
             sharpe_ratio,
             sortino_ratio,
             calmar_ratio: if max_drawdown_pct > 0 {
-                (total_pnl as f64 / 10000.0) / (max_drawdown_pct as f64 / 10000.0)
+                (total_pnl as f64 / 10000.0) / (f64::from(max_drawdown_pct) / 10000.0)
             } else {
                 0.0
             },
@@ -402,7 +398,9 @@ impl PerformanceAnalyzer {
         // Downside deviation for Sortino
         let negative_returns: Vec<f64> = returns.iter().filter(|&&r| r < 0.0).copied().collect();
 
-        let sortino_ratio = if !negative_returns.is_empty() {
+        let sortino_ratio = if negative_returns.is_empty() {
+            sharpe_ratio // If no negative returns, Sortino = Sharpe
+        } else {
             let downside_variance = negative_returns.iter().map(|r| r.powi(2)).sum::<f64>()
                 / negative_returns.len() as f64;
             let downside_deviation = downside_variance.sqrt();
@@ -412,8 +410,6 @@ impl PerformanceAnalyzer {
             } else {
                 0.0
             }
-        } else {
-            sharpe_ratio // If no negative returns, Sortino = Sharpe
         };
 
         (sharpe_ratio, sortino_ratio)
@@ -540,7 +536,7 @@ impl PerformanceAnalyzer {
                 .count();
 
             let win_rate = if trades_count > 0 {
-                wins as f64 / trades_count as f64 * 100.0
+                wins as f64 / f64::from(trades_count) * 100.0
             } else {
                 0.0
             };
@@ -549,15 +545,14 @@ impl PerformanceAnalyzer {
             let avg_spread = self
                 .price_history
                 .get(&symbol)
-                .map(|history| {
-                    if !history.is_empty() {
+                .map_or(0.0, |history| {
+                    if history.is_empty() {
+                        0.0
+                    } else {
                         let total_spread: i64 = history.iter().map(|p| p.ask - p.bid).sum();
                         total_spread as f64 / history.len() as f64 / 10000.0
-                    } else {
-                        0.0
                     }
-                })
-                .unwrap_or(0.0);
+                });
 
             result.insert(
                 symbol,

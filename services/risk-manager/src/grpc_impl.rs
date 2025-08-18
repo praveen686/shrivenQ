@@ -1,4 +1,4 @@
-//! gRPC RiskService implementation
+//! gRPC `RiskService` implementation
 
 use crate::grpc_service::{
     RiskManagerGrpcService, RiskEvent, RiskEventType,
@@ -10,8 +10,8 @@ use crate::{RiskCheckResult, RiskManager};
 // Constants for conversion error states in protobuf messages
 const PROTO_I64_OVERFLOW_VALUE: i64 = i64::MAX;
 const PROTO_I32_OVERFLOW_VALUE: i32 = i32::MAX;
-use common::{Px, Qty, Side as CommonSide, Symbol};
-use shrivenquant_proto::risk::v1::{
+use services_common::{Px, Qty, Side as CommonSide, Symbol};
+use services_common::risk::v1::{
     risk_service_server::RiskService,
     CheckOrderRequest, CheckOrderResponse, CheckResult,
     UpdatePositionRequest, UpdatePositionResponse,
@@ -76,7 +76,7 @@ impl RiskService for RiskManagerGrpcService {
                         timestamp: chrono::Utc::now().timestamp_millis(),
                         event_type: RiskEventType::OrderRejected,
                         symbol: Some(symbol),
-                        message: format!("Order rejected: {}", reason),
+                        message: format!("Order rejected: {reason}"),
                     }
                 }
                 RiskCheckResult::RequiresApproval(reason) => {
@@ -84,7 +84,7 @@ impl RiskService for RiskManagerGrpcService {
                         timestamp: chrono::Utc::now().timestamp_millis(),
                         event_type: RiskEventType::OrderRejected,
                         symbol: Some(symbol),
-                        message: format!("Order requires approval: {}", reason),
+                        message: format!("Order requires approval: {reason}"),
                     }
                 }
             };
@@ -114,29 +114,20 @@ impl RiskService for RiskManagerGrpcService {
                 reason,
                 current_metrics: Some(ProtoMetrics {
                     // Safe conversion: monetary values to protobuf i64
-                    total_exposure: match i64::try_from(metrics.total_exposure) {
-                        Ok(val) => val,
-                        Err(_) => {
-                            warn!("Total exposure {} exceeds i64 range", metrics.total_exposure);
-                            PROTO_I64_OVERFLOW_VALUE
-                        }
+                    total_exposure: if let Ok(val) = i64::try_from(metrics.total_exposure) { val } else {
+                        warn!("Total exposure {} exceeds i64 range", metrics.total_exposure);
+                        PROTO_I64_OVERFLOW_VALUE
                     },
                     current_drawdown: metrics.current_drawdown,
                     daily_pnl: metrics.daily_pnl,
                     // Safe conversion: count values to protobuf i32
-                    open_positions: match i32::try_from(metrics.open_positions) {
-                        Ok(val) => val,
-                        Err(_) => {
-                            warn!("Open positions {} exceeds i32 range", metrics.open_positions);
-                            PROTO_I32_OVERFLOW_VALUE
-                        }
+                    open_positions: if let Ok(val) = i32::try_from(metrics.open_positions) { val } else {
+                        warn!("Open positions {} exceeds i32 range", metrics.open_positions);
+                        PROTO_I32_OVERFLOW_VALUE
                     },
-                    orders_today: match i32::try_from(metrics.orders_today) {
-                        Ok(val) => val,
-                        Err(_) => {
-                            warn!("Orders today {} exceeds i32 range", metrics.orders_today);
-                            PROTO_I32_OVERFLOW_VALUE
-                        }
+                    orders_today: if let Ok(val) = i32::try_from(metrics.orders_today) { val } else {
+                        warn!("Orders today {} exceeds i32 range", metrics.orders_today);
+                        PROTO_I32_OVERFLOW_VALUE
                     },
                     circuit_breaker_active: metrics.circuit_breaker_active,
                     kill_switch_active: metrics.kill_switch_active,
@@ -167,14 +158,14 @@ impl RiskService for RiskManagerGrpcService {
             
             // Update position in risk manager
             handle.block_on(
-                risk_manager.update_position(symbol.clone(), side, qty, price)
-            ).map_err(|e| Status::internal(format!("Failed to update position: {}", e)))?;
+                risk_manager.update_position(symbol, side, qty, price)
+            ).map_err(|e| Status::internal(format!("Failed to update position: {e}")))?;
             
             // Send position updated event
             let event = RiskEvent {
                 timestamp: chrono::Utc::now().timestamp_millis(),
                 event_type: RiskEventType::PositionUpdated,
-                symbol: Some(symbol.clone()),
+                symbol: Some(symbol),
                 message: format!("Position updated: {} {} @ {}", qty.as_i64(), symbol.0, price.as_i64()),
             };
             
@@ -183,7 +174,7 @@ impl RiskService for RiskManagerGrpcService {
             
             // Get updated position
             let position = handle.block_on(
-                risk_manager.get_position(symbol.clone())
+                risk_manager.get_position(symbol)
             ).ok_or_else(|| Status::not_found("Position not found after update"))?;
             
             // Get current metrics
@@ -199,45 +190,33 @@ impl RiskService for RiskManagerGrpcService {
                 unrealized_pnl: position.unrealized_pnl,
                 realized_pnl: position.realized_pnl,
                 // Safe conversion: position value to protobuf i64
-                position_value: match i64::try_from(position.position_value) {
-                    Ok(val) => val,
-                    Err(_) => {
-                        warn!("Position value {} exceeds i64 range", position.position_value);
-                        PROTO_I64_OVERFLOW_VALUE
-                    }
+                position_value: if let Ok(val) = i64::try_from(position.position_value) { val } else {
+                    warn!("Position value {} exceeds i64 range", position.position_value);
+                    PROTO_I64_OVERFLOW_VALUE
                 },
                 exchange: String::new(),
             }),
             current_metrics: Some(ProtoMetrics {
                 // Safe conversions for metric values
-                total_exposure: match i64::try_from(metrics.total_exposure) {
-                    Ok(val) => val,
-                    Err(_) => {
-                        warn!("Total exposure {} exceeds i64 range", metrics.total_exposure);
-                        PROTO_I64_OVERFLOW_VALUE
-                    }
+                total_exposure: if let Ok(val) = i64::try_from(metrics.total_exposure) { val } else {
+                    warn!("Total exposure {} exceeds i64 range", metrics.total_exposure);
+                    PROTO_I64_OVERFLOW_VALUE
                 },
-                current_drawdown: match i32::try_from(metrics.current_drawdown) {
-                    Ok(val) => val,
-                    Err(_) => {
+                current_drawdown: {
+                    
+                    i32::try_from(metrics.current_drawdown).unwrap_or_else(|_| {
                         warn!("Current drawdown {} exceeds i32 range", metrics.current_drawdown);
                         PROTO_I32_OVERFLOW_VALUE
-                    }
+                    })
                 },
                 daily_pnl: metrics.daily_pnl,
-                open_positions: match i32::try_from(metrics.open_positions) {
-                    Ok(val) => val,
-                    Err(_) => {
-                        warn!("Open positions {} exceeds i32 range", metrics.open_positions);
-                        PROTO_I32_OVERFLOW_VALUE
-                    }
+                open_positions: if let Ok(val) = i32::try_from(metrics.open_positions) { val } else {
+                    warn!("Open positions {} exceeds i32 range", metrics.open_positions);
+                    PROTO_I32_OVERFLOW_VALUE
                 },
-                orders_today: match i32::try_from(metrics.orders_today) {
-                    Ok(val) => val,
-                    Err(_) => {
-                        warn!("Orders today {} exceeds i32 range", metrics.orders_today);
-                        PROTO_I32_OVERFLOW_VALUE
-                    }
+                orders_today: if let Ok(val) = i32::try_from(metrics.orders_today) { val } else {
+                    warn!("Orders today {} exceeds i32 range", metrics.orders_today);
+                    PROTO_I32_OVERFLOW_VALUE
                 },
                 circuit_breaker_active: metrics.circuit_breaker_active,
                 kill_switch_active: metrics.kill_switch_active,
@@ -276,12 +255,9 @@ impl RiskService for RiskManagerGrpcService {
             mark_price: p.mark_price.as_i64(),
             unrealized_pnl: p.unrealized_pnl,
             realized_pnl: p.realized_pnl,
-            position_value: match i64::try_from(p.position_value) {
-                Ok(val) => val,
-                Err(_) => {
-                    warn!("Position value {} exceeds i64 range", p.position_value);
-                    PROTO_I64_OVERFLOW_VALUE
-                }
+            position_value: if let Ok(val) = i64::try_from(p.position_value) { val } else {
+                warn!("Position value {} exceeds i64 range", p.position_value);
+                PROTO_I64_OVERFLOW_VALUE
             },
             exchange: String::new(),
             }).collect();
@@ -290,12 +266,9 @@ impl RiskService for RiskManagerGrpcService {
             
             Ok(GetPositionsResponse {
                 positions: proto_positions,
-                total_exposure: match i64::try_from(total_exposure) {
-                    Ok(val) => val,
-                    Err(_) => {
-                        warn!("Total exposure {} exceeds i64 range", total_exposure);
-                        PROTO_I64_OVERFLOW_VALUE
-                    }
+                total_exposure: if let Ok(val) = i64::try_from(total_exposure) { val } else {
+                    warn!("Total exposure {} exceeds i64 range", total_exposure);
+                    PROTO_I64_OVERFLOW_VALUE
                 },
             })
         }).await
@@ -313,28 +286,19 @@ impl RiskService for RiskManagerGrpcService {
             
             Ok(GetMetricsResponse {
                 metrics: Some(ProtoMetrics {
-                total_exposure: match i64::try_from(metrics.total_exposure) {
-                    Ok(val) => val,
-                    Err(_) => {
-                        warn!("Total exposure {} exceeds i64 range", metrics.total_exposure);
-                        PROTO_I64_OVERFLOW_VALUE
-                    }
+                total_exposure: if let Ok(val) = i64::try_from(metrics.total_exposure) { val } else {
+                    warn!("Total exposure {} exceeds i64 range", metrics.total_exposure);
+                    PROTO_I64_OVERFLOW_VALUE
                 },
                 current_drawdown: metrics.current_drawdown,
                 daily_pnl: metrics.daily_pnl,
-                open_positions: match i32::try_from(metrics.open_positions) {
-                    Ok(val) => val,
-                    Err(_) => {
-                        warn!("Open positions {} exceeds i32 range", metrics.open_positions);
-                        PROTO_I32_OVERFLOW_VALUE
-                    }
+                open_positions: if let Ok(val) = i32::try_from(metrics.open_positions) { val } else {
+                    warn!("Open positions {} exceeds i32 range", metrics.open_positions);
+                    PROTO_I32_OVERFLOW_VALUE
                 },
-                orders_today: match i32::try_from(metrics.orders_today) {
-                    Ok(val) => val,
-                    Err(_) => {
-                        warn!("Orders today {} exceeds i32 range", metrics.orders_today);
-                        PROTO_I32_OVERFLOW_VALUE
-                    }
+                orders_today: if let Ok(val) = i32::try_from(metrics.orders_today) { val } else {
+                    warn!("Orders today {} exceeds i32 range", metrics.orders_today);
+                    PROTO_I32_OVERFLOW_VALUE
                 },
                 circuit_breaker_active: metrics.circuit_breaker_active,
                 kill_switch_active: metrics.kill_switch_active,
@@ -448,7 +412,7 @@ impl RiskService for RiskManagerGrpcService {
                                 let alert = RiskAlert {
                                     // Proto-generated enum already has i32 representation
                                     level: AlertLevel::Critical.into(),
-                                    message: format!("Daily loss exceeds limit: ${}", metrics.daily_pnl / i64::from(FIXED_POINT_DIVISOR)),
+                                    message: format!("Daily loss exceeds limit: ${}", metrics.daily_pnl / FIXED_POINT_DIVISOR),
                                     timestamp: chrono::Utc::now().timestamp_millis(),
                                     source: "risk-monitor".to_string(),
                                     #[allow(clippy::disallowed_types)] // proto-generated metadata field
@@ -457,29 +421,25 @@ impl RiskService for RiskManagerGrpcService {
                                 
                                 // Send alert to stream
                                 // Proto-generated enum already has i32 representation
-                                if requested_levels.is_empty() || requested_levels.contains(&AlertLevel::Critical.into()) {
-                                    if tx.send(Ok(alert.clone())).await.is_err() {
+                                if (requested_levels.is_empty() || requested_levels.contains(&AlertLevel::Critical.into()))
+                                    && tx.send(Ok(alert.clone())).await.is_err() {
                                         break;
                                     }
-                                }
                                 
                                 // Also send as event
                                 let _ = event_tx.send(RiskEvent {
                                     timestamp: chrono::Utc::now().timestamp_millis(),
                                     event_type: RiskEventType::LimitBreached,
                                     symbol: None,
-                                    message: format!("Daily loss limit breached: ${}", metrics.daily_pnl / i64::from(FIXED_POINT_DIVISOR)),
+                                    message: format!("Daily loss limit breached: ${}", metrics.daily_pnl / FIXED_POINT_DIVISOR),
                                 });
                             }
                             
                             // Safe conversion: threshold constant to i64 for comparison
-                            let threshold_i64 = match i64::try_from(DRAWDOWN_CRITICAL_THRESHOLD) {
-                                Ok(val) => val,
-                                Err(_) => {
-                                    tracing::error!("DRAWDOWN_CRITICAL_THRESHOLD exceeds i64 range");
-                                    i64::MAX
-                                }
-                            };
+                            let threshold_i64 = i64::try_from(DRAWDOWN_CRITICAL_THRESHOLD).unwrap_or_else(|_| {
+                                tracing::error!("DRAWDOWN_CRITICAL_THRESHOLD exceeds i64 range");
+                                i64::MAX
+                            });
                             if metrics.current_drawdown > threshold_i64 {
                                 let alert = RiskAlert {
                                     // Proto-generated enum already has i32 representation
@@ -492,11 +452,10 @@ impl RiskService for RiskManagerGrpcService {
                                 };
                                 
                                 // Proto-generated enum already has i32 representation
-                                if requested_levels.is_empty() || requested_levels.contains(&AlertLevel::Warning.into()) {
-                                    if tx.send(Ok(alert)).await.is_err() {
+                                if (requested_levels.is_empty() || requested_levels.contains(&AlertLevel::Warning.into()))
+                                    && tx.send(Ok(alert)).await.is_err() {
                                         break;
                                     }
-                                }
                             }
                         }
                     }

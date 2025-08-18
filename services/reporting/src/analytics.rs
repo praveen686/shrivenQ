@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
-/// Rolling window calculator using VecDeque for efficient FIFO operations
+/// Rolling window calculator using `VecDeque` for efficient FIFO operations
 pub struct RollingWindow {
     window: VecDeque<f64>,
     capacity: usize,
@@ -15,7 +15,7 @@ pub struct RollingWindow {
 
 impl RollingWindow {
     /// Create new rolling window with fixed capacity
-    pub fn new(capacity: usize) -> Self {
+    #[must_use] pub fn new(capacity: usize) -> Self {
         Self {
             window: VecDeque::with_capacity(capacity),
             capacity,
@@ -27,12 +27,11 @@ impl RollingWindow {
     /// Add value to rolling window with O(1) complexity
     pub fn add(&mut self, value: f64) {
         // Remove oldest value if at capacity
-        if self.window.len() >= self.capacity {
-            if let Some(old_value) = self.window.pop_front() {
+        if self.window.len() >= self.capacity
+            && let Some(old_value) = self.window.pop_front() {
                 self.sum -= old_value;
                 self.sum_sq -= old_value * old_value;
             }
-        }
 
         // Add new value
         self.window.push_back(value);
@@ -42,7 +41,7 @@ impl RollingWindow {
 
     /// Get current mean in O(1) time
     #[allow(clippy::cast_precision_loss)]
-    pub fn mean(&self) -> f64 {
+    #[must_use] pub fn mean(&self) -> f64 {
         if self.window.is_empty() {
             0.0
         } else {
@@ -52,7 +51,7 @@ impl RollingWindow {
 
     /// Get current standard deviation in O(1) time
     #[allow(clippy::cast_precision_loss)]
-    pub fn std_dev(&self) -> f64 {
+    #[must_use] pub fn std_dev(&self) -> f64 {
         let len = self.window.len();
         if len < 2 {
             return 0.0;
@@ -60,22 +59,22 @@ impl RollingWindow {
 
         let len_f64 = len as f64;
         let mean = self.mean();
-        let variance = (self.sum_sq / len_f64) - (mean * mean);
+        let variance = mean.mul_add(-mean, self.sum_sq / len_f64);
         variance.max(0.0).sqrt() // Handle floating point precision issues
     }
 
     /// Get current window size
-    pub fn len(&self) -> usize {
+    #[must_use] pub fn len(&self) -> usize {
         self.window.len()
     }
 
     /// Check if window is empty
-    pub fn is_empty(&self) -> bool {
+    #[must_use] pub fn is_empty(&self) -> bool {
         self.window.is_empty()
     }
 
     /// Get current values as slice
-    pub fn values(&self) -> Vec<f64> {
+    #[must_use] pub fn values(&self) -> Vec<f64> {
         self.window.iter().copied().collect()
     }
 
@@ -92,7 +91,7 @@ pub struct StatisticalAnalyzer;
 
 impl StatisticalAnalyzer {
     /// Calculate rolling statistics
-    pub fn rolling_stats(data: &[f64], window: usize) -> Vec<RollingStats> {
+    #[must_use] pub fn rolling_stats(data: &[f64], window: usize) -> Vec<RollingStats> {
         if data.is_empty() || window == 0 {
             return Vec::new();
         }
@@ -136,7 +135,7 @@ impl StatisticalAnalyzer {
         let min = sorted_data[0];
         let max = sorted_data[count - 1];
         let median = if count % 2 == 0 {
-            (sorted_data[count / 2 - 1] + sorted_data[count / 2]) / 2.0
+            f64::midpoint(sorted_data[count / 2 - 1], sorted_data[count / 2])
         } else {
             sorted_data[count / 2]
         };
@@ -154,7 +153,7 @@ impl StatisticalAnalyzer {
 
     /// Calculate correlation between two series
     #[allow(clippy::cast_precision_loss)]
-    pub fn correlation(x: &[f64], y: &[f64]) -> f64 {
+    #[must_use] pub fn correlation(x: &[f64], y: &[f64]) -> f64 {
         if x.len() != y.len() || x.len() < 2 {
             return 0.0;
         }
@@ -185,7 +184,7 @@ impl StatisticalAnalyzer {
     }
 
     /// Calculate beta coefficient (relative to benchmark)
-    pub fn beta(returns: &[f64], benchmark_returns: &[f64]) -> f64 {
+    #[must_use] pub fn beta(returns: &[f64], benchmark_returns: &[f64]) -> f64 {
         if returns.len() != benchmark_returns.len() || returns.len() < 2 {
             return 1.0; // Default beta
         }
@@ -252,7 +251,7 @@ pub struct PortfolioMetricsCalculator;
 
 impl PortfolioMetricsCalculator {
     /// Calculate Information Ratio
-    pub fn information_ratio(active_returns: &[f64], benchmark_returns: &[f64]) -> f64 {
+    #[must_use] pub fn information_ratio(active_returns: &[f64], benchmark_returns: &[f64]) -> f64 {
         if active_returns.len() != benchmark_returns.len() || active_returns.is_empty() {
             return 0.0;
         }
@@ -276,7 +275,7 @@ impl PortfolioMetricsCalculator {
 
     /// Calculate Treynor Ratio
     #[allow(clippy::cast_precision_loss)]
-    pub fn treynor_ratio(returns: &[f64], benchmark_returns: &[f64], risk_free_rate: f64) -> f64 {
+    #[must_use] pub fn treynor_ratio(returns: &[f64], benchmark_returns: &[f64], risk_free_rate: f64) -> f64 {
         if returns.is_empty() {
             return 0.0;
         }
@@ -286,16 +285,16 @@ impl PortfolioMetricsCalculator {
         let excess_return = mean_return - risk_free_rate;
         let beta = StatisticalAnalyzer::beta(returns, benchmark_returns);
 
-        if beta != 0.0 {
-            excess_return / beta
-        } else {
+        if beta == 0.0 {
             0.0
+        } else {
+            excess_return / beta
         }
     }
 
     /// Calculate Jensen's Alpha
     #[allow(clippy::cast_precision_loss)]
-    pub fn jensens_alpha(returns: &[f64], benchmark_returns: &[f64], risk_free_rate: f64) -> f64 {
+    #[must_use] pub fn jensens_alpha(returns: &[f64], benchmark_returns: &[f64], risk_free_rate: f64) -> f64 {
         if returns.is_empty() || benchmark_returns.is_empty() {
             return 0.0;
         }
@@ -307,12 +306,12 @@ impl PortfolioMetricsCalculator {
         let beta = StatisticalAnalyzer::beta(returns, benchmark_returns);
 
         // Jensen's Alpha = Portfolio Return - (Risk Free Rate + Beta * (Benchmark Return - Risk Free Rate))
-        let expected_return = risk_free_rate + beta * (mean_benchmark - risk_free_rate);
+        let expected_return = beta.mul_add(mean_benchmark - risk_free_rate, risk_free_rate);
         mean_return - expected_return
     }
 
     /// Calculate Maximum Adverse Excursion (MAE)
-    pub fn maximum_adverse_excursion(equity_curve: &[f64]) -> f64 {
+    #[must_use] pub fn maximum_adverse_excursion(equity_curve: &[f64]) -> f64 {
         if equity_curve.is_empty() {
             return 0.0;
         }
@@ -335,7 +334,7 @@ impl PortfolioMetricsCalculator {
     }
 
     /// Calculate Maximum Favorable Excursion (MFE)
-    pub fn maximum_favorable_excursion(equity_curve: &[f64]) -> f64 {
+    #[must_use] pub fn maximum_favorable_excursion(equity_curve: &[f64]) -> f64 {
         if equity_curve.is_empty() {
             return 0.0;
         }
@@ -362,8 +361,8 @@ impl PortfolioMetricsCalculator {
 pub struct RiskMetricsCalculator;
 
 impl RiskMetricsCalculator {
-    /// Calculate Conditional Value at Risk (CVaR) / Expected Shortfall
-    pub fn conditional_var(returns: &[f64], confidence_level: f64) -> f64 {
+    /// Calculate Conditional Value at Risk (`CVaR`) / Expected Shortfall
+    #[must_use] pub fn conditional_var(returns: &[f64], confidence_level: f64) -> f64 {
         if returns.is_empty() || confidence_level <= 0.0 || confidence_level >= 1.0 {
             return 0.0;
         }
@@ -386,7 +385,7 @@ impl RiskMetricsCalculator {
 
     /// Calculate downside deviation
     #[allow(clippy::cast_precision_loss)]
-    pub fn downside_deviation(returns: &[f64], minimum_acceptable_return: f64) -> f64 {
+    #[must_use] pub fn downside_deviation(returns: &[f64], minimum_acceptable_return: f64) -> f64 {
         if returns.is_empty() {
             return 0.0;
         }
@@ -411,7 +410,7 @@ impl RiskMetricsCalculator {
     }
 
     /// Calculate tail ratio (95th percentile / 5th percentile)
-    pub fn tail_ratio(returns: &[f64]) -> f64 {
+    #[must_use] pub fn tail_ratio(returns: &[f64]) -> f64 {
         if returns.len() < 20 {
             // Need sufficient data
             return 1.0;
@@ -438,7 +437,7 @@ pub struct TimeSeriesAnalyzer;
 impl TimeSeriesAnalyzer {
     /// Calculate autocorrelation at given lag
     #[allow(clippy::cast_precision_loss)]
-    pub fn autocorrelation(data: &[f64], lag: usize) -> f64 {
+    #[must_use] pub fn autocorrelation(data: &[f64], lag: usize) -> f64 {
         if data.len() <= lag {
             return 0.0;
         }
@@ -471,7 +470,7 @@ impl TimeSeriesAnalyzer {
     }
 
     /// Detect regime changes using rolling statistics
-    pub fn detect_regime_changes(data: &[f64], window: usize, threshold: f64) -> Vec<usize> {
+    #[must_use] pub fn detect_regime_changes(data: &[f64], window: usize, threshold: f64) -> Vec<usize> {
         if data.len() < 2 * window {
             return Vec::new();
         }
@@ -497,7 +496,7 @@ impl TimeSeriesAnalyzer {
 
     /// Calculate momentum indicator
     #[allow(clippy::cast_precision_loss)]
-    pub fn momentum(data: &[f64], periods: usize) -> Vec<f64> {
+    #[must_use] pub fn momentum(data: &[f64], periods: usize) -> Vec<f64> {
         if data.len() <= periods {
             return Vec::new();
         }
@@ -507,10 +506,10 @@ impl TimeSeriesAnalyzer {
         for i in periods..data.len() {
             let current = data[i];
             let previous = data[i - periods];
-            let momentum = if previous != 0.0 {
-                (current - previous) / previous * 100.0
-            } else {
+            let momentum = if previous == 0.0 {
                 0.0
+            } else {
+                (current - previous) / previous * 100.0
             };
             momentum_values.push(momentum);
         }

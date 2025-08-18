@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 use market_connector::grpc_service::MarketDataGrpcService;
-use shrivenquant_proto::marketdata::v1::market_data_service_server::MarketDataServiceServer;
+use services_common::marketdata::v1::market_data_service_server::MarketDataServiceServer;
 use std::net::SocketAddr;
 use tonic::transport::Server;
 use tracing::{info, error};
@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
     let (market_data_service, _event_sender) = MarketDataGrpcService::new();
     
     // Configure server address
-    let addr: SocketAddr = format!("0.0.0.0:{}", DEFAULT_PORT)
+    let addr: SocketAddr = format!("0.0.0.0:{DEFAULT_PORT}")
         .parse()
         .map_err(|e| anyhow::anyhow!("Invalid socket address: {}", e))?;
 

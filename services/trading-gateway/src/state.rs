@@ -4,7 +4,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tokio::fs;
-use tracing::{error, info};
+use tracing::info;
 
 /// Gateway state for persistence
 #[derive(Debug, Clone, Serialize, Deserialize)]

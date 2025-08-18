@@ -1,4 +1,4 @@
-//! ShrivenQuant API Gateway
+//! `ShrivenQuant` API Gateway
 //!
 //! Unified REST API gateway providing HTTP access to all microservices.
 //! Features:

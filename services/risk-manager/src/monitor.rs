@@ -38,7 +38,7 @@ pub struct RiskMetricsWithPositions {
 /// Position information for metrics
 #[derive(Debug, Clone)]
 pub struct PositionInfo {
-    pub symbol: common::Symbol,
+    pub symbol: services_common::Symbol,
     pub position_value: i64,
 }
 
@@ -48,9 +48,15 @@ pub struct RiskMonitor {
     metrics: Arc<RwLock<FxHashMap<String, f64>>>,
 }
 
+impl Default for RiskMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RiskMonitor {
     /// Create new risk monitor
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             alerts: Arc::new(RwLock::new(Vec::new())),
             metrics: Arc::new(RwLock::new(FxHashMap::default())),

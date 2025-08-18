@@ -23,21 +23,21 @@ const MAX_POOL_SIZE: usize = u32::MAX as usize;
 // Helper functions for tagged pointer manipulation
 #[inline(always)]
 #[cfg(target_pointer_width = "64")]
-fn pack_tagged(generation: u32, index: u32) -> usize {
+const fn pack_tagged(generation: u32, index: u32) -> usize {
     // SAFETY: u32 to usize for pointer tagging on 64-bit
     ((generation as usize) << TAG_BITS) | (index as usize)
 }
 
 #[inline(always)]
 #[cfg(target_pointer_width = "64")]
-fn unpack_generation(tagged: usize) -> u32 {
+const fn unpack_generation(tagged: usize) -> u32 {
     // SAFETY: usize to u32 - upper 32 bits extracted
     (tagged >> TAG_BITS) as u32
 }
 
 #[inline(always)]
 #[cfg(target_pointer_width = "64")]
-fn unpack_index(tagged: usize) -> u32 {
+const fn unpack_index(tagged: usize) -> u32 {
     // SAFETY: usize to u32 - lower 32 bits masked
     (tagged & INDEX_MASK) as u32
 }
@@ -97,14 +97,14 @@ pub struct PoolRef<'a, T> {
     index: usize,
 }
 
-impl<'a, T> Drop for PoolRef<'a, T> {
+impl<T> Drop for PoolRef<'_, T> {
     fn drop(&mut self) {
         // Safety: we know this came from the pool
         unsafe { self.pool.release_internal(self.obj, self.index) };
     }
 }
 
-impl<'a, T> std::ops::Deref for PoolRef<'a, T> {
+impl<T> std::ops::Deref for PoolRef<'_, T> {
     type Target = T;
 
     #[inline(always)]
@@ -113,7 +113,7 @@ impl<'a, T> std::ops::Deref for PoolRef<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::DerefMut for PoolRef<'a, T> {
+impl<T> std::ops::DerefMut for PoolRef<'_, T> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.obj
@@ -181,15 +181,13 @@ impl<T> ObjectPool<T> {
 impl<T: Default> ObjectPool<T> {
     /// Create new pool with specified capacity
     ///
-    /// Pre-allocates all objects using T::default()
+    /// Pre-allocates all objects using `T::default()`
     /// No allocations after this point
-    pub fn new(capacity: usize) -> Self {
+    #[must_use] pub fn new(capacity: usize) -> Self {
         assert!(capacity > 0, "Pool capacity must be > 0");
         assert!(
             capacity <= MAX_POOL_SIZE,
-            "Pool capacity {} exceeds maximum {}",
-            capacity,
-            MAX_POOL_SIZE
+            "Pool capacity {capacity} exceeds maximum {MAX_POOL_SIZE}"
         );
 
         // Pre-allocate storage

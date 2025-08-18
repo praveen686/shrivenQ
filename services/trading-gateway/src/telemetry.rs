@@ -3,7 +3,6 @@
 use anyhow::Result;
 use metrics::{counter, gauge, histogram};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use tracing::info;
 
 /// Telemetry collector

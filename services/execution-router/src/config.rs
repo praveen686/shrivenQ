@@ -1,6 +1,6 @@
 //! Execution router configuration
 
-use common::constants::{
+use services_common::constants::{
     fixed_point::{SCALE_2, SCALE_3},
     network::{INITIAL_RETRY_DELAY_MS, MAX_RETRY_ATTEMPTS, MAX_RETRY_DELAY_MS},
     time::SECS_PER_MINUTE,
@@ -68,7 +68,7 @@ pub struct AlgorithmSettings {
     /// Default slice duration (seconds)
     pub default_slice_duration: u64,
 
-    /// Maximum participation rate (fixed-point: SCALE_3 = 100%)
+    /// Maximum participation rate (fixed-point: `SCALE_3` = 100%)
     pub max_participation_rate: i32,
 
     /// Minimum order size (fixed-point)
@@ -80,7 +80,7 @@ pub struct AlgorithmSettings {
     /// VWAP lookback period (minutes)
     pub vwap_lookback_minutes: u32,
 
-    /// Iceberg display percentage (fixed-point: SCALE_3 = 100%)
+    /// Iceberg display percentage (fixed-point: `SCALE_3` = 100%)
     pub iceberg_display_pct: i32,
 }
 
@@ -96,7 +96,7 @@ pub struct RiskCheckConfig {
     /// Maximum position value (fixed-point)
     pub max_position_value: i64,
 
-    /// Price tolerance percentage (fixed-point: SCALE_2 = 100%)
+    /// Price tolerance percentage (fixed-point: `SCALE_2` = 100%)
     pub price_tolerance_pct: i32,
 
     /// Reject orders outside market hours

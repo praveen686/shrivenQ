@@ -1,7 +1,7 @@
 //! Integration tests for Trading Gateway
 
 use anyhow::Result;
-use common::{Px, Qty, Symbol, Ts};
+use services_common::{Px, Qty, Symbol, Ts};
 use orderbook::OrderBook;
 use orderbook::analytics::MicrostructureAnalytics;
 use std::sync::Arc;

@@ -7,9 +7,9 @@
 //! - Performance optimized lookups
 
 use anyhow::{Context, Result};
-use auth::ZerodhaAuth;
+use services_common::ZerodhaAuth;
 use chrono::Timelike;
-use common::constants::{
+use services_common::constants::{
     financial::STRIKE_PRICE_SCALE,
     math::{
         DEFAULT_FETCH_HOUR, DEFAULT_FETCH_INTERVAL_HOURS, F64_PRECISION_BITS, FETCH_WINDOW_MINUTES,
@@ -19,7 +19,7 @@ use common::constants::{
     numeric::ZERO,
     time::{NANOS_PER_SEC, SECS_PER_HOUR},
 };
-use common::{Px, Ts};
+use services_common::{Px, Ts};
 use reqwest::Client;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -75,7 +75,7 @@ pub fn calculate_default_strike_range(spot_price: Px) -> u32 {
 /// Get default tick size in fixed-point representation
 pub fn get_default_tick_size_fixed() -> i64 {
     // Convert basis points to fixed-point representation
-    use common::constants::fixed_point::{BASIS_POINTS, SCALE_4};
+    use services_common::constants::fixed_point::{BASIS_POINTS, SCALE_4};
     (DEFAULT_TICK_SIZE_BP * SCALE_4) / BASIS_POINTS
 }
 
@@ -193,7 +193,7 @@ impl InstrumentService {
         let store = Arc::clone(&self.store);
         let auth_config = self.zerodha_auth.as_ref().map(|_auth| {
             // Extract config from existing auth
-            auth::ZerodhaConfig::new(
+            services_common::ZerodhaConfig::new(
                 std::env::var("ZERODHA_USER_ID").unwrap_or_default(),
                 std::env::var("ZERODHA_PASSWORD").unwrap_or_default(),
                 std::env::var("ZERODHA_TOTP_SECRET").unwrap_or_default(),
@@ -207,7 +207,10 @@ impl InstrumentService {
             let mut interval = interval(Duration::from_secs(UPDATE_CHECK_INTERVAL_SECS));
 
             // Create auth instance in background task
-            let auth = auth_config.map(auth::ZerodhaAuth::new);
+            let auth = auth_config.map(|config| {
+                // Convert config to auth - placeholder implementation
+                services_common::ZerodhaAuth::new(config.api_key, "".to_string(), config.user_id)
+            });
 
             loop {
                 interval.tick().await;

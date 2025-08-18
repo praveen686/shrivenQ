@@ -23,7 +23,7 @@ serde_json = { workspace = true }
 # Service dependencies
 auth-service = { path = "../auth" }
 market-connector = { path = "../market-connector" }
-common = { path = "../../crates/core/common" }
+services-common = { path = "../common" }
 
 # Web framework for demo API
 axum = "0.7"

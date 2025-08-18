@@ -1,4 +1,4 @@
-//! gRPC ExecutionService implementation
+//! gRPC `ExecutionService` implementation
 //!
 //! Production-grade execution service with all required features:
 //! - Order submission and management
@@ -7,10 +7,10 @@
 //! - Metrics collection
 
 use crate::ExecutionRouterService;
-use common::{Px, Qty, Symbol};
-use shrivenquant_proto::execution::v1::{
+use services_common::{Px, Qty, Symbol};
+use services_common::execution::v1::{
     execution_service_server::ExecutionService,
-    *,
+    ExecutionReport, SubmitOrderRequest, SubmitOrderResponse, CancelOrderRequest, CancelOrderResponse, ModifyOrderRequest, ModifyOrderResponse, GetOrderRequest, GetOrderResponse, StreamExecutionReportsRequest, GetMetricsRequest, GetMetricsResponse, ExecutionMetrics, Order, Fill,
 };
 use std::pin::Pin;
 use std::sync::Arc;
@@ -25,7 +25,7 @@ const PROTO_I32_OVERFLOW: i32 = i32::MAX;
 // Channel capacity for streaming
 const STREAM_CHANNEL_CAPACITY: usize = 1000;
 
-/// gRPC wrapper for ExecutionRouterService
+/// gRPC wrapper for `ExecutionRouterService`
 pub struct ExecutionServiceImpl {
     router: Arc<ExecutionRouterService>,
     execution_broadcaster: broadcast::Sender<ExecutionReport>,
@@ -49,12 +49,9 @@ impl ExecutionServiceImpl {
             exchange_order_id: order.exchange_order_id.clone().unwrap_or_default(),
             report_type,
             // Safe conversion: internal OrderStatus enum to i32 (proto-generated requirement)
-            status: match i32::try_from(order.status as u32) {
-                Ok(val) => val,
-                Err(_) => {
-                    tracing::error!("OrderStatus {:?} exceeds i32 range", order.status);
-                    0 // UNSPECIFIED status
-                }
+            status: if let Ok(val) = i32::try_from(order.status as u32) { val } else {
+                tracing::error!("OrderStatus {:?} exceeds i32 range", order.status);
+                0 // UNSPECIFIED status
             },
             filled_qty: order.filled_quantity.as_i64(),
             last_qty: 0, // Will be set from fill information
@@ -80,12 +77,12 @@ impl ExecutionService for ExecutionServiceImpl {
         // Convert proto request to internal types
         let symbol = Symbol::new(
             req.symbol.parse::<u32>()
-                .map_err(|e| Status::invalid_argument(format!("Invalid symbol: {}", e)))?
+                .map_err(|e| Status::invalid_argument(format!("Invalid symbol: {e}")))?
         );
         
         let side = match req.side {
-            1 => common::Side::Bid,  // BUY = BID
-            2 => common::Side::Ask,  // SELL = ASK
+            1 => services_common::Side::Bid,  // BUY = BID
+            2 => services_common::Side::Ask,  // SELL = ASK
             _ => return Err(Status::invalid_argument("Invalid side")),
         };
         
@@ -119,7 +116,7 @@ impl ExecutionService for ExecutionServiceImpl {
                 Ok(Response::new(SubmitOrderResponse {
                     order_id: 0,
                     status: 7, // REJECTED
-                    message: format!("Order rejected: {}", e),
+                    message: format!("Order rejected: {e}"),
                 }))
             }
         }
@@ -135,7 +132,7 @@ impl ExecutionService for ExecutionServiceImpl {
         let result = self.router.cancel_order(req.order_id as u64).await;
         
         match result {
-            Ok(_) => {
+            Ok(()) => {
                 // Broadcast CANCELLED report
                 if let Ok(order) = self.router.get_order(req.order_id as u64).await {
                     self.broadcast_execution_report(&order, 4); // REPORT_TYPE_CANCELLED
@@ -152,7 +149,7 @@ impl ExecutionService for ExecutionServiceImpl {
                 Ok(Response::new(CancelOrderResponse {
                     success: false,
                     status: 0, // UNSPECIFIED
-                    message: format!("Cancellation failed: {}", e),
+                    message: format!("Cancellation failed: {e}"),
                 }))
             }
         }
@@ -199,7 +196,7 @@ impl ExecutionService for ExecutionServiceImpl {
                 Ok(Response::new(ModifyOrderResponse {
                     success: false,
                     updated_order: None,
-                    message: format!("Modification failed: {}", e),
+                    message: format!("Modification failed: {e}"),
                 }))
             }
         }
@@ -227,7 +224,7 @@ impl ExecutionService for ExecutionServiceImpl {
                 }))
             }
             Err(e) => {
-                Err(Status::not_found(format!("Order not found: {}", e)))
+                Err(Status::not_found(format!("Order not found: {e}")))
             }
         }
     }
@@ -282,24 +279,18 @@ impl ExecutionService for ExecutionServiceImpl {
                 avg_fill_time_ms: metrics.avg_fill_time_ms as i64,
                 total_volume: metrics.total_volume as i64,
                 total_commission: metrics.total_commission as i64,
-                fill_rate: match i32::try_from(metrics.fill_rate) {
-                    Ok(val) => val,
-                    Err(_) => {
-                        warn!("Fill rate {} exceeds i32 range", metrics.fill_rate);
-                        PROTO_I32_OVERFLOW
-                    }
+                fill_rate: if let Ok(val) = i32::try_from(metrics.fill_rate) { val } else {
+                    warn!("Fill rate {} exceeds i32 range", metrics.fill_rate);
+                    PROTO_I32_OVERFLOW
                 },
                 // Proto-generated code requires std::collections::HashMap for map fields
                 #[allow(clippy::disallowed_types)] // Required by protobuf for map<string, int64>
                 venues_used: metrics.venues_used.into_iter()
                     .map(|(k, v)| {
                         // Safe conversion: venue count to i64 (proto-generated requirement)
-                        let count = match i64::try_from(v) {
-                            Ok(val) => val,
-                            Err(_) => {
-                                tracing::warn!("Venue count {} exceeds i64 range", v);
-                                i64::MAX
-                            }
+                        let count = if let Ok(val) = i64::try_from(v) { val } else {
+                            tracing::warn!("Venue count {} exceeds i64 range", v);
+                            i64::MAX
                         };
                         (k, count)
                     })
@@ -317,55 +308,40 @@ fn convert_order_to_proto(order: crate::Order) -> Order {
         exchange_order_id: order.exchange_order_id.unwrap_or_default(),
         symbol: order.symbol.0.to_string(),
         side: match order.side {
-            common::Side::Bid => 1,  // SIDE_BUY (Bid = Buy)
-            common::Side::Ask => 2,  // SIDE_SELL (Ask = Sell)
+            services_common::Side::Bid => 1,  // SIDE_BUY (Bid = Buy)
+            services_common::Side::Ask => 2,  // SIDE_SELL (Ask = Sell)
         },
         quantity: order.quantity.as_i64(),
         filled_quantity: order.filled_quantity.as_i64(),
         avg_fill_price: order.avg_fill_price.as_i64(),
         // Safe conversion: internal OrderStatus enum to i32 (proto-generated requirement)
-        status: match i32::try_from(order.status as u32) {
-            Ok(val) => val,
-            Err(_) => {
-                tracing::error!("OrderStatus {:?} exceeds i32 range", order.status);
-                0 // UNSPECIFIED status
-            }
+        status: if let Ok(val) = i32::try_from(order.status as u32) { val } else {
+            tracing::error!("OrderStatus {:?} exceeds i32 range", order.status);
+            0 // UNSPECIFIED status
         },
         // Safe conversion: internal OrderType enum to i32 (proto-generated requirement)
-        order_type: match i32::try_from(order.order_type as u32) {
-            Ok(val) => val,
-            Err(_) => {
-                tracing::error!("OrderType {:?} exceeds i32 range", order.order_type);
-                0 // UNSPECIFIED type
-            }
+        order_type: if let Ok(val) = i32::try_from(order.order_type as u32) { val } else {
+            tracing::error!("OrderType {:?} exceeds i32 range", order.order_type);
+            0 // UNSPECIFIED type
         },
-        limit_price: order.limit_price.map(|p| p.as_i64()).unwrap_or(0),
-        stop_price: order.stop_price.map(|p| p.as_i64()).unwrap_or(0),
+        limit_price: order.limit_price.map_or(0, |p| p.as_i64()),
+        stop_price: order.stop_price.map_or(0, |p| p.as_i64()),
         // Safe conversion: internal TimeInForce enum to i32 (proto-generated requirement)
-        time_in_force: match i32::try_from(order.time_in_force as u32) {
-            Ok(val) => val,
-            Err(_) => {
-                tracing::error!("TimeInForce {:?} exceeds i32 range", order.time_in_force);
-                0 // UNSPECIFIED time in force
-            }
+        time_in_force: if let Ok(val) = i32::try_from(order.time_in_force as u32) { val } else {
+            tracing::error!("TimeInForce {:?} exceeds i32 range", order.time_in_force);
+            0 // UNSPECIFIED time in force
         },
         venue: order.venue,
         strategy_id: order.strategy_id,
         // Safe conversion: timestamp nanos to i64 (proto-generated requirement)
-        created_at: match i64::try_from(order.created_at.as_nanos()) {
-            Ok(val) => val,
-            Err(_) => {
-                tracing::warn!("Created timestamp exceeds i64 range");
-                i64::MAX
-            }
+        created_at: if let Ok(val) = i64::try_from(order.created_at.as_nanos()) { val } else {
+            tracing::warn!("Created timestamp exceeds i64 range");
+            i64::MAX
         },
         // Safe conversion: timestamp nanos to i64 (proto-generated requirement)
-        updated_at: match i64::try_from(order.updated_at.as_nanos()) {
-            Ok(val) => val,
-            Err(_) => {
-                tracing::warn!("Updated timestamp exceeds i64 range");
-                i64::MAX
-            }
+        updated_at: if let Ok(val) = i64::try_from(order.updated_at.as_nanos()) { val } else {
+            tracing::warn!("Updated timestamp exceeds i64 range");
+            i64::MAX
         },
         fills: order.fills.into_iter().map(convert_fill_to_proto).collect(),
     }
@@ -378,12 +354,9 @@ fn convert_fill_to_proto(fill: crate::Fill) -> Fill {
         quantity: fill.quantity.as_i64(),
         price: fill.price.as_i64(),
         // Safe conversion: timestamp nanos to i64 (proto-generated requirement)
-        timestamp: match i64::try_from(fill.timestamp.as_nanos()) {
-            Ok(val) => val,
-            Err(_) => {
-                tracing::warn!("Fill timestamp exceeds i64 range");
-                i64::MAX
-            }
+        timestamp: if let Ok(val) = i64::try_from(fill.timestamp.as_nanos()) { val } else {
+            tracing::warn!("Fill timestamp exceeds i64 range");
+            i64::MAX
         },
         is_maker: fill.is_maker,
         commission: fill.commission,

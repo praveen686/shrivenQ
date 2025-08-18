@@ -1,10 +1,10 @@
 //! Market data service gRPC client wrapper with production-grade streaming support
 
-use crate::constants::*;
+use crate::network::{DEFAULT_CONNECT_TIMEOUT_SECS, DEFAULT_REQUEST_TIMEOUT_SECS, MAX_RECONNECT_ATTEMPTS, RECONNECT_BACKOFF_MS, EVENT_BUFFER_SIZE, DEFAULT_HEARTBEAT_INTERVAL_SECS, MAX_BACKOFF_MS};
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use rustc_hash::FxHashMap;
-use shrivenquant_proto::marketdata::v1::{
+use crate::proto::marketdata::v1::{
     GetHistoricalDataRequest, GetHistoricalDataResponse, GetSnapshotRequest, GetSnapshotResponse,
     MarketDataEvent, SubscribeRequest, UnsubscribeRequest, UnsubscribeResponse,
     market_data_service_client::MarketDataServiceClient as GrpcClient,
@@ -197,7 +197,7 @@ impl MarketDataClient {
 
                 // Resubscribe to all active subscriptions
                 let subs = self.subscriptions.read().await.clone();
-                for (key, sub) in subs.iter() {
+                for (key, sub) in &subs {
                     if sub.active {
                         info!("Resubscribing to {} (retry {})", key, sub.retry_count);
                         if let Err(e) = self
@@ -585,7 +585,7 @@ impl MarketDataClient {
     }
 
     /// Get endpoint
-    pub fn endpoint(&self) -> &str {
+    #[must_use] pub fn endpoint(&self) -> &str {
         &self.config.endpoint
     }
 }

@@ -1,156 +1,150 @@
 # ShrivenQuant Quick Start Guide
 
-## 🚨 Current Status
-- **40% Complete** - Strong libraries, missing production infrastructure
-- **Critical Issue:** Gateway won't compile (see fix below)
-- **Timeline:** 4-6 weeks to MVP
+## Current Status
+- **Development Phase** - Core services compile but not production-ready
+- **Not tested** with real exchanges
+- **No backtesting** capability
 
----
+## Prerequisites
 
-## 🔧 Fix Gateway Compilation (Priority 1)
+1. **Rust Installation**
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   rustup default stable
+   ```
 
-```rust
-// File: services/gateway/src/server.rs:227
-// Error: use of partially moved value
+2. **Protocol Buffers**
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install protobuf-compiler
+   
+   # macOS
+   brew install protobuf
+   ```
 
-// FIX: Clone before moving
-let request_clone = request.clone();
-let quantity = request.quantity;
-match ExecutionHandlers::submit_order(
-    State(state.execution_handlers), 
-    headers, 
-    Json(request_clone)  // Use clone here
-).await {
-    // ...
-}
-```
+## Building the System
 
----
+1. **Clone the repository**
+   ```bash
+   git clone [repository-url]
+   cd ShrivenQuant
+   ```
 
-## 🏗️ Create Missing Services (Priority 2)
+2. **Build all services**
+   ```bash
+   cargo build --release
+   ```
+   This will compile all 17 services. Expect warnings but no errors.
 
-### Template for 5 Missing main.rs Files
+3. **Run tests** (minimal coverage)
+   ```bash
+   cargo test
+   ```
 
-```rust
-// services/{service-name}/src/main.rs
-use anyhow::Result;
-use tonic::transport::Server;
-use {service_name}::{create_service, ServiceGrpc};
-use shrivenquant_proto::{service_name_server::ServiceNameServer};
+## Running Services
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
-    
-    let service = create_service().await?;
-    let grpc_service = ServiceGrpc::new(service);
-    
-    let addr = "[::1]:5005X".parse()?; // X = 2,3,4,5,6
-    println!("Starting {} on {}", env!("CARGO_PKG_NAME"), addr);
-    
-    Server::builder()
-        .add_service(ServiceNameServer::new(grpc_service))
-        .serve(addr)
-        .await?;
-    
-    Ok(())
-}
-```
+### Start Core Services (Example)
 
-### Port Assignments
-- market-connector: 50052
-- risk-manager: 50053  
-- execution-router: 50054
-- portfolio-manager: 50055
-- reporting: 50056
+1. **Start Gateway** (REST API)
+   ```bash
+   cargo run --release -p gateway
+   # Listens on http://localhost:8080
+   ```
 
----
+2. **Start Auth Service**
+   ```bash
+   cargo run --release -p auth
+   # Listens on localhost:50051 (gRPC)
+   ```
 
-## ✅ Verify Setup
+3. **Start Market Connector**
+   ```bash
+   cargo run --release -p market-connector
+   # Listens on localhost:50052 (gRPC)
+   ```
 
+## Testing the System
+
+### Health Check
 ```bash
-# 1. Fix compilation
-cargo check --workspace
-
-# 2. Run what works
-cargo run --bin auth-service &
-cargo run --bin api-gateway &  # After fixing
-
-# 3. Test health
 curl http://localhost:8080/health
 ```
 
----
+### View Service Logs
+Services output to stdout. Use separate terminals or a process manager.
 
-## 📋 Development Checklist
+## Configuration
 
-### Before Coding
-- [ ] Read [Quantitative Best Practices](developer-guide/QUANTITATIVE_DEVELOPMENT_BEST_PRACTICES.md)
-- [ ] Understand fixed-point math (Px/Qty types)
-- [ ] Review existing service patterns
+Currently hardcoded. To add credentials (not functional yet):
 
-### While Coding  
-- [ ] No f32/f64 for money
-- [ ] No allocations in hot paths
-- [ ] No unwrap() or panic!()
-- [ ] Use FxHashMap not HashMap
-- [ ] Pre-allocate collections
+1. Set environment variables:
+   ```bash
+   export BINANCE_API_KEY="your-key"
+   export BINANCE_SECRET="your-secret"
+   export ZERODHA_API_KEY="your-key"
+   export ZERODHA_SECRET="your-secret"
+   ```
 
-### Before Committing
-- [ ] `cargo fmt`
-- [ ] `cargo clippy -- -D warnings`
-- [ ] `cargo test`
-- [ ] Verify performance targets
+2. These are read but not properly integrated yet.
 
----
+## What Works
 
-## 🎯 MVP Milestones
+- ✅ All services compile
+- ✅ Basic gRPC communication
+- ✅ Options pricing (Black-Scholes)
+- ✅ Protocol buffer definitions
 
-### Week 1
-- [x] Fix gateway compilation
-- [ ] Create market-connector main.rs
-- [ ] Create risk-manager main.rs
+## What Doesn't Work
 
-### Week 2  
-- [ ] Create remaining 3 main.rs files
-- [ ] Test inter-service communication
-- [ ] Basic integration test
+- ❌ Exchange connections (untested)
+- ❌ Order execution (not implemented)
+- ❌ Backtesting (not implemented)
+- ❌ Real-time data (not connected)
+- ❌ Trading strategies (not implemented)
 
-### Week 3-4
-- [ ] Docker containers
-- [ ] Basic deployment
-- [ ] End-to-end testing
+## Common Issues
 
----
-
-## 🆘 Common Issues
-
-### "cannot find crate"
+### Port Already in Use
 ```bash
-# Update dependencies
-cargo update
-cargo build --workspace
+# Find and kill process using port
+lsof -i :8080
+kill -9 [PID]
 ```
 
-### "use of moved value"  
-```rust
-// Clone before moving
-let data_clone = data.clone();
+### Compilation Errors
+```bash
+# Clean and rebuild
+cargo clean
+cargo build --release
 ```
 
-### "floating point in money calc"
-```rust
-// Wrong
-let price: f64 = 100.50;
+### Missing Protobuf Compiler
+Install protobuf-compiler for your OS (see Prerequisites).
 
-// Right  
-let price = Px::from_i64(1005000); // Fixed-point
-```
+## Next Steps for Development
 
----
+1. **Remove unwrap() calls** - 134 potential panic points
+2. **Add error handling** - Services lack proper error recovery
+3. **Test exchange connectivity** - Never tested with real exchanges
+4. **Implement backtesting** - Essential for strategy development
+5. **Add monitoring** - No visibility into system health
 
-## 📞 Help
+## ⚠️ WARNING
 
-1. Check compilation errors
-2. Review this guide
-3. Email: praveenkumar.avln@gmail.com
+This system is NOT ready for:
+- Production trading
+- Paper trading
+- Real money
+- Customer use
+
+It's suitable only for:
+- Development
+- Learning
+- Architecture review
+
+## Support
+
+For issues or questions:
+- Review [Architecture Documentation](../architecture/)
+- Check [System Status](../SYSTEM_STATUS.md)
+- Contact: praveenkumar.avln@gmail.com

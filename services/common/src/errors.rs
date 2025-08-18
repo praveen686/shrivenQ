@@ -31,19 +31,19 @@ impl From<tonic::Status> for ServiceError {
     fn from(status: tonic::Status) -> Self {
         match status.code() {
             tonic::Code::Unauthenticated => {
-                ServiceError::AuthenticationFailed(status.message().to_string())
+                Self::AuthenticationFailed(status.message().to_string())
             }
             tonic::Code::Unavailable => {
-                ServiceError::ServiceUnavailable(status.message().to_string())
+                Self::ServiceUnavailable(status.message().to_string())
             }
             tonic::Code::InvalidArgument => {
-                ServiceError::InvalidRequest(status.message().to_string())
+                Self::InvalidRequest(status.message().to_string())
             }
-            tonic::Code::DeadlineExceeded => ServiceError::Timeout(status.message().to_string()),
+            tonic::Code::DeadlineExceeded => Self::Timeout(status.message().to_string()),
             tonic::Code::ResourceExhausted => {
-                ServiceError::RateLimited(status.message().to_string())
+                Self::RateLimited(status.message().to_string())
             }
-            _ => ServiceError::InternalError(status.message().to_string()),
+            _ => Self::InternalError(status.message().to_string()),
         }
     }
 }

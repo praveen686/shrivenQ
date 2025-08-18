@@ -7,7 +7,7 @@
 //! - Deterministically ordered for replay
 //! - Compact for network transmission
 
-use common::{Px, Qty, Symbol, Ts};
+use services_common::{Px, Qty, Symbol, Ts};
 use serde::{Deserialize, Serialize};
 
 /// Side of an order or trade
@@ -23,16 +23,16 @@ pub enum Side {
 impl Side {
     /// Check if this is the buy side
     #[inline]
-    pub fn is_buy(&self) -> bool {
-        matches!(self, Side::Buy)
+    #[must_use] pub const fn is_buy(&self) -> bool {
+        matches!(self, Self::Buy)
     }
 
     /// Get the opposite side
     #[inline]
-    pub fn opposite(&self) -> Self {
+    #[must_use] pub const fn opposite(&self) -> Self {
         match self {
-            Side::Buy => Side::Sell,
-            Side::Sell => Side::Buy,
+            Self::Buy => Self::Sell,
+            Self::Sell => Self::Buy,
         }
     }
 }
@@ -206,7 +206,7 @@ pub enum OrderBookEvent {
 
 impl OrderBookEvent {
     /// Get the sequence number of this event
-    pub fn sequence(&self) -> u64 {
+    #[must_use] pub const fn sequence(&self) -> u64 {
         match self {
             Self::Order(o) => o.sequence,
             Self::Trade(t) => t.sequence,
@@ -217,7 +217,7 @@ impl OrderBookEvent {
     }
 
     /// Get the exchange timestamp
-    pub fn exchange_time(&self) -> Ts {
+    #[must_use] pub const fn exchange_time(&self) -> Ts {
         match self {
             Self::Order(o) => o.exchange_time,
             Self::Trade(t) => t.exchange_time,
@@ -228,7 +228,7 @@ impl OrderBookEvent {
     }
 
     /// Get the local timestamp
-    pub fn local_time(&self) -> Option<Ts> {
+    #[must_use] pub const fn local_time(&self) -> Option<Ts> {
         match self {
             Self::Order(o) => Some(o.local_time),
             Self::Trade(t) => Some(t.local_time),
@@ -240,13 +240,13 @@ impl OrderBookEvent {
 
     /// Check if this is a snapshot event
     #[inline]
-    pub fn is_snapshot(&self) -> bool {
+    #[must_use] pub const fn is_snapshot(&self) -> bool {
         matches!(self, Self::Snapshot(_))
     }
 
     /// Check if this is a trade event
     #[inline]
-    pub fn is_trade(&self) -> bool {
+    #[must_use] pub const fn is_trade(&self) -> bool {
         matches!(self, Self::Trade(_))
     }
 }
@@ -277,9 +277,15 @@ pub struct EventBuilder {
     sequence_counter: u64,
 }
 
+impl Default for EventBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EventBuilder {
     /// Create a new event builder
-    pub fn new() -> Self {
+    #[must_use] pub const fn new() -> Self {
         Self {
             sequence_counter: 0,
         }
@@ -347,12 +353,12 @@ impl EventBuilder {
     }
 
     /// Get current sequence number
-    pub fn current_sequence(&self) -> u64 {
+    #[must_use] pub const fn current_sequence(&self) -> u64 {
         self.sequence_counter
     }
 
     /// Reset sequence counter
-    pub fn reset_sequence(&mut self) {
+    pub const fn reset_sequence(&mut self) {
         self.sequence_counter = 0;
     }
 }

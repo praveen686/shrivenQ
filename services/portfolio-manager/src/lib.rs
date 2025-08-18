@@ -16,7 +16,7 @@ pub mod rebalancer;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::{Px, Qty, Side, Symbol, Ts};
+use services_common::{Px, Qty, Side, Symbol, Ts};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

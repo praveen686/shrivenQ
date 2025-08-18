@@ -9,8 +9,8 @@ pub mod websocket;
 pub use config::BinanceConfig;
 
 use crate::connectors::adapter::{FeedAdapter, FeedConfig};
-use auth::{BinanceAuth, BinanceMarket};
-use common::{L2Update, Px, Qty, Side, Symbol, Ts};
+use services_common::{BinanceAuth, BinanceMarket};
+use services_common::{L2Update, Px, Qty, Side, Symbol, Ts};
 use futures_util::{SinkExt, StreamExt};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};

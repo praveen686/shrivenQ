@@ -1,7 +1,7 @@
 //! Order definitions and structures
 
 use chrono::{DateTime, Utc};
-use common::{Px, Qty, Symbol};
+use services_common::{Px, Qty, Symbol};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -206,7 +206,7 @@ pub struct Amendment {
 
 impl Order {
     /// Calculate average fill price
-    pub fn average_fill_price(&self) -> Option<Px> {
+    #[must_use] pub fn average_fill_price(&self) -> Option<Px> {
         if self.fills.is_empty() {
             return None;
         }
@@ -229,12 +229,12 @@ impl Order {
     }
     
     /// Calculate total commission
-    pub fn total_commission(&self) -> i64 {
+    #[must_use] pub fn total_commission(&self) -> i64 {
         self.fills.iter().map(|f| f.commission).sum()
     }
     
     /// Check if order is active
-    pub fn is_active(&self) -> bool {
+    #[must_use] pub const fn is_active(&self) -> bool {
         matches!(self.status, 
             OrderStatus::New | 
             OrderStatus::Pending | 
@@ -245,7 +245,7 @@ impl Order {
     }
     
     /// Check if order is terminal
-    pub fn is_terminal(&self) -> bool {
+    #[must_use] pub const fn is_terminal(&self) -> bool {
         matches!(self.status,
             OrderStatus::Filled |
             OrderStatus::Cancelled |
@@ -255,7 +255,7 @@ impl Order {
     }
     
     /// Get fill rate
-    pub fn fill_rate(&self) -> f64 {
+    #[must_use] pub fn fill_rate(&self) -> f64 {
         if self.quantity.as_i64() == 0 {
             return 0.0;
         }

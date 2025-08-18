@@ -1,9 +1,9 @@
 //! Market Making Strategy - Continuous bid/ask quoting
 
-use crate::{ComponentHealth, OrderType, Side, SignalType, TimeInForce, TradingEvent, TradingStrategy};
+use crate::{ComponentHealth, OrderType, Side, TimeInForce, TradingEvent, TradingStrategy};
 use anyhow::Result;
 use async_trait::async_trait;
-use common::{Px, Qty, Symbol, Ts};
+use services_common::{Px, Qty, Symbol};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -85,6 +85,25 @@ impl MarketMakingStrategy {
         let ask_size = base_size;
         
         (bid_price, ask_price, bid_size, ask_size)
+    }
+    
+    /// Get current quotes for a symbol
+    pub fn get_quotes(&self, symbol: &Symbol) -> Option<(Px, Px, Qty, Qty)> {
+        let quotes = self.active_quotes.read();
+        quotes.get(symbol).and_then(|q| {
+            match (q.bid_price, q.ask_price) {
+                (Some(bid), Some(ask)) => Some((bid, ask, q.bid_size, q.ask_size)),
+                _ => None
+            }
+        })
+    }
+    
+    /// Check if quotes are stale
+    pub fn quotes_are_stale(&self, symbol: &Symbol, max_age_secs: u64) -> bool {
+        let quotes = self.active_quotes.read();
+        quotes.get(symbol).map_or(true, |q| {
+            q.last_update.elapsed().as_secs() > max_age_secs
+        })
     }
     
     /// Check inventory limits

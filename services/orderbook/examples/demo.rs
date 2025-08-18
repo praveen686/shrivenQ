@@ -5,7 +5,7 @@
 use orderbook::{OrderBook, Side, OrderUpdate, ReplayEngine, ReplayConfig, PerformanceMetrics};
 use orderbook::analytics::{MicrostructureAnalytics, ImbalanceCalculator};
 use orderbook::core::Order;
-use common::{Px, Qty, Ts};
+use services_common::{Px, Qty, Ts};
 use std::time::Instant;
 
 fn main() {

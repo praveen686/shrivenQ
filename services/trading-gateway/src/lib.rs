@@ -13,14 +13,13 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::{Px, Qty, Symbol, Ts};
-use crossbeam::channel::{bounded, Receiver, Sender};
+use services_common::{Px, Qty, Symbol, Ts};
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
-use tracing::{debug, error, info, warn};
+use tokio::sync::broadcast;
+use tracing::{error, info, warn};
 
 pub mod orchestrator;
 pub mod state;
@@ -189,8 +188,23 @@ pub enum RiskAction {
     KillSwitch,
 }
 
+/// Gateway status enum
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GatewayStatus {
+    /// Gateway is stopped
+    Stopped,
+    /// Gateway is starting up
+    Starting,
+    /// Gateway is running
+    Running,
+    /// Gateway is stopping
+    Stopping,
+    /// Gateway is in error state
+    Error,
+}
+
 /// Trading Gateway configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct GatewayConfig {
     /// Maximum position size per symbol
     pub max_position_size: Qty,
@@ -229,6 +243,8 @@ impl Default for GatewayConfig {
 pub struct TradingGateway {
     /// Configuration
     config: Arc<GatewayConfig>,
+    /// Current status
+    status: Arc<RwLock<GatewayStatus>>,
     /// Event bus for all components
     event_bus: Arc<broadcast::Sender<TradingEvent>>,
     /// Component health status
@@ -319,6 +335,7 @@ impl TradingGateway {
         
         Ok(Self {
             config: Arc::new(config),
+            status: Arc::new(RwLock::new(GatewayStatus::Stopped)),
             event_bus,
             health_status: Arc::new(DashMap::new()),
             strategies: Arc::new(RwLock::new(Vec::new())),
@@ -335,6 +352,8 @@ impl TradingGateway {
     pub async fn start(&self) -> Result<()> {
         info!("🚀 Starting ShrivenQuant Trading Gateway");
         
+        *self.status.write() = GatewayStatus::Starting;
+        
         // Start component health monitoring
         self.start_health_monitor();
         
@@ -346,6 +365,8 @@ impl TradingGateway {
         
         // Initialize strategies
         self.initialize_strategies().await?;
+        
+        *self.status.write() = GatewayStatus::Running;
         
         info!("✅ Trading Gateway started successfully");
         Ok(())
@@ -393,8 +414,8 @@ impl TradingGateway {
         let _ = self.event_bus.send(event.clone());
         
         // Process through strategies
-        let strategies = self.strategies.read();
-        for strategy in strategies.iter() {
+        let mut strategies = self.strategies.write();
+        for strategy in strategies.iter_mut() {
             if let Some(signal) = strategy.on_market_update(&event).await? {
                 self.process_signal(signal).await?;
             }
@@ -477,7 +498,7 @@ impl TradingGateway {
     
     /// Start risk monitoring
     fn start_risk_monitor(&self) {
-        let risk_gate = self.risk_gate.clone();
+        let _risk_gate = self.risk_gate.clone();
         let position_manager = self.position_manager.clone();
         let circuit_breaker = self.circuit_breaker.clone();
         let event_bus = self.event_bus.clone();
@@ -550,6 +571,22 @@ impl TradingGateway {
         }
     }
     
+    /// Stop trading gracefully
+    pub async fn stop(&self) -> Result<()> {
+        info!("Stopping Trading Gateway gracefully...");
+        
+        *self.status.write() = GatewayStatus::Stopping;
+        
+        // Cancel all open orders
+        self.execution_engine.cancel_all_orders().await?;
+        
+        // Update status
+        *self.status.write() = GatewayStatus::Stopped;
+        
+        info!("Trading Gateway stopped");
+        Ok(())
+    }
+    
     /// Emergency stop - kill switch
     pub async fn emergency_stop(&self) -> Result<()> {
         error!("🚨 EMERGENCY STOP TRIGGERED");
@@ -580,32 +617,9 @@ impl TradingGateway {
     }
     
     /// Get gateway status
-    pub async fn get_status(&self) -> GatewayStatus {
-        GatewayStatus {
-            is_running: !self.is_circuit_breaker_tripped(),
-            component_health: self.health_status.iter()
-                .map(|e| (e.key().clone(), e.value().clone()))
-                .collect(),
-            active_strategies: self.strategies.read().len(),
-            total_positions: self.position_manager.get_position_count().await,
-            telemetry_stats: self.telemetry.get_stats().await,
-        }
+    pub fn get_status(&self) -> GatewayStatus {
+        *self.status.read()
     }
-}
-
-/// Gateway status
-#[derive(Debug, Clone)]
-pub struct GatewayStatus {
-    /// Is gateway running
-    pub is_running: bool,
-    /// Component health
-    pub component_health: Vec<(String, ComponentHealth)>,
-    /// Number of active strategies
-    pub active_strategies: usize,
-    /// Total positions
-    pub total_positions: usize,
-    /// Telemetry statistics
-    pub telemetry_stats: telemetry::TelemetryStats,
 }
 
 #[cfg(test)]

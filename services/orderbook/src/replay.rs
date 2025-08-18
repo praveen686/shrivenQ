@@ -8,7 +8,7 @@
 
 use crate::core::{OrderBook, Order, Side};
 use crate::events::{OrderBookEvent, OrderUpdate, TradeEvent, OrderBookSnapshot, OrderBookDelta, UpdateType};
-use common::Ts;
+use services_common::Ts;
 use anyhow::{Result, bail};
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -53,6 +53,7 @@ pub struct ReplayEngine {
     /// Last processed sequence number
     last_sequence: RwLock<u64>,
     /// Snapshot manager
+    #[allow(dead_code)]
     snapshot_manager: SnapshotManager,
     /// Latency tracker
     latency_tracker: LatencyTracker,
@@ -68,7 +69,7 @@ impl ReplayEngine {
         let symbol = symbol.into();
         Self {
             config: config.clone(),
-            orderbook: RwLock::new(OrderBook::new(symbol.clone())),
+            orderbook: RwLock::new(OrderBook::new(symbol)),
             event_buffer: RwLock::new(BTreeMap::new()),
             last_sequence: RwLock::new(0),
             snapshot_manager: SnapshotManager::new(config.snapshot_interval),
@@ -83,12 +84,11 @@ impl ReplayEngine {
         let sequence = event.sequence();
         
         // Track latency if enabled
-        if self.config.track_latency {
-            if let Some(local_time) = event.local_time() {
+        if self.config.track_latency
+            && let Some(local_time) = event.local_time() {
                 let latency = local_time.as_nanos() - event.exchange_time().as_nanos();
-                self.latency_tracker.record(latency as u64);
+                self.latency_tracker.record(latency);
             }
-        }
 
         // Check sequence ordering
         let last_seq = *self.last_sequence.read();
@@ -235,12 +235,12 @@ impl ReplayEngine {
         info!("Applying snapshot at sequence {}", snapshot.sequence);
         
         // Convert snapshot levels to tuples for orderbook
-        let bid_levels: Vec<(common::Px, common::Qty, u64)> = snapshot.bids
+        let bid_levels: Vec<(services_common::Px, services_common::Qty, u64)> = snapshot.bids
             .iter()
             .map(|level| (level.price, level.quantity, level.order_count))
             .collect();
             
-        let ask_levels: Vec<(common::Px, common::Qty, u64)> = snapshot.asks
+        let ask_levels: Vec<(services_common::Px, services_common::Qty, u64)> = snapshot.asks
             .iter()
             .map(|level| (level.price, level.quantity, level.order_count))
             .collect();
@@ -394,7 +394,7 @@ pub struct SnapshotManager {
 
 impl SnapshotManager {
     /// Create a new snapshot manager
-    pub fn new(snapshot_interval: u64) -> Self {
+    #[must_use] pub const fn new(snapshot_interval: u64) -> Self {
         Self {
             snapshot_interval,
             snapshots: RwLock::new(BTreeMap::new()),
@@ -424,7 +424,7 @@ impl SnapshotManager {
     }
 
     /// Check if a snapshot is needed
-    pub fn needs_snapshot(&self, current_sequence: u64, last_snapshot_sequence: u64) -> bool {
+    pub const fn needs_snapshot(&self, current_sequence: u64, last_snapshot_sequence: u64) -> bool {
         current_sequence - last_snapshot_sequence >= self.snapshot_interval
     }
 }
@@ -437,9 +437,15 @@ pub struct LatencyTracker {
     max_samples: usize,
 }
 
+impl Default for LatencyTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LatencyTracker {
     /// Create a new latency tracker
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             latencies: RwLock::new(VecDeque::with_capacity(10000)),
             max_samples: 10000,
@@ -485,13 +491,21 @@ impl LatencyTracker {
 /// Latency percentiles in nanoseconds
 #[derive(Debug, Clone, Default)]
 pub struct LatencyPercentiles {
+    /// 50th percentile latency (median)
     pub p50: u64,
+    /// 90th percentile latency
     pub p90: u64,
+    /// 95th percentile latency
     pub p95: u64,
+    /// 99th percentile latency
     pub p99: u64,
+    /// 99.9th percentile latency
     pub p999: u64,
+    /// Minimum latency observed
     pub min: u64,
+    /// Maximum latency observed
     pub max: u64,
+    /// Mean latency
     pub mean: u64,
 }
 

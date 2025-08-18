@@ -1,14 +1,14 @@
 //! Zerodha-integrated Authentication Service
 //!
 //! This module provides a complete authentication service that integrates
-//! with Zerodha's KiteConnect API for real trading authentication.
+//! with Zerodha's `KiteConnect` API for real trading authentication.
 
 use crate::{
     AuthContext, AuthService, Permission,
     providers::zerodha::{ZerodhaAuth, ZerodhaConfig},
 };
 use anyhow::{Result, anyhow};
-use common::constants::time::DEFAULT_TOKEN_EXPIRY_SECS;
+use services_common::constants::time::DEFAULT_TOKEN_EXPIRY_SECS;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -47,7 +47,7 @@ impl ZerodhaAuthService {
     }
 
     /// Create with custom Zerodha config
-    pub fn with_config(config: ZerodhaConfig, jwt_secret: String, token_expiry: u64) -> Self {
+    #[must_use] pub fn with_config(config: ZerodhaConfig, jwt_secret: String, token_expiry: u64) -> Self {
         Self {
             zerodha_auth: Arc::new(ZerodhaAuth::new(config)),
             jwt_secret,
@@ -171,7 +171,7 @@ impl AuthService for ZerodhaAuthService {
             "exp".to_string(),
             // SAFETY: Explicit bounds check ensures token_expiry fits in i64
             (chrono::Utc::now().timestamp()
-                + if self.token_expiry <= i64::MAX as u64 {
+                + if i64::try_from(self.token_expiry).is_ok() {
                     // SAFETY: Bounds checked above
                     self.token_expiry as i64
                 } else {

@@ -6,16 +6,16 @@
 //! - Zero allocations in hot paths
 
 use anyhow::{Context, Result};
-use common::constants::{
+use services_common::constants::{
     capacity::PROGRESS_REPORT_INTERVAL,
     financial::STRIKE_PRICE_SCALE,
     memory::{BYTES_PER_MB, DEFAULT_WAL_SEGMENT_SIZE_MB},
     numeric::{INCREMENT, INITIAL_COUNTER, SECOND_INDEX, ZERO, ZERO_U64},
 };
-use common::{Px, Ts};
+use services_common::{Px, Ts};
 use rustc_hash::FxHashMap;
 use std::path::PathBuf;
-use storage::wal::Wal;
+use services_common::wal::Wal;
 use tracing::{debug, info};
 
 use super::types::{Instrument, InstrumentFilter, InstrumentType, OptionType};
@@ -59,7 +59,7 @@ impl InstrumentWalStore {
             .or(Some(DEFAULT_SEGMENT_SIZE));
 
         let wal =
-            Wal::new(&wal_dir, segment_size).context("Failed to initialize instrument WAL")?;
+            Wal::new(&wal_dir, segment_size.map(|s| s as usize)).context("Failed to initialize instrument WAL")?;
 
         Ok(Self {
             wal,

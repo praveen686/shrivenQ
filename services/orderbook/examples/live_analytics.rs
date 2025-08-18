@@ -9,8 +9,8 @@ use orderbook::{OrderBook, PerformanceMetrics};
 use orderbook::analytics::{MicrostructureAnalytics, ImbalanceCalculator, ToxicityDetector};
 use orderbook::core::{Order, Side};
 
-use common::{Px, Qty, Symbol, Ts};
-use shrivenquant_proto::marketdata::v1::{
+use services_common::{Px, Qty, Symbol, Ts};
+use services_common::marketdata::v1::{
     market_data_service_client::MarketDataServiceClient,
     SubscribeRequest, MarketDataEvent,
 };
@@ -65,7 +65,7 @@ impl AnalyticsDashboard {
         let start = std::time::Instant::now();
         
         match event.data {
-            Some(shrivenquant_proto::marketdata::v1::market_data_event::Data::OrderBook(book)) => {
+            Some(services_common::proto::marketdata::v1::market_data_event::Data::OrderBook(book)) => {
                 let mut orderbooks = self.orderbooks.write();
                 let live_book = orderbooks.entry(event.symbol.clone())
                     .or_insert_with(|| LiveOrderBook::new(&event.symbol));
@@ -136,7 +136,7 @@ impl AnalyticsDashboard {
                 live_book.update_count += 1;
                 live_book.last_update = Ts::now();
             }
-            Some(shrivenquant_proto::marketdata::v1::market_data_event::Data::Trade(trade)) => {
+            Some(services_common::proto::marketdata::v1::market_data_event::Data::Trade(trade)) => {
                 let mut orderbooks = self.orderbooks.write();
                 let live_book = orderbooks.entry(event.symbol.clone())
                     .or_insert_with(|| LiveOrderBook::new(&event.symbol));

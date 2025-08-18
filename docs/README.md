@@ -1,72 +1,141 @@
 # ShrivenQuant Documentation
 
-Welcome to the comprehensive documentation for ShrivenQuant - an institutional-grade, ultra-low-latency trading platform.
+## Overview
 
-## 📚 Documentation Structure
+Technical documentation for the ShrivenQuant algorithmic trading system - a Rust-based microservices platform currently in early development.
 
-### **Getting Started**
-- **[Getting Started Guide](getting-started/getting-started.md)** - Complete setup and development workflow
-- **[Quick Start](getting-started/quick-start.md)** - Minimal setup for immediate testing
-- **[Project Status](getting-started/project-status.md)** - Current implementation status
+## ⚠️ Important Notice
 
-### **Development**
-- **[Next Steps](development/next-steps.md)** - Production roadmap and timeline
-- **[Best Practices](development/best-practices.md)** - Development standards and guidelines
-- **[Command Reference](development/command-reference.md)** - Common development commands
+**Current Status**: Development prototype, NOT production-ready
+**Testing**: Never tested with real exchanges
+**Safety**: Contains 134 unwrap() calls that will cause crashes
 
-### **Architecture**
-- **[Overview](architecture/overview.md)** - System design and service status
-- **[Fixed-Point Design](architecture/fixed-point-design.md)** - Financial arithmetic precision
-- **[Memory Pool Design](architecture/memory-pool-design.md)** - Performance optimization
-- **[Trading Engine Plan](architecture/trading-engine-plan.md)** - Core engine architecture
+## Documentation Structure
 
-### **Status Updates**
-- **[Platform Status Report](status-updates/platform-status-report.md)** - Comprehensive implementation analysis
-- **[Release Build 2025-01-14](status-updates/release-build-2025-01-14.md)** - Historical release notes
+### Essential Documents
 
-### **Integrations**
-- **[Zerodha Setup](integrations/zerodha-setup.md)** - Indian market integration
-- **[Binance Setup](integrations/binance-setup.md)** - Crypto market integration
+#### System Status
+- **[SYSTEM_STATUS.md](SYSTEM_STATUS.md)** - Accurate current state assessment
+- **[Main README](../README.md)** - Project overview and warnings
 
-## 🚀 Quick Navigation
+#### Architecture
+- **[Architecture Overview](architecture/README.md)** - System design and service layout
+- **[Logging Architecture](architecture/LOGGING_ARCHITECTURE.md)** - Logging system design
+- **[Trading Gateway](architecture/trading-gateway.md)** - Trading service details
 
-### **I'm New Here**
-→ Start with **[Getting Started Guide](getting-started/getting-started.md)**
+#### Getting Started
+- **[Quick Start Guide](getting-started/quick-start.md)** - Build and run instructions
+- **[Getting Started](getting-started/getting-started.md)** - Detailed setup
 
-### **I Want to Understand the Current Status**
-→ Read **[Platform Status Report](status-updates/platform-status-report.md)**
+#### Development
+- **[Development Roadmap](development/ROADMAP.md)** - Realistic path to production
+- **[Best Practices](development/best-practices.md)** - Coding standards
+- **[Command Reference](development/command-reference.md)** - Useful commands
 
-### **I Want to Contribute**
-→ Check **[Next Steps](development/next-steps.md)** and **[Best Practices](development/best-practices.md)**
+#### Service Documentation
+Each service has its own README:
+- [Auth Service](../services/auth/README.md)
+- [Options Engine](../services/options-engine/README.md) - ✅ Working
+- [ML Inference](../services/ml-inference/README.md) - Framework only
+- [Sentiment Analyzer](../services/sentiment-analyzer/README.md) - Partial
+- [Secrets Manager](../services/secrets-manager/README.md) - Basic
+- [Logging Service](../services/logging/README.md) - Framework
 
-### **I Need Technical Details**
-→ Browse **[Architecture Overview](architecture/overview.md)**
+#### Exchange Integration
+- **[Binance Setup](integrations/binance-setup.md)** - Crypto exchange (untested)
+- **[Zerodha Setup](integrations/zerodha-setup.md)** - Indian broker (untested)
 
-### **I Want to Set Up Exchanges**
-→ Follow **[Zerodha Setup](integrations/zerodha-setup.md)** or **[Binance Setup](integrations/binance-setup.md)**
+#### Security
+- **[Security Audit](security/SECURITY_AUDIT.md)** - Security issues and recommendations
 
-## 📊 Current Platform Status
+## Quick Navigation
 
-**Status**: ~75% Complete for Production Trading  
-**Key Strength**: 3,500+ lines of production-grade business logic with proven performance  
-**Next Steps**: Add service executables (2-3 weeks) → Production infrastructure (4-6 weeks)
+### I want to understand what this is
+→ Read [SYSTEM_STATUS.md](SYSTEM_STATUS.md) for honest assessment
 
-## 🎯 Key Resources
+### I want to build and run it
+→ Follow [Quick Start Guide](getting-started/quick-start.md)
 
-- **Platform Overview**: See main [README.md](../README.md)
-- **Service Status**: All details in [Platform Status Report](status-updates/platform-status-report.md)
-- **Development Priorities**: Listed in [Next Steps](development/next-steps.md)
+### I want to know what's missing
+→ Check [Development Roadmap](development/ROADMAP.md)
 
-## 📝 Documentation Guidelines
+### I want to understand the architecture
+→ Review [Architecture Overview](architecture/README.md)
 
-When contributing to documentation:
+## Current Capabilities
 
-1. **Structure**: Follow the existing directory organization
-2. **Naming**: Use kebab-case for filenames (e.g., `getting-started.md`)
-3. **Links**: Use relative paths for internal links
-4. **Updates**: Update this README when adding new documents
-5. **Status**: Keep status information current and evidence-based
+### ✅ What Works
+- All 17 services compile
+- Options pricing with Black-Scholes
+- Basic microservices structure
+- gRPC protocol definitions
 
-## 🔄 Last Updated
+### ❌ What Doesn't Work
+- Exchange connections (never tested)
+- Order execution (not implemented)
+- Backtesting (not implemented)
+- Real-time data (not connected)
+- ML predictions (no models)
+- Monitoring (stub only)
 
-This documentation was last comprehensively updated on **2025-08-14** with accurate platform status and realistic roadmap.
+## Development Status
+
+```
+Component          Status      Notes
+-----------------  ----------  --------------------------------
+Core Structure     ✅ Done     Microservices architecture
+Compilation        ✅ Works    With warnings
+Options Pricing    ✅ Working  Black-Scholes implemented
+Exchange Connect   ❌ Untested Never attempted
+Order Execution    ❌ Missing   Not implemented
+Backtesting       ❌ Missing   Critical gap
+Risk Management   ⚠️ Framework No actual implementation
+ML Models         ❌ None      Framework only
+Production Ready  ❌ No        6-12 months away
+```
+
+## Critical Issues
+
+1. **134 unwrap() calls** - Will panic in production
+2. **No integration tests** - Unknown if services work together
+3. **No error handling** - Services crash on errors
+4. **Never tested** - No real market data or trades
+5. **No monitoring** - Blind to system health
+
+## Timeline to Production
+
+With full-time development team:
+- **Stabilization**: 1 month (fix crashes, add error handling)
+- **Core Features**: 2 months (backtesting, exchange integration)
+- **Production Prep**: 2-3 months (monitoring, security, testing)
+- **Hardening**: 1-2 months (paper trading, optimization)
+
+**Total: 6-8 months minimum**
+
+## Documentation Standards
+
+All documentation must be:
+- **Accurate** - No false claims or hyperbole
+- **Dated** - Include last update date
+- **Honest** - Clear about limitations
+- **Technical** - Focus on facts, not marketing
+
+## Warning
+
+This system is a development prototype. It will lose money if used for trading because it:
+- Has never been tested with real markets
+- Contains numerous crash points
+- Lacks error recovery
+- Has no proven strategies
+- Is missing critical features
+
+## Support
+
+For questions or issues:
+- Review existing documentation
+- Check service README files
+- Contact: praveenkumar.avln@gmail.com
+
+---
+
+*Last Updated: August 18, 2025*

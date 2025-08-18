@@ -5,7 +5,7 @@
 //! - Fixed-size arrays for predictable performance
 //! - Cache-aligned structure-of-arrays design
 
-use common::{Px, Qty};
+use services_common::{Px, Qty};
 
 /// Fixed depth for order book (32 levels per side)
 /// Chosen for cache efficiency and typical market depth

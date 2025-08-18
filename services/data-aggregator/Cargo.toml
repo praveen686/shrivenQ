@@ -25,9 +25,9 @@ serde_json = { workspace = true }
 async-trait = "0.1"
 
 # Internal dependencies
-common = { path = "../../crates/core/common" }
+services-common = { path = "../common" }
 market-connector = { path = "../market-connector" }
-shrivenquant-proto = { path = "../../crates/core/proto" }
+
 
 # Data processing
 chrono = { workspace = true }
@@ -55,5 +55,4 @@ tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.10"
-services-common = { path = "../common" }
 tracing-subscriber = "0.3"

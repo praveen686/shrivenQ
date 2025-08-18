@@ -32,7 +32,7 @@ pub struct BusMetrics {
 
 impl BusMetrics {
     /// Create new metrics collector
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             publish_attempts: RwLock::new(FxHashMap::default()),
             publish_successes: RwLock::new(FxHashMap::default()),
@@ -181,8 +181,7 @@ impl BusMetrics {
         self.publish_successes
             .read()
             .get(topic)
-            .map(|c| c.load(Ordering::Relaxed))
-            .unwrap_or(0)
+            .map_or(0, |c| c.load(Ordering::Relaxed))
     }
 
     /// Get handle count for topic
@@ -190,8 +189,7 @@ impl BusMetrics {
         self.handle_successes
             .read()
             .get(topic)
-            .map(|c| c.load(Ordering::Relaxed))
-            .unwrap_or(0)
+            .map_or(0, |c| c.load(Ordering::Relaxed))
     }
 
     /// Get failure count for topic
@@ -199,8 +197,7 @@ impl BusMetrics {
         self.handle_failures
             .read()
             .get(topic)
-            .map(|c| c.load(Ordering::Relaxed))
-            .unwrap_or(0)
+            .map_or(0, |c| c.load(Ordering::Relaxed))
     }
 
     /// Get success rate for topic
@@ -222,7 +219,7 @@ impl BusMetrics {
         self.handle_durations
             .read()
             .get(topic)
-            .map(|tracker| tracker.average())
+            .map(DurationTracker::average)
     }
 
     /// Get comprehensive metrics snapshot
@@ -245,14 +242,12 @@ impl BusMetrics {
                 .dead_letters
                 .read()
                 .get(&topic)
-                .map(|c| c.load(Ordering::Relaxed))
-                .unwrap_or(0);
+                .map_or(0, |c| c.load(Ordering::Relaxed));
             let expired_count = self
                 .expired_messages
                 .read()
                 .get(&topic)
-                .map(|c| c.load(Ordering::Relaxed))
-                .unwrap_or(0);
+                .map_or(0, |c| c.load(Ordering::Relaxed));
 
             topic_metrics.insert(
                 topic,
@@ -262,7 +257,7 @@ impl BusMetrics {
                     failure_count,
                     success_rate,
                     // SAFETY: u128 to f64 for duration in milliseconds
-                    avg_duration_ms: avg_duration.map(|d| d.as_millis() as f64).unwrap_or(0.0),
+                    avg_duration_ms: avg_duration.map_or(0.0, |d| d.as_millis() as f64),
                     dead_letter_count,
                     expired_count,
                 },
@@ -289,7 +284,7 @@ struct DurationTracker {
 }
 
 impl DurationTracker {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             total_duration: Duration::ZERO,
             count: 0,
@@ -341,17 +336,17 @@ pub struct TopicMetrics {
 
 impl EventBusMetrics {
     /// Get total messages published across all topics
-    pub fn total_published(&self) -> u64 {
+    #[must_use] pub fn total_published(&self) -> u64 {
         self.topic_metrics.values().map(|m| m.publish_count).sum()
     }
 
     /// Get total messages handled across all topics
-    pub fn total_handled(&self) -> u64 {
+    #[must_use] pub fn total_handled(&self) -> u64 {
         self.topic_metrics.values().map(|m| m.handle_count).sum()
     }
 
     /// Get overall success rate
-    pub fn overall_success_rate(&self) -> f64 {
+    #[must_use] pub fn overall_success_rate(&self) -> f64 {
         let total_handled = self.total_handled();
         let total_failed: u64 = self.topic_metrics.values().map(|m| m.failure_count).sum();
         let total_attempts = total_handled + total_failed;
@@ -365,7 +360,7 @@ impl EventBusMetrics {
     }
 
     /// Get topics sorted by message count
-    pub fn busiest_topics(&self) -> Vec<(String, u64)> {
+    #[must_use] pub fn busiest_topics(&self) -> Vec<(String, u64)> {
         let mut topics: Vec<_> = self
             .topic_metrics
             .iter()

@@ -13,7 +13,7 @@ use crate::{
     monitor::RiskMonitor,
 };
 use anyhow::Result;
-use common::{Symbol, constants};
+use services_common::{Symbol, constants};
 use prometheus::{
     register_counter_vec, register_histogram_vec, register_gauge_vec,
     CounterVec, HistogramVec, GaugeVec,
@@ -178,13 +178,13 @@ pub struct RateLimiter {
 }
 
 impl RateLimiter {
-    pub fn new(max_rps: u32) -> Self {
+    #[must_use] pub fn new(max_rps: u32) -> Self {
         // Use MAX_CONCURRENT_REQUESTS to bound the rate limiter
         let effective_max_rps = max_rps.min(MAX_CONCURRENT_REQUESTS as u32);
         
         // Safely convert rate limit to usize for vector capacity
         let capacity = effective_max_rps.min(MAX_RATE_LIMIT_WINDOW);
-        let capacity_usize = if capacity <= usize::MAX as u32 {
+        let capacity_usize = if usize::try_from(capacity).is_ok() {
             #[allow(clippy::cast_possible_truncation)] // u32 bounded to usize::MAX
             { capacity as usize }
         } else {
@@ -205,7 +205,7 @@ impl RateLimiter {
         window.retain(|&t| now.duration_since(t) < Duration::from_secs(1));
         
         // Convert u32 to usize with bounds check
-        let max_requests = if self.max_requests_per_second <= usize::MAX as u32 {
+        let max_requests = if usize::try_from(self.max_requests_per_second).is_ok() {
             #[allow(clippy::cast_possible_truncation)] // u32 bounded to usize::MAX
             { self.max_requests_per_second as usize }
         } else {
@@ -371,7 +371,7 @@ impl RiskManagerGrpcService {
                         metrics.request_counter.with_label_values(&[method, "error"]).inc();
                     }
                     self.circuit_breaker.record_failure();
-                    Err(Status::internal(format!("Task error: {}", e)))
+                    Err(Status::internal(format!("Task error: {e}")))
                 }
                 Err(_timeout_err) => {
                     if let Some(metrics) = METRICS.as_ref() {

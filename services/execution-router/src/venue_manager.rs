@@ -62,7 +62,7 @@ pub struct VenueManager {
 
 impl VenueManager {
     /// Create new venue manager
-    pub fn new(primary_venue: String) -> Self {
+    #[must_use] pub fn new(primary_venue: String) -> Self {
         Self {
             connections: Arc::new(RwLock::new(FxHashMap::default())),
             primary_venue,
@@ -132,7 +132,7 @@ impl VenueManager {
     }
 
     /// Get primary venue name
-    pub fn get_primary_venue(&self) -> &str {
+    #[must_use] pub fn get_primary_venue(&self) -> &str {
         &self.primary_venue
     }
 

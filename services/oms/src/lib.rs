@@ -15,20 +15,19 @@
 #![forbid(unsafe_code)]
 
 use anyhow::Result;
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use common::{Px, Qty, Symbol, Ts};
+use services_common::{Qty, Symbol};
 use fxhash::FxHashMap;
 use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+pub mod error;
 pub mod order;
 pub mod lifecycle;
 pub mod persistence;
@@ -36,10 +35,11 @@ pub mod audit;
 pub mod matching;
 pub mod recovery;
 
-use order::*;
-use lifecycle::*;
-use persistence::*;
-use audit::*;
+use error::{OmsError, OmsResult};
+use order::{Order, OrderStatus, Fill, Amendment, OrderRequest};
+use lifecycle::OrderLifecycleManager;
+use persistence::PersistenceManager;
+use audit::AuditTrail;
 
 /// OMS Configuration
 #[derive(Debug, Clone)]
@@ -303,13 +303,13 @@ impl OrderManagementSystem {
     }
     
     /// Submit order to exchange
-    pub async fn submit_order(&self, order_id: Uuid) -> Result<()> {
+    pub async fn submit_order(&self, order_id: Uuid) -> OmsResult<()> {
         let mut orders = self.active_orders.write();
         let order = orders.get_mut(&order_id)
-            .ok_or_else(|| anyhow::anyhow!("Order not found"))?;
+            .ok_or_else(|| OmsError::OrderNotFound { order_id: order_id.to_string() })?;
         
         // Validate transition
-        self.lifecycle_manager.validate_transition(&order, OrderStatus::Pending)?;
+        self.lifecycle_manager.validate_transition(order, OrderStatus::Pending)?;
         
         // Update status
         let old_status = order.status;
@@ -317,7 +317,7 @@ impl OrderManagementSystem {
         order.updated_at = Utc::now();
         
         // Persist change
-        self.persistence_manager.update_order_status(&order).await?;
+        self.persistence_manager.update_order_status(order).await?;
         
         // Audit trail
         if self.config.enable_audit {
@@ -365,7 +365,7 @@ impl OrderManagementSystem {
         };
         
         if new_status != old_status {
-            self.lifecycle_manager.validate_transition(&order, new_status)?;
+            self.lifecycle_manager.validate_transition(order, new_status)?;
             order.status = new_status;
         }
         
@@ -373,7 +373,7 @@ impl OrderManagementSystem {
         
         // Persist
         self.persistence_manager.save_fill(&fill).await?;
-        self.persistence_manager.update_order_quantities(&order).await?;
+        self.persistence_manager.update_order_quantities(order).await?;
         
         // Audit trail
         if self.config.enable_audit {
@@ -405,17 +405,17 @@ impl OrderManagementSystem {
             .ok_or_else(|| anyhow::anyhow!("Order not found"))?;
         
         // Validate cancellation
-        if !self.lifecycle_manager.can_cancel(&order) {
+        if !self.lifecycle_manager.can_cancel(order) {
             return Err(anyhow::anyhow!("Order cannot be cancelled in current state"));
         }
         
         // Update status
-        let old_status = order.status;
+        let _old_status = order.status;
         order.status = OrderStatus::Cancelled;
         order.updated_at = Utc::now();
         
         // Persist
-        self.persistence_manager.update_order_status(&order).await?;
+        self.persistence_manager.update_order_status(order).await?;
         
         // Audit trail
         if self.config.enable_audit {
@@ -443,7 +443,7 @@ impl OrderManagementSystem {
             .ok_or_else(|| anyhow::anyhow!("Order not found"))?;
         
         // Validate amendment
-        if !self.lifecycle_manager.can_amend(&order) {
+        if !self.lifecycle_manager.can_amend(order) {
             return Err(anyhow::anyhow!("Order cannot be amended in current state"));
         }
         
@@ -469,7 +469,7 @@ impl OrderManagementSystem {
         
         // Persist
         self.persistence_manager.save_amendment(&amendment).await?;
-        self.persistence_manager.update_order(&order).await?;
+        self.persistence_manager.update_order(order).await?;
         
         // Audit trail
         if self.config.enable_audit {

@@ -39,7 +39,7 @@ pub struct AuthContext {
 }
 
 /// Permission types
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Permission {
     /// Read market data
     ReadMarketData,
@@ -80,7 +80,7 @@ pub struct AuthServiceImpl {
 }
 
 impl AuthServiceImpl {
-    pub fn new(config: AuthConfig) -> Self {
+    #[must_use] pub const fn new(config: AuthConfig) -> Self {
         Self { config }
     }
 }

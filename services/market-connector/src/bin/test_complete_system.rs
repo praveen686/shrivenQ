@@ -13,7 +13,7 @@
 //! - Proper error handling
 
 use anyhow::{Context, Result};
-use common::{L2Update, Side, Symbol, Ts};
+use services_common::{L2Update, Side, Symbol, Ts, ZerodhaAuth, ZerodhaConfig};
 use market_connector::{
     MarketData, MarketDataEvent,
     connectors::adapter::{FeedAdapter, FeedConfig},
@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use storage::wal::{Wal, WalEntry};
+use services_common::wal::{Wal, WalEntry};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, timeout};
 use tracing::{error, info, warn};
@@ -101,6 +101,14 @@ impl WalEntry for MarketDataEntry {
     fn timestamp(&self) -> Ts {
         self.timestamp
     }
+    
+    fn sequence(&self) -> u64 {
+        self.timestamp.as_nanos()
+    }
+    
+    fn to_bytes(&self) -> anyhow::Result<Vec<u8>> {
+        Ok(serde_json::to_vec(self)?)
+    }
 }
 
 /// Initialize market data WAL
@@ -131,14 +139,14 @@ async fn test_complete_system(stats: Arc<TestStats>) -> Result<()> {
     };
 
     // Initialize authentication
-    let auth_config = auth::ZerodhaConfig::new(
+    let auth_config = ZerodhaConfig::new(
         std::env::var("ZERODHA_USER_ID").context("ZERODHA_USER_ID not set")?,
         std::env::var("ZERODHA_PASSWORD").context("ZERODHA_PASSWORD not set")?,
         std::env::var("ZERODHA_TOTP_SECRET").context("ZERODHA_TOTP_SECRET not set")?,
         std::env::var("ZERODHA_API_KEY").context("ZERODHA_API_KEY not set")?,
         std::env::var("ZERODHA_API_SECRET").context("ZERODHA_API_SECRET not set")?,
     );
-    let zerodha_auth = auth::ZerodhaAuth::new(auth_config.clone());
+    let zerodha_auth = ZerodhaAuth::from_config(auth_config.clone());
 
     // Create and start instrument service
     let instrument_service = InstrumentService::new(instrument_config, Some(zerodha_auth))
@@ -167,7 +175,7 @@ async fn test_complete_system(stats: Arc<TestStats>) -> Result<()> {
     );
 
     // Create second auth instance for ZerodhaFeed
-    let zerodha_auth_feed = auth::ZerodhaAuth::new(auth_config);
+    let zerodha_auth_feed = ZerodhaAuth::from_config(auth_config);
 
     // Phase 2: Query Key Instruments and Map to Futures
     info!("Phase 2: Querying spot instruments and mapping to futures...");

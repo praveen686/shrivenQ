@@ -23,14 +23,11 @@ tonic = { workspace = true }
 tonic-health = "0.12"
 tonic-reflection = "0.12"
 prost = { workspace = true }
-shrivenquant-proto = { path = "../../crates/core/proto" }
-
 # HTTP server for metrics
 warp = "0.3"
 
 # Internal dependencies
-common = { path = "../../crates/core/common" }
-engine = { path = "../../crates/trading/engine" }
+services-common = { path = "../common" }
 
 # Concurrent data structures
 dashmap = "6.1"

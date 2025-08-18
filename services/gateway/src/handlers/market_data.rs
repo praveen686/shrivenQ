@@ -41,20 +41,20 @@ pub struct MarketDataHandlers {
 }
 
 impl MarketDataHandlers {
-    pub fn new(grpc_clients: Arc<GrpcClients>) -> Self {
+    pub const fn new(grpc_clients: Arc<GrpcClients>) -> Self {
         Self { grpc_clients }
     }
 
     /// Get market data snapshot
     pub async fn get_snapshot(
-        State(handlers): State<MarketDataHandlers>,
+        State(handlers): State<Self>,
         request: axum::extract::Request,
         Query(query): Query<SnapshotQuery>,
     ) -> Result<Json<ApiResponse<Vec<MarketSnapshot>>>, StatusCode> {
         // Check permissions
         let user_context = get_user_context(&request);
-        if let Some(user) = user_context {
-            if !check_permission(user, "READ_MARKET_DATA") {
+        if let Some(user) = user_context
+            && !check_permission(user, "READ_MARKET_DATA") {
                 let error_response = ErrorResponse {
                     error: "PERMISSION_DENIED".to_string(),
                     message: "Insufficient permissions to read market data".to_string(),
@@ -62,7 +62,6 @@ impl MarketDataHandlers {
                 };
                 return Ok(Json(ApiResponse::error(error_response)));
             }
-        }
 
         info!("Get snapshot request for symbols: {}", query.symbols);
 
@@ -125,14 +124,14 @@ impl MarketDataHandlers {
 
     /// Get historical market data
     pub async fn get_historical_data(
-        State(handlers): State<MarketDataHandlers>,
+        State(handlers): State<Self>,
         request: axum::extract::Request,
         Query(query): Query<HistoricalQuery>,
     ) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
         // Check permissions
         let user_context = get_user_context(&request);
-        if let Some(user) = user_context {
-            if !check_permission(user, "READ_MARKET_DATA") {
+        if let Some(user) = user_context
+            && !check_permission(user, "READ_MARKET_DATA") {
                 let error_response = ErrorResponse {
                     error: "PERMISSION_DENIED".to_string(),
                     message: "Insufficient permissions to read market data".to_string(),
@@ -140,7 +139,6 @@ impl MarketDataHandlers {
                 };
                 return Ok(Json(ApiResponse::error(error_response)));
             }
-        }
 
         info!("Get historical data request for symbol: {}", query.symbol);
 
@@ -272,8 +270,8 @@ fn fixed_point_to_string(value: i64) -> String {
     let fraction = abs_value % 10000;
 
     if is_negative {
-        format!("-{}.{:04}", whole, fraction)
+        format!("-{whole}.{fraction:04}")
     } else {
-        format!("{}.{:04}", whole, fraction)
+        format!("{whole}.{fraction:04}")
     }
 }

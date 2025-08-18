@@ -1,0 +1,44 @@
+[package]
+name = "ml-inference"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.47", features = ["full"] }
+
+# gRPC
+tonic = "0.12"
+prost = "0.13"
+
+# ML frameworks (simplified for now)
+ndarray = "0.16"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Internal
+services-common = { path = "../common" }
+
+# Data structures
+dashmap = "6.1"
+parking_lot = "0.12"
+
+# Statistics
+statrs = "0.18"
+
+[build-dependencies]
+tonic-build = "0.12"

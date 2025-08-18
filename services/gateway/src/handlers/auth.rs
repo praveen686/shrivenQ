@@ -16,13 +16,13 @@ pub struct AuthHandlers {
 }
 
 impl AuthHandlers {
-    pub fn new(grpc_clients: Arc<GrpcClients>) -> Self {
+    pub const fn new(grpc_clients: Arc<GrpcClients>) -> Self {
         Self { grpc_clients }
     }
 
     /// Login endpoint
     pub async fn login(
-        State(handlers): State<AuthHandlers>,
+        State(handlers): State<Self>,
         Json(request): Json<LoginRequest>,
     ) -> Result<Json<ApiResponse<LoginResponse>>, StatusCode> {
         info!("Login request for user: {}", request.username);
@@ -70,7 +70,7 @@ impl AuthHandlers {
 
     /// Refresh token endpoint
     pub async fn refresh_token(
-        State(handlers): State<AuthHandlers>,
+        State(handlers): State<Self>,
         Json(request): Json<RefreshTokenRequest>,
     ) -> Result<Json<ApiResponse<LoginResponse>>, StatusCode> {
         info!("Token refresh request");
@@ -109,7 +109,7 @@ impl AuthHandlers {
 
     /// Validate token endpoint (for internal use or debugging)
     pub async fn validate_token(
-        State(handlers): State<AuthHandlers>,
+        State(handlers): State<Self>,
         token: String,
     ) -> Result<Json<ApiResponse<bool>>, StatusCode> {
         let mut client = handlers.grpc_clients.auth.clone();
@@ -135,7 +135,7 @@ impl AuthHandlers {
 
     /// Revoke token endpoint
     pub async fn revoke_token(
-        State(handlers): State<AuthHandlers>,
+        State(handlers): State<Self>,
         token: String,
     ) -> Result<Json<ApiResponse<bool>>, StatusCode> {
         info!("Token revocation request");

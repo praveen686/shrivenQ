@@ -18,7 +18,7 @@ pub struct HealthHandlers {
 }
 
 impl HealthHandlers {
-    pub fn new(grpc_clients: Arc<GrpcClients>, start_time: Instant) -> Self {
+    pub const fn new(grpc_clients: Arc<GrpcClients>, start_time: Instant) -> Self {
         Self {
             grpc_clients,
             start_time,
@@ -27,7 +27,7 @@ impl HealthHandlers {
 
     /// Health check endpoint
     pub async fn health_check(
-        State(handlers): State<HealthHandlers>,
+        State(handlers): State<Self>,
     ) -> Result<Json<ApiResponse<HealthCheckResponse>>, StatusCode> {
         info!("Health check request");
 
@@ -127,7 +127,7 @@ impl HealthHandlers {
              api_gateway_active_connections 1\n",
             uptime = uptime,
             // SAFETY: Process ID fits in u64, used for simulation only
-            memory_usage = std::process::id() as u64 * 1024 * 1024 // Simulated memory usage
+            memory_usage = u64::from(std::process::id()) * 1024 * 1024 // Simulated memory usage
         );
 
         Ok(metrics)

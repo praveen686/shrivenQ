@@ -39,8 +39,8 @@ crossbeam = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 
 # Internal
-common = { path = "../../crates/core/common" }
-shrivenquant-proto = { path = "../../crates/core/proto" }
+services-common = { path = "../common" }
+
 
 [dev-dependencies]
 criterion = "0.5"

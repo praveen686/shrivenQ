@@ -1,7 +1,7 @@
 //! Execution service gRPC client wrapper
 
 use anyhow::Result;
-use shrivenquant_proto::execution::v1::{
+use crate::proto::execution::v1::{
     CancelOrderRequest, CancelOrderResponse, GetOrderRequest, GetOrderResponse, SubmitOrderRequest,
     SubmitOrderResponse, execution_service_client::ExecutionServiceClient as GrpcClient,
 };

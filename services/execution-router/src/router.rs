@@ -1,7 +1,7 @@
 //! Smart order routing logic
 
 use crate::{OrderRequest, VenueStrategy};
-use common::Symbol;
+use services_common::Symbol;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
@@ -49,7 +49,7 @@ pub struct SmartOrderRouter {
 
 impl SmartOrderRouter {
     /// Create new router
-    pub fn new(default_venue: String) -> Self {
+    #[must_use] pub fn new(default_venue: String) -> Self {
         Self {
             venues: FxHashMap::default(),
             symbol_venues: FxHashMap::default(),
@@ -68,7 +68,7 @@ impl SmartOrderRouter {
     }
 
     /// Get available venues for a specific symbol
-    pub fn get_symbol_venues(&self, symbol: Symbol) -> Vec<String> {
+    #[must_use] pub fn get_symbol_venues(&self, symbol: Symbol) -> Vec<String> {
         self.symbol_venues.get(&symbol).cloned().unwrap_or_else(|| {
             // Return all active venues if no specific mapping exists
             self.venues
@@ -80,7 +80,7 @@ impl SmartOrderRouter {
     }
 
     /// Route order
-    pub fn route_order(&self, request: &OrderRequest, strategy: VenueStrategy) -> RoutingDecision {
+    #[must_use] pub fn route_order(&self, request: &OrderRequest, strategy: VenueStrategy) -> RoutingDecision {
         match strategy {
             VenueStrategy::Primary => {
                 // Use symbol-specific primary venue if available
@@ -121,7 +121,7 @@ impl SmartOrderRouter {
             primary_venue: best_venue,
             backup_venues: vec![],
             split_allocation: FxHashMap::default(),
-            reason: format!("Lowest fee: {} bps", lowest_fee),
+            reason: format!("Lowest fee: {lowest_fee} bps"),
         }
     }
 
@@ -142,7 +142,7 @@ impl SmartOrderRouter {
             primary_venue: best_venue,
             backup_venues: vec![],
             split_allocation: FxHashMap::default(),
-            reason: format!("Best liquidity score: {}", best_liquidity),
+            reason: format!("Best liquidity score: {best_liquidity}"),
         }
     }
 

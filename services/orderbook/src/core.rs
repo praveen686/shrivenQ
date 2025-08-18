@@ -7,7 +7,7 @@
 //! - Order-by-order reconstruction
 //! - Deterministic checksum validation
 
-use common::{Px, Qty, Ts};
+use services_common::{Px, Qty, Ts};
 use std::sync::atomic::{AtomicU64, AtomicI64, Ordering};
 use std::collections::BTreeMap;
 use parking_lot::RwLock;
@@ -64,7 +64,7 @@ pub struct PriceLevel {
 
 impl PriceLevel {
     /// Create a new price level
-    pub fn new(price: Px) -> Self {
+    #[must_use] pub fn new(price: Px) -> Self {
         Self {
             price,
             total_quantity: AtomicI64::new(0),
@@ -90,7 +90,7 @@ impl PriceLevel {
         if hidden > 0 {
             self.hidden_quantity.fetch_add(hidden, Ordering::Release);
         }
-        self.last_update.store(order.timestamp.as_nanos() as u64, Ordering::Release);
+        self.last_update.store(order.timestamp.as_nanos(), Ordering::Release);
 
         // Then update the order list
         let mut orders = self.orders.write();
@@ -143,12 +143,13 @@ impl PriceLevel {
 /// The main order book structure
 pub struct OrderBook {
     /// Symbol for this order book
+    #[allow(dead_code)]
     symbol: String,
     
-    /// Bid levels (buy orders) - BTreeMap keeps them sorted
+    /// Bid levels (buy orders) - `BTreeMap` keeps them sorted
     bids: RwLock<BTreeMap<i64, PriceLevel>>, // Key is negative price for reverse order
     
-    /// Ask levels (sell orders) - BTreeMap keeps them sorted
+    /// Ask levels (sell orders) - `BTreeMap` keeps them sorted
     asks: RwLock<BTreeMap<i64, PriceLevel>>, // Key is positive price
     
     /// Best bid price (atomic for lock-free access)
@@ -240,7 +241,7 @@ impl OrderBook {
         }
         
         // Update timestamp and checksum
-        self.last_update.store(order.timestamp.as_nanos() as u64, Ordering::Release);
+        self.last_update.store(order.timestamp.as_nanos(), Ordering::Release);
         self.update_checksum();
         
         seq
@@ -271,7 +272,7 @@ impl OrderBook {
                         
                         // Update best bid if this was the best
                         if price.as_i64() == self.best_bid.load(Ordering::Acquire) {
-                            let new_best = bids.keys().next().map(|k| -k).unwrap_or(0);
+                            let new_best = bids.keys().next().map_or(0, |k| -k);
                             self.best_bid.store(new_best, Ordering::Release);
                         }
                     }
@@ -377,7 +378,7 @@ impl OrderBook {
         }
         
         let checksum = crc32fast::hash(checksum_str.as_bytes());
-        self.checksum.store(checksum as u64, Ordering::Release);
+        self.checksum.store(u64::from(checksum), Ordering::Release);
     }
 
     /// Get current checksum for validation
@@ -386,9 +387,33 @@ impl OrderBook {
         self.checksum.load(Ordering::Acquire)
     }
 
-    /// Get price key for BTreeMap storage
+    /// Get mid price (average of best bid and ask)
     #[inline]
-    fn get_price_key(&self, price: Px, side: Side) -> i64 {
+    pub fn get_mid(&self) -> Option<Px> {
+        let (bid, ask) = self.get_bbo();
+        match (bid, ask) {
+            (Some(b), Some(a)) => Some(Px::from_i64((b.as_i64() + a.as_i64()) / 2)),
+            _ => None,
+        }
+    }
+
+    /// Get bid size at a specific price
+    pub fn get_bid_size_at(&self, price: Px) -> Option<Qty> {
+        let bids = self.bids.read();
+        let price_key = self.get_price_key(price, Side::Bid);
+        bids.get(&price_key).map(|level| level.get_quantity())
+    }
+
+    /// Get ask size at a specific price
+    pub fn get_ask_size_at(&self, price: Px) -> Option<Qty> {
+        let asks = self.asks.read();
+        let price_key = self.get_price_key(price, Side::Ask);
+        asks.get(&price_key).map(|level| level.get_quantity())
+    }
+
+    /// Get price key for `BTreeMap` storage
+    #[inline]
+    const fn get_price_key(&self, price: Px, side: Side) -> i64 {
         match side {
             Side::Bid => -price.as_i64(), // Negative for reverse order
             Side::Ask => price.as_i64(),   // Positive for normal order
