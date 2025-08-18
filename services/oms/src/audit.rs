@@ -361,8 +361,16 @@ impl ComplianceReporter {
     
     /// Generate daily compliance report
     pub async fn generate_daily_report(&self, date: DateTime<Utc>) -> Result<ComplianceReport> {
-        let start = date.date_naive().and_hms_opt(0, 0, 0).unwrap();
-        let end = date.date_naive().and_hms_opt(23, 59, 59).unwrap();
+        use crate::error::OmsError;
+        
+        let start = date.date_naive().and_hms_opt(0, 0, 0)
+            .ok_or_else(|| OmsError::InvalidDateTime { 
+                context: format!("Failed to create start time for date: {}", date) 
+            })?;
+        let end = date.date_naive().and_hms_opt(23, 59, 59)
+            .ok_or_else(|| OmsError::InvalidDateTime { 
+                context: format!("Failed to create end time for date: {}", date) 
+            })?;
         
         // Query audit records for the day
         let records = self.audit_trail.query_audit_log(

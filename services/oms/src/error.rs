@@ -44,6 +44,10 @@ pub enum OmsError {
     /// System capacity exceeded
     #[error("System capacity exceeded: {details}")]
     CapacityExceeded { details: String },
+    
+    /// Date/time parsing error
+    #[error("Invalid date/time: {context}")]
+    InvalidDateTime { context: String },
 }
 
 /// Type alias for OMS results

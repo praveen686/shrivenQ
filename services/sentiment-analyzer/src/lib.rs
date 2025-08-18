@@ -36,6 +36,13 @@ pub struct RedditAnalyzer {
     client: Client,
     sentiment_cache: Arc<DashMap<String, SentimentSignal>>,
     config: SentimentConfig,
+    rate_limit: Arc<RwLock<RateLimiter>>,
+}
+
+/// Rate limiter for API calls
+pub struct RateLimiter {
+    requests_per_minute: u32,
+    last_requests: Vec<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone)]
@@ -71,19 +78,49 @@ impl Default for SentimentConfig {
 }
 
 impl RedditAnalyzer {
-    pub fn new(config: SentimentConfig) -> Self {
-        Self {
+    pub fn new(config: SentimentConfig) -> Result<Self> {
+        Ok(Self {
             client: Client::builder()
                 .user_agent("ShrivenQuant/1.0")
                 .build()
-                .expect("Failed to create HTTP client"),
+                .context("Failed to create HTTP client")?,
             sentiment_cache: Arc::new(DashMap::new()),
             config,
+            rate_limit: Arc::new(RwLock::new(RateLimiter {
+                requests_per_minute: 60,
+                last_requests: Vec::new(),
+            })),
+        })
+    }
+    
+    /// Check rate limit before making API call
+    pub async fn check_rate_limit(&self) -> Result<()> {
+        let mut limiter = self.rate_limit.write().await;
+        let now = Utc::now();
+        
+        // Remove requests older than 1 minute
+        limiter.last_requests.retain(|&req_time| {
+            (now - req_time).num_seconds() < 60
+        });
+        
+        if limiter.last_requests.len() >= limiter.requests_per_minute as usize {
+            let oldest = limiter.last_requests[0];
+            let wait_time = 60 - (now - oldest).num_seconds();
+            if wait_time > 0 {
+                warn!("Rate limit reached, waiting {} seconds", wait_time);
+                tokio::time::sleep(tokio::time::Duration::from_secs(wait_time as u64)).await;
+            }
         }
+        
+        limiter.last_requests.push(now);
+        Ok(())
     }
     
     /// Fetch and analyze posts from Reddit
     pub async fn analyze_subreddit(&self, subreddit: &str) -> Result<Vec<SentimentSignal>> {
+        // Check rate limit before making request
+        self.check_rate_limit().await?;
+        
         let url = format!("https://www.reddit.com/r/{}/hot.json?limit=25", subreddit);
         
         let response = self.client

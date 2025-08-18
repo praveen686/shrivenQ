@@ -288,9 +288,30 @@ async fn main() -> Result<()> {
         )
         .get_matches();
     
-    let wal_dir = matches.get_one::<String>("wal_dir").unwrap();
+    // Handle CLI args properly without panicking
+    let wal_dir = match matches.get_one::<String>("wal_dir") {
+        Some(dir) => dir,
+        None => {
+            eprintln!("Error: WAL directory argument is required");
+            std::process::exit(1);
+        }
+    };
+    
     let symbol_filter = matches.get_one::<String>("symbol");
-    let limit: usize = matches.get_one::<String>("limit").unwrap().parse()?;
+    
+    let limit: usize = match matches.get_one::<String>("limit") {
+        Some(limit_str) => match limit_str.parse() {
+            Ok(val) => val,
+            Err(e) => {
+                eprintln!("Error: Invalid limit value '{}': {}", limit_str, e);
+                std::process::exit(1);
+            }
+        },
+        None => {
+            eprintln!("Error: Limit argument is required");
+            std::process::exit(1);
+        }
+    };
     
     info!("🚀 Starting WAL replay from: {}", wal_dir);
     

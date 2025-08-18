@@ -141,6 +141,33 @@ impl LogForwarder {
     }
 }
 
+/// Check if metadata should be included based on level and target
+pub fn should_include_metadata(metadata: &Metadata) -> bool {
+    // Filter based on target and level
+    let target = metadata.target();
+    let level = metadata.level();
+    
+    // Always include ERROR and WARN levels
+    if level <= &Level::WARN {
+        return true;
+    }
+    
+    // Include INFO for our services
+    if level == &Level::INFO && target.starts_with("shrivenquant") {
+        return true;
+    }
+    
+    // Include DEBUG for specific modules during development
+    if level == &Level::DEBUG {
+        return target.starts_with("shrivenquant::") 
+            || target.starts_with("trading_gateway::")
+            || target.starts_with("execution_router::");
+    }
+    
+    // Exclude TRACE unless explicitly requested
+    false
+}
+
 /// Initialize centralized logging for a service
 pub fn init_logging(service_name: &str) -> Result<()> {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};

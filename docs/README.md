@@ -96,6 +96,16 @@
 | [command-reference.md](04-development/command-reference.md) | Useful commands | Developers |
 | [README.md](04-development/README.md) | Development overview | All |
 
+### 🧪 Testing Architecture
+**Production-grade testing framework**
+
+| Document | Purpose | Status |
+|----------|---------|--------|
+| [TESTING_ARCHITECTURE.md](TESTING_ARCHITECTURE.md) | Complete testing guide | ✅ IMPLEMENTED |
+| Test Utilities | Fixtures, factories, mocks | ✅ READY |
+| Test Migration | Scripts to migrate inline tests | ✅ AVAILABLE |
+| Coverage Goals | 80% unit, 60% integration | 🟡 IN PROGRESS |
+
 ### 🔌 05 - Exchange Integrations
 **Connect to trading venues (not tested)**
 

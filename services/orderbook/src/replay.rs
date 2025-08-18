@@ -408,8 +408,9 @@ impl SnapshotManager {
         
         // Remove old snapshots if at capacity
         if snapshots.len() >= self.max_snapshots {
-            let oldest = *snapshots.keys().next().unwrap();
-            snapshots.remove(&oldest);
+            if let Some(&oldest) = snapshots.keys().next() {
+                snapshots.remove(&oldest);
+            }
         }
         
         snapshots.insert(snapshot.sequence, snapshot);

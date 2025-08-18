@@ -116,7 +116,7 @@ impl MicrostructureAnalytics {
             let bucket_time = (timestamp.as_nanos() / VOLUME_BUCKET_SIZE_NS) * VOLUME_BUCKET_SIZE_NS;
             let bucket_ts = Ts::from_nanos(bucket_time);
             
-            if buckets.is_empty() || buckets.back().unwrap().timestamp != bucket_ts {
+            if buckets.is_empty() || buckets.back().map_or(true, |b| b.timestamp != bucket_ts) {
                 // New bucket needed
                 if buckets.len() >= MAX_BUCKETS {
                     buckets.pop_front();

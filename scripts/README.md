@@ -1,19 +1,27 @@
-# ShrivenQuant Scripts Organization
+# 📁 ShrivenQuant Scripts Directory
 
-## 📁 Directory Structure
+**Last Updated**: January 18, 2025  
+**Maintained By**: CTO  
+**Status**: REORGANIZED & CONSOLIDATED
+
+## 📋 Directory Structure
 
 ```
 scripts/
-├── shrivenquant.sh       # Master control script (main entry point)
-├── auth/                 # Authentication and credential management
-│   └── setup-zerodha-auth.sh
+├── code-quality/         # Code quality and maintenance scripts ✨ NEW
+│   ├── fix_unwrap_calls.sh     # Consolidated unwrap/test management
+│   ├── migrate_tests.sh        # [DEPRECATED - use fix_unwrap_calls.sh]
+│   └── remove_production_unwraps.sh # [DEPRECATED - use fix_unwrap_calls.sh]
 ├── deployment/           # Production deployment and startup
 │   ├── connect_real_exchanges.sh
 │   ├── production_demo.sh
 │   ├── start_live_trading.sh
 │   └── start_services.sh
+├── development/          # Development workflow scripts ✨ NEW
+│   └── shrivenquant.sh  # Master control script
 ├── monitoring/           # System monitoring and analytics
 │   ├── check_system_status.sh
+│   ├── performance_dashboard.sh
 │   ├── run_live_analytics.sh
 │   └── setup_monitoring.sh
 ├── testing/              # Testing and validation scripts

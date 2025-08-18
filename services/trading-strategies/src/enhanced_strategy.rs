@@ -889,8 +889,9 @@ async fn main() -> Result<()> {
                   performance.max_drawdown * 100.0);
             
             // Save performance to file
+            // Use chrono for reliable timestamp generation
             let report = serde_json::json!({
-                "timestamp": SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+                "timestamp": chrono::Utc::now().timestamp(),
                 "capital": *capital,
                 "total_pnl": performance.total_pnl,
                 "win_rate": performance.win_rate,

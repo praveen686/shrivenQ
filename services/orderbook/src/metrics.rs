@@ -285,14 +285,26 @@ impl Default for LatencyTracker {
 impl LatencyTracker {
     /// Create new latency tracker
     #[must_use] pub fn new() -> Self {
+        // Create histograms with safe fallback
+        // Precision 3 gives us microsecond accuracy up to ~1 hour
+        let create_histogram = || {
+            Histogram::new(3).unwrap_or_else(|_| {
+                // Fallback to precision 2 if 3 fails (unlikely but safe)
+                Histogram::new(2).unwrap_or_else(|_| {
+                    // Last resort: precision 1 (this should never fail)
+                    Histogram::new(1).unwrap_or_default()
+                })
+            })
+        };
+        
         let histograms = [
-            Histogram::new(3).unwrap(),
-            Histogram::new(3).unwrap(),
-            Histogram::new(3).unwrap(),
-            Histogram::new(3).unwrap(),
-            Histogram::new(3).unwrap(),
-            Histogram::new(3).unwrap(),
-            Histogram::new(3).unwrap(),
+            create_histogram(),
+            create_histogram(),
+            create_histogram(),
+            create_histogram(),
+            create_histogram(),
+            create_histogram(),
+            create_histogram(),
         ];
         
         Self {

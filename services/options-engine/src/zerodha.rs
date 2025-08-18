@@ -204,9 +204,9 @@ impl ZerodhaOptionsClient {
             }
         }
         
-        // Sort by strike
-        calls.sort_by(|a, b| a.strike.partial_cmp(&b.strike).unwrap());
-        puts.sort_by(|a, b| a.strike.partial_cmp(&b.strike).unwrap());
+        // Sort by strike - use total_cmp for f64 to handle NaN safely
+        calls.sort_by(|a, b| a.strike.total_cmp(&b.strike));
+        puts.sort_by(|a, b| a.strike.total_cmp(&b.strike));
         
         Ok(OptionChain {
             symbol: request.symbol,

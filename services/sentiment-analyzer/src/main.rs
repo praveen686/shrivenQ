@@ -26,9 +26,9 @@ pub struct SentimentServiceImpl {
 }
 
 impl SentimentServiceImpl {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self> {
         let config = SentimentConfig::default();
-        let analyzer = Arc::new(RedditAnalyzer::new(config));
+        let analyzer = Arc::new(RedditAnalyzer::new(config)?);
         
         // Spawn background analysis task
         let analyzer_clone = analyzer.clone();
@@ -38,7 +38,7 @@ impl SentimentServiceImpl {
             }
         });
         
-        Self { analyzer }
+        Ok(Self { analyzer })
     }
 }
 
@@ -104,7 +104,7 @@ async fn main() -> Result<()> {
         .init();
     
     let addr = "[::1]:50065".parse()?;
-    let service = SentimentServiceImpl::new();
+    let service = SentimentServiceImpl::new()?;
     
     info!("📊 Sentiment Analyzer Service starting on {}", addr);
     info!("🔍 Analyzing: Reddit (r/wallstreetbets, r/cryptocurrency)");

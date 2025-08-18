@@ -37,12 +37,16 @@ impl SecretsManager {
         // Derive key from master password using Argon2
         use argon2::{Argon2, PasswordHasher, password_hash::{SaltString, rand_core::OsRng}};
         
-        let salt = SaltString::from_b64("c2hyaXZlbnF1YW50X3NhbHRfdjE").unwrap();
+        let salt = SaltString::from_b64("c2hyaXZlbnF1YW50X3NhbHRfdjE")
+            .map_err(|e| anyhow::anyhow!("Failed to parse salt: {}", e))?;
         let argon2 = Argon2::default();
         let password_hash = argon2.hash_password(master_password.as_bytes(), &salt)
             .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))?;
         
-        let hash = password_hash.hash.unwrap().as_bytes().to_vec();
+        let hash = password_hash.hash
+            .ok_or_else(|| anyhow::anyhow!("Password hash not available"))?
+            .as_bytes()
+            .to_vec();
         
         let key = Key::<Aes256Gcm>::from_slice(&hash[..32]);
         let cipher = Aes256Gcm::new(key);
@@ -110,7 +114,9 @@ impl SecretsManager {
     
     /// Save encrypted credentials to file
     fn save_credentials(&self, creds: &SecureCredentials) -> Result<()> {
-        fs::create_dir_all(self.config_path.parent().unwrap())?;
+        if let Some(parent) = self.config_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         let data = serde_json::to_string_pretty(creds)?;
         fs::write(&self.config_path, data)?;
         
@@ -161,7 +167,9 @@ pub fn get_credentials() -> Result<HashMap<String, String>> {
     match env.as_str() {
         "production" => {
             // In production, use HashiCorp Vault or AWS Secrets Manager
-            panic!("Production secrets management not yet implemented. Use Vault or AWS Secrets Manager.");
+            return Err(anyhow::anyhow!(
+                "Production secrets management not yet implemented. Use Vault or AWS Secrets Manager."
+            ));
         }
         "staging" => {
             // For staging, use encrypted local file with different master password

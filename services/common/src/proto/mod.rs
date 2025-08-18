@@ -34,6 +34,12 @@ pub mod trading {
     }
 }
 
+pub mod backtesting {
+    pub mod v1 {
+        tonic::include_proto!("shrivenquant.backtesting.v1");
+    }
+}
+
 // Re-export commonly used types
 pub use auth::v1::{
     auth_service_client::AuthServiceClient,
@@ -53,4 +59,15 @@ pub use risk::v1::{
 pub use execution::v1::{
     execution_service_client::ExecutionServiceClient,
     execution_service_server::{ExecutionService, ExecutionServiceServer},
+};
+
+pub use backtesting::v1::{
+    backtesting_service_client::BacktestingServiceClient,
+    backtesting_service_server::{BacktestingService, BacktestingServiceServer},
+    RunBacktestRequest, RunBacktestResponse,
+    GetBacktestStatusRequest, GetBacktestStatusResponse,
+    GetBacktestResultsRequest, GetBacktestResultsResponse,
+    StopBacktestRequest, StopBacktestResponse,
+    ListBacktestsRequest, ListBacktestsResponse,
+    PerformanceMetrics, EquityPoint, Trade, BacktestSummary,
 };

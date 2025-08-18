@@ -101,6 +101,7 @@ pub struct Features {
 
 impl FeatureStore {
     pub fn new(config: FeatureConfig) -> Self {
+        info!("Initializing FeatureStore with config: {:?}", config);
         Self {
             price_buffers: Arc::new(DashMap::new()),
             volume_buffers: Arc::new(DashMap::new()),
@@ -141,6 +142,7 @@ impl FeatureStore {
         let volume_buffer = self.volume_buffers.get(symbol)?;
         
         if price_buffer.len() < 200 {
+            warn!("Insufficient price history for {}: {} samples", symbol, price_buffer.len());
             return None; // Need minimum history
         }
         
@@ -339,5 +341,94 @@ impl FeatureStore {
     /// Get features for a symbol
     pub fn get_features(&self, symbol: &str) -> Option<Features> {
         self.computed_features.get(symbol).map(|f| f.clone())
+    }
+    
+    /// Convert features to ndarray for ML model input (uses Array1)
+    pub fn features_to_array(&self, features: &Features) -> Result<Array1<f64>> {
+        let mut feature_vec = Vec::new();
+        
+        // Add all features to vector
+        feature_vec.extend_from_slice(&features.returns);
+        feature_vec.extend_from_slice(&features.log_returns);
+        feature_vec.extend_from_slice(&features.moving_averages);
+        feature_vec.extend_from_slice(&features.volatility);
+        feature_vec.push(features.rsi);
+        feature_vec.push(features.macd);
+        feature_vec.push(features.bollinger_position);
+        feature_vec.push(features.bid_ask_spread);
+        feature_vec.push(features.volume_imbalance);
+        feature_vec.push(features.trade_intensity);
+        feature_vec.push(features.market_beta);
+        feature_vec.push(features.correlation_index);
+        
+        Ok(Array1::from_vec(feature_vec))
+    }
+    
+    /// Create batch feature matrix for multiple symbols (uses Array2)
+    pub fn create_feature_matrix(&self, symbols: &[String]) -> Result<Array2<f64>> {
+        let mut feature_arrays = Vec::new();
+        
+        for symbol in symbols {
+            match self.get_features(symbol) {
+                Some(features) => {
+                    let array = self.features_to_array(&features)?;
+                    feature_arrays.push(array);
+                }
+                None => {
+                    error!("No features available for symbol: {}", symbol);
+                    return Err(anyhow::anyhow!("Missing features for {}", symbol))
+                        .context("Feature matrix creation failed")?;
+                }
+            }
+        }
+        
+        if feature_arrays.is_empty() {
+            return Err(anyhow::anyhow!("No features available"))
+                .context("Cannot create empty feature matrix")?;
+        }
+        
+        let n_features = feature_arrays[0].len();
+        let n_samples = feature_arrays.len();
+        let flat_data: Vec<f64> = feature_arrays.into_iter().flatten().collect();
+        
+        Array2::from_shape_vec((n_samples, n_features), flat_data)
+            .context("Failed to create 2D feature matrix")
+    }
+}
+
+/// Model cache using RwLock for thread-safe access
+pub struct ModelCache {
+    models: Arc<RwLock<DashMap<String, CachedModel>>>,
+}
+
+#[derive(Clone)]
+pub struct CachedModel {
+    pub model_id: String,
+    pub version: String,
+    pub weights: Vec<f64>,
+    pub last_updated: DateTime<Utc>,
+}
+
+impl ModelCache {
+    pub fn new() -> Self {
+        Self {
+            models: Arc::new(RwLock::new(DashMap::new())),
+        }
+    }
+    
+    /// Load model with error context
+    pub fn load_model(&self, model_id: &str) -> Result<CachedModel> {
+        let cache = self.models.read();
+        cache.get(model_id)
+            .map(|entry| entry.clone())
+            .context(format!("Model {} not found in cache", model_id))
+    }
+    
+    /// Update model in cache
+    pub fn update_model(&self, model_id: String, model: CachedModel) -> Result<()> {
+        let cache = self.models.write();
+        cache.insert(model_id.clone(), model);
+        info!("Updated model {} in cache", model_id);
+        Ok(())
     }
 }

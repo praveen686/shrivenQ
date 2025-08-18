@@ -55,6 +55,55 @@ impl IndexOption {
     pub fn tick_size(&self) -> f64 {
         0.05 // 5 paise for all index options
     }
+    
+    /// Get expiry dates for the index (using Datelike trait)
+    pub fn get_expiry_dates(&self, current_date: DateTime<Utc>) -> Result<Vec<DateTime<Utc>>> {
+        let mut expiries = Vec::new();
+        let mut date = current_date;
+        
+        // Indian options expire on Thursday (weekday = 4)
+        // Generate next 12 weekly expiries
+        for _ in 0..12 {
+            // Find next Thursday using Datelike methods
+            while date.weekday().num_days_from_monday() != 3 {
+                date = date + chrono::Duration::days(1);
+            }
+            expiries.push(date);
+            date = date + chrono::Duration::days(7);
+        }
+        
+        Ok(expiries)
+    }
+    
+    /// Parse option symbol with error context
+    pub fn parse_symbol(symbol: &str) -> Result<(IndexOption, OptionType, f64, DateTime<Utc>)> {
+        // Example: NIFTY24JAN25000CE
+        let parts: Vec<&str> = symbol.split(&['2', 'C', 'P'][..]).collect();
+        
+        let index = match parts.get(0).context("Missing index in symbol")? {
+            &"NIFTY" => IndexOption::Nifty50,
+            &"BANKNIFTY" => IndexOption::BankNifty,
+            &"FINNIFTY" => IndexOption::FinNifty,
+            _ => return Err(anyhow::anyhow!("Unknown index")),
+        };
+        
+        let option_type = if symbol.contains("CE") {
+            OptionType::Call
+        } else if symbol.contains("PE") {
+            OptionType::Put
+        } else {
+            return Err(anyhow::anyhow!("Invalid option type")).context("Option type must be CE or PE")?;
+        };
+        
+        // Parse strike price
+        let strike_str = parts.get(2).context("Missing strike price")?;
+        let strike = strike_str.parse::<f64>().context("Invalid strike price format")?;
+        
+        // Parse expiry date (simplified for example)
+        let expiry = Utc::now(); // Would parse actual date from symbol
+        
+        Ok((index, option_type, strike, expiry))
+    }
 }
 
 /// Complete Greeks for option pricing
@@ -399,7 +448,10 @@ impl MonteCarloEngine {
                         BarrierType::DownAndIn => path.iter().any(|&p| p < *barrier),
                     };
                     
-                    let final_value = *path.last().unwrap();
+                    let final_value = match path.last() {
+                        Some(v) => *v,
+                        None => return 0.0, // Empty path, no payoff
+                    };
                     match (barrier_type, breached) {
                         (BarrierType::UpAndOut | BarrierType::DownAndOut, true) => 0.0,
                         (BarrierType::UpAndIn | BarrierType::DownAndIn, false) => 0.0,

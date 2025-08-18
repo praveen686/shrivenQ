@@ -1,0 +1,148 @@
+syntax = "proto3";
+
+package shrivenquant.backtesting.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Backtesting service for strategy evaluation
+service BacktestingService {
+    // Run a new backtest
+    rpc RunBacktest(RunBacktestRequest) returns (RunBacktestResponse);
+    
+    // Get backtest status
+    rpc GetBacktestStatus(GetBacktestStatusRequest) returns (GetBacktestStatusResponse);
+    
+    // Get backtest results
+    rpc GetBacktestResults(GetBacktestResultsRequest) returns (GetBacktestResultsResponse);
+    
+    // Stop a running backtest
+    rpc StopBacktest(StopBacktestRequest) returns (StopBacktestResponse);
+    
+    // List all backtests
+    rpc ListBacktests(ListBacktestsRequest) returns (ListBacktestsResponse);
+}
+
+// Request to run a backtest
+message RunBacktestRequest {
+    string backtest_id = 1;
+    string strategy_code = 2;  // Strategy implementation
+    string config = 3;         // JSON configuration
+    repeated string symbols = 4;
+    google.protobuf.Timestamp start_date = 5;
+    google.protobuf.Timestamp end_date = 6;
+    double initial_capital = 7;
+}
+
+// Response from running a backtest
+message RunBacktestResponse {
+    string backtest_id = 1;
+    string status = 2;
+    string message = 3;
+}
+
+// Request to get backtest status
+message GetBacktestStatusRequest {
+    string backtest_id = 1;
+}
+
+// Response with backtest status
+message GetBacktestStatusResponse {
+    string backtest_id = 1;
+    string status = 2;         // PENDING, RUNNING, COMPLETED, FAILED
+    double progress_pct = 3;
+    string message = 4;
+    google.protobuf.Timestamp started_at = 5;
+    google.protobuf.Timestamp updated_at = 6;
+}
+
+// Request to get backtest results
+message GetBacktestResultsRequest {
+    string backtest_id = 1;
+}
+
+// Response with backtest results
+message GetBacktestResultsResponse {
+    string backtest_id = 1;
+    PerformanceMetrics metrics = 2;
+    repeated EquityPoint equity_curve = 3;
+    repeated Trade trades = 4;
+    string final_portfolio = 5;  // JSON representation
+}
+
+// Performance metrics
+message PerformanceMetrics {
+    double total_return = 1;
+    double annualized_return = 2;
+    double volatility = 3;
+    double sharpe_ratio = 4;
+    double sortino_ratio = 5;
+    double calmar_ratio = 6;
+    double max_drawdown = 7;
+    int64 max_drawdown_duration_days = 8;
+    double value_at_risk = 9;
+    double conditional_var = 10;
+    uint64 total_trades = 11;
+    uint64 winning_trades = 12;
+    uint64 losing_trades = 13;
+    double win_rate = 14;
+    double average_win = 15;
+    double average_loss = 16;
+    double profit_factor = 17;
+    double expectancy = 18;
+    double total_commission = 19;
+    double total_slippage = 20;
+}
+
+// Equity curve point
+message EquityPoint {
+    google.protobuf.Timestamp timestamp = 1;
+    double value = 2;
+}
+
+// Trade record
+message Trade {
+    string symbol = 1;
+    string side = 2;  // BUY or SELL
+    double quantity = 3;
+    double entry_price = 4;
+    double exit_price = 5;
+    double pnl = 6;
+    double return_pct = 7;
+    google.protobuf.Timestamp entry_time = 8;
+    google.protobuf.Timestamp exit_time = 9;
+}
+
+// Request to stop a backtest
+message StopBacktestRequest {
+    string backtest_id = 1;
+}
+
+// Response from stopping a backtest
+message StopBacktestResponse {
+    string backtest_id = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+// Request to list backtests
+message ListBacktestsRequest {
+    uint32 limit = 1;
+    uint32 offset = 2;
+    string status_filter = 3;  // Optional: filter by status
+}
+
+// Response with list of backtests
+message ListBacktestsResponse {
+    repeated BacktestSummary backtests = 1;
+    uint32 total = 2;
+}
+
+// Backtest summary
+message BacktestSummary {
+    string backtest_id = 1;
+    string status = 2;
+    google.protobuf.Timestamp created_at = 3;
+    google.protobuf.Timestamp completed_at = 4;
+    double total_return = 5;
+    double sharpe_ratio = 6;
+}

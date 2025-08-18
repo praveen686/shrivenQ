@@ -311,14 +311,14 @@ impl Router {
                 Ok((venue_bid, venue_ask, venue_volume)) => {
                     // Update best bid (highest)
                     if let Some(bid) = venue_bid {
-                        if best_bid.is_none() || bid.as_i64() > best_bid.unwrap().as_i64() {
+                        if best_bid.map_or(true, |b| bid.as_i64() > b.as_i64()) {
                             best_bid = Some(bid);
                         }
                     }
                     
                     // Update best ask (lowest)
                     if let Some(ask) = venue_ask {
-                        if best_ask.is_none() || ask.as_i64() < best_ask.unwrap().as_i64() {
+                        if best_ask.map_or(true, |a| ask.as_i64() < a.as_i64()) {
                             best_ask = Some(ask);
                         }
                     }
@@ -332,12 +332,12 @@ impl Router {
                     if let Some(venues_map) = self.venues.try_read() {
                         if let Some(venue_conn) = venues_map.get(venue_name) {
                             if let Some(sim_bid) = self.simulate_venue_bid(venue_conn, symbol) {
-                                if best_bid.is_none() || sim_bid.as_i64() > best_bid.unwrap().as_i64() {
+                                if best_bid.map_or(true, |b| sim_bid.as_i64() > b.as_i64()) {
                                     best_bid = Some(sim_bid);
                                 }
                             }
                             if let Some(sim_ask) = self.simulate_venue_ask(venue_conn, symbol) {
-                                if best_ask.is_none() || sim_ask.as_i64() < best_ask.unwrap().as_i64() {
+                                if best_ask.map_or(true, |a| sim_ask.as_i64() < a.as_i64()) {
                                     best_ask = Some(sim_ask);
                                 }
                             }
@@ -1030,10 +1030,18 @@ impl AlgorithmEngine for TwapAlgo {
         let mut child_orders = Vec::new();
         
         for slice_index in 0..slices {
+            let venue = market_context.venues.first()
+                .ok_or_else(|| anyhow::anyhow!("No venues available for TWAP"))
+                .map_err(|e| {
+                    error!("Failed to get venue for TWAP: {}", e);
+                    e
+                })?
+                .clone();
+            
             child_orders.push(ChildOrder {
                 parent_id: OrderId::new(0),
                 child_id: OrderId::new(rand::random::<u64>() + slice_index as u64),
-                venue: market_context.venues.first().unwrap().clone(),
+                venue,
                 quantity: Qty::from_i64(qty_per_slice),
                 order_type: OrderType::Limit,
                 limit_price: market_context.mid,
@@ -1168,10 +1176,14 @@ impl AlgorithmEngine for IcebergAlgo {
         // Iceberg: Show only visible quantity
         let visible_qty = request.quantity.as_i64() / 10; // Show 10%
         
+        let venue = market_context.venues.first()
+            .ok_or_else(|| anyhow::anyhow!("No venues available for Iceberg order"))?
+            .clone();
+        
         Ok(vec![ChildOrder {
             parent_id: OrderId::new(0),
             child_id: OrderId::new(rand::random()),
-            venue: market_context.venues.first().unwrap().clone(),
+            venue,
             quantity: Qty::from_i64(visible_qty),
             order_type: OrderType::Limit,
             limit_price: request.limit_price,
@@ -1204,10 +1216,14 @@ impl AlgorithmEngine for PegAlgo {
         market_context: &MarketContext,
     ) -> Result<Vec<ChildOrder>> {
         // Peg: Track market price
+        let venue = market_context.venues.first()
+            .ok_or_else(|| anyhow::anyhow!("No venues available for POV order"))?
+            .clone();
+        
         Ok(vec![ChildOrder {
             parent_id: OrderId::new(0),
             child_id: OrderId::new(rand::random()),
-            venue: market_context.venues.first().unwrap().clone(),
+            venue,
             quantity: request.quantity,
             order_type: OrderType::Limit,
             limit_price: market_context.mid,
