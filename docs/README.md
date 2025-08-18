@@ -1,141 +1,220 @@
-# ShrivenQuant Documentation
+# 📚 ShrivenQuant Documentation Hub
 
-## Overview
-
-Technical documentation for the ShrivenQuant algorithmic trading system - a Rust-based microservices platform currently in early development.
-
-## ⚠️ Important Notice
-
-**Current Status**: Development prototype, NOT production-ready
-**Testing**: Never tested with real exchanges
-**Safety**: Contains 134 unwrap() calls that will cause crashes
-
-## Documentation Structure
-
-### Essential Documents
-
-#### System Status
-- **[SYSTEM_STATUS.md](SYSTEM_STATUS.md)** - Accurate current state assessment
-- **[Main README](../README.md)** - Project overview and warnings
-
-#### Architecture
-- **[Architecture Overview](architecture/README.md)** - System design and service layout
-- **[Logging Architecture](architecture/LOGGING_ARCHITECTURE.md)** - Logging system design
-- **[Trading Gateway](architecture/trading-gateway.md)** - Trading service details
-
-#### Getting Started
-- **[Quick Start Guide](getting-started/quick-start.md)** - Build and run instructions
-- **[Getting Started](getting-started/getting-started.md)** - Detailed setup
-
-#### Development
-- **[Development Roadmap](development/ROADMAP.md)** - Realistic path to production
-- **[Best Practices](development/best-practices.md)** - Coding standards
-- **[Command Reference](development/command-reference.md)** - Useful commands
-
-#### Service Documentation
-Each service has its own README:
-- [Auth Service](../services/auth/README.md)
-- [Options Engine](../services/options-engine/README.md) - ✅ Working
-- [ML Inference](../services/ml-inference/README.md) - Framework only
-- [Sentiment Analyzer](../services/sentiment-analyzer/README.md) - Partial
-- [Secrets Manager](../services/secrets-manager/README.md) - Basic
-- [Logging Service](../services/logging/README.md) - Framework
-
-#### Exchange Integration
-- **[Binance Setup](integrations/binance-setup.md)** - Crypto exchange (untested)
-- **[Zerodha Setup](integrations/zerodha-setup.md)** - Indian broker (untested)
-
-#### Security
-- **[Security Audit](security/SECURITY_AUDIT.md)** - Security issues and recommendations
-
-## Quick Navigation
-
-### I want to understand what this is
-→ Read [SYSTEM_STATUS.md](SYSTEM_STATUS.md) for honest assessment
-
-### I want to build and run it
-→ Follow [Quick Start Guide](getting-started/quick-start.md)
-
-### I want to know what's missing
-→ Check [Development Roadmap](development/ROADMAP.md)
-
-### I want to understand the architecture
-→ Review [Architecture Overview](architecture/README.md)
-
-## Current Capabilities
-
-### ✅ What Works
-- All 17 services compile
-- Options pricing with Black-Scholes
-- Basic microservices structure
-- gRPC protocol definitions
-
-### ❌ What Doesn't Work
-- Exchange connections (never tested)
-- Order execution (not implemented)
-- Backtesting (not implemented)
-- Real-time data (not connected)
-- ML predictions (no models)
-- Monitoring (stub only)
-
-## Development Status
-
-```
-Component          Status      Notes
------------------  ----------  --------------------------------
-Core Structure     ✅ Done     Microservices architecture
-Compilation        ✅ Works    With warnings
-Options Pricing    ✅ Working  Black-Scholes implemented
-Exchange Connect   ❌ Untested Never attempted
-Order Execution    ❌ Missing   Not implemented
-Backtesting       ❌ Missing   Critical gap
-Risk Management   ⚠️ Framework No actual implementation
-ML Models         ❌ None      Framework only
-Production Ready  ❌ No        6-12 months away
-```
-
-## Critical Issues
-
-1. **134 unwrap() calls** - Will panic in production
-2. **No integration tests** - Unknown if services work together
-3. **No error handling** - Services crash on errors
-4. **Never tested** - No real market data or trades
-5. **No monitoring** - Blind to system health
-
-## Timeline to Production
-
-With full-time development team:
-- **Stabilization**: 1 month (fix crashes, add error handling)
-- **Core Features**: 2 months (backtesting, exchange integration)
-- **Production Prep**: 2-3 months (monitoring, security, testing)
-- **Hardening**: 1-2 months (paper trading, optimization)
-
-**Total: 6-8 months minimum**
-
-## Documentation Standards
-
-All documentation must be:
-- **Accurate** - No false claims or hyperbole
-- **Dated** - Include last update date
-- **Honest** - Clear about limitations
-- **Technical** - Focus on facts, not marketing
-
-## Warning
-
-This system is a development prototype. It will lose money if used for trading because it:
-- Has never been tested with real markets
-- Contains numerous crash points
-- Lacks error recovery
-- Has no proven strategies
-- Is missing critical features
-
-## Support
-
-For questions or issues:
-- Review existing documentation
-- Check service README files
-- Contact: praveenkumar.avln@gmail.com
+## ⚠️ Critical Notice
+**Status**: Early Development Prototype | **Production Ready**: ❌ NO | **Exchange Tested**: ❌ NO | **Safe to Use**: ❌ NO
 
 ---
 
-*Last Updated: August 18, 2025*
+## 🎯 Start Here: Documentation Map
+
+### For Different Audiences
+
+<table>
+<tr>
+<td width="50%">
+
+#### 👤 If You're a Developer
+1. Read [System Status](01-status-updates/SYSTEM_STATUS.md) - Know what you're getting into
+2. Follow [Quick Start](02-getting-started/quick-start.md) - Get it running
+3. Study [Architecture](03-architecture/README.md) - Understand the design
+4. Check [Roadmap](04-development/ROADMAP.md) - See what needs doing
+
+</td>
+<td width="50%">
+
+#### 👔 If You're an Executive/Investor
+1. Read [System Status](01-status-updates/SYSTEM_STATUS.md) - Honest assessment
+2. Review [Roadmap](04-development/ROADMAP.md) - Timeline & resources
+3. Check [Security Audit](06-security/SECURITY_AUDIT.md) - Risk assessment
+4. See [Build Report](01-status-updates/build-report-2025-08-18.md) - Technical proof
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+#### 🔧 If You're DevOps/SRE
+1. Check [Operations Guide](07-operations/README.md) - Deployment info
+2. Review [Architecture](03-architecture/README.md) - System topology
+3. See [Monitoring](03-architecture/LOGGING_ARCHITECTURE.md) - Observability
+4. Read [Security](06-security/SECURITY_AUDIT.md) - Security posture
+
+</td>
+<td width="50%">
+
+#### 📊 If You're a Trader/Quant
+1. ⚠️ **DO NOT USE FOR TRADING** - Not ready
+2. See [Integrations](05-integrations/) - Exchange connections
+3. Check [Services](../services/) - Trading capabilities
+4. Review [Roadmap](04-development/ROADMAP.md) - When it'll be ready
+
+</td>
+</tr>
+</table>
+
+---
+
+## 📖 Complete Documentation Structure
+
+### 📊 01 - Status & Reality Check
+**Start here to understand the current state**
+
+| Document | Purpose | Key Takeaway |
+|----------|---------|--------------|
+| [SYSTEM_STATUS.md](01-status-updates/SYSTEM_STATUS.md) | Honest system assessment | NOT production ready |
+| [Build Report](01-status-updates/build-report-2025-08-18.md) | Latest compilation status | Compiles with warnings |
+| [README.md](01-status-updates/README.md) | Status guidelines | How we report progress |
+
+### 🚀 02 - Getting Started
+**Learn how to build and run the system**
+
+| Document | Purpose | Time Required |
+|----------|---------|---------------|
+| [quick-start.md](02-getting-started/quick-start.md) | Minimal setup guide | 15 minutes |
+| [getting-started.md](02-getting-started/getting-started.md) | Detailed instructions | 1 hour |
+| [README.md](02-getting-started/README.md) | Navigation help | 2 minutes |
+
+### 🏗️ 03 - Architecture & Design
+**Understand how the system is built**
+
+| Document | Purpose | Technical Level |
+|----------|---------|-----------------|
+| [README.md](03-architecture/README.md) | System architecture overview | Medium |
+| [DIRECTORY_STRUCTURE.md](03-architecture/DIRECTORY_STRUCTURE.md) | Project organization | Low |
+| [LOGGING_ARCHITECTURE.md](03-architecture/LOGGING_ARCHITECTURE.md) | Logging & monitoring design | High |
+| [trading-gateway.md](03-architecture/trading-gateway.md) | Trading service details | High |
+| [memory-pool-design.md](03-architecture/memory-pool-design.md) | Performance optimization | Very High |
+| [fixed-point-design.md](03-architecture/fixed-point-design.md) | Numerical precision | High |
+
+### 🔨 04 - Development & Contributing
+**Plan and execute development work**
+
+| Document | Purpose | Audience |
+|----------|---------|----------|
+| [ROADMAP.md](04-development/ROADMAP.md) | 6-12 month plan to production | Developers, Managers |
+| [best-practices.md](04-development/best-practices.md) | Coding standards | Developers |
+| [command-reference.md](04-development/command-reference.md) | Useful commands | Developers |
+| [README.md](04-development/README.md) | Development overview | All |
+
+### 🔌 05 - Exchange Integrations
+**Connect to trading venues (not tested)**
+
+| Document | Purpose | Status |
+|----------|---------|--------|
+| [binance-setup.md](05-integrations/binance-setup.md) | Binance crypto exchange | ❌ Untested |
+| [zerodha-setup.md](05-integrations/zerodha-setup.md) | Zerodha Indian broker | ❌ Untested |
+
+### 🔒 06 - Security & Compliance
+**Security assessment and requirements**
+
+| Document | Purpose | Severity |
+|----------|---------|----------|
+| [SECURITY_AUDIT.md](06-security/SECURITY_AUDIT.md) | Security vulnerabilities | 🔴 Critical |
+
+### ⚙️ 07 - Operations & Deployment
+**Run and maintain the system (future)**
+
+| Document | Purpose | Status |
+|----------|---------|--------|
+| README.md | Operational guides | 📝 Planned |
+
+---
+
+## 🚨 Critical Information Summary
+
+### What's Actually Working
+✅ **Compilation** - All services compile  
+✅ **Structure** - Clean microservices architecture  
+✅ **Options Pricing** - Black-Scholes implementation  
+✅ **Proto Definitions** - gRPC interfaces defined  
+
+### What's NOT Working
+❌ **Trading** - Never executed a trade  
+❌ **Exchange Connections** - Never tested  
+❌ **Backtesting** - Not implemented  
+❌ **Risk Management** - Framework only  
+❌ **ML Models** - No trained models  
+❌ **Monitoring** - Stub implementation  
+
+### Critical Issues
+🔴 **134 unwrap() calls** - Will crash in production  
+🔴 **No integration tests** - Services untested together  
+🔴 **No error recovery** - Cascading failures  
+🔴 **No real data** - Never seen market data  
+
+---
+
+## 📈 Progress Tracking
+
+### Current Phase: **Early Development**
+```
+[##########----------] 35% Complete
+```
+
+### Phases to Production
+1. **Stabilization** (Current) - Fix critical issues
+2. **Integration** (Next) - Connect services
+3. **Testing** - Validate with test data
+4. **Hardening** - Production preparation
+5. **Certification** - Exchange approval
+6. **Production** - Live trading
+
+**Realistic Timeline**: 6-12 months with full team
+
+---
+
+## 🧭 Quick Links
+
+### Most Important Documents
+1. [DASHBOARD](/DASHBOARD.md) - **📊 Complete project overview**
+2. [System Status](01-status-updates/SYSTEM_STATUS.md) - Detailed assessment
+3. [Roadmap](04-development/ROADMAP.md) - What needs doing
+4. [Security Audit](06-security/SECURITY_AUDIT.md) - Critical issues
+5. [Quick Start](02-getting-started/quick-start.md) - Get it running
+
+### Service Documentation
+- [All Services Overview](../services/README.md)
+- [Options Engine](../services/options-engine/README.md) ✅ Working
+- [Auth Service](../services/auth/README.md) ⚠️ Basic
+- [ML Inference](../services/ml-inference/README.md) 🏗️ Framework
+- [Logging Service](../services/logging/README.md) 🏗️ Framework
+
+---
+
+## 📝 Documentation Standards
+
+All documentation MUST be:
+- **Accurate** - No false claims
+- **Dated** - Clear timestamps
+- **Honest** - Acknowledge problems
+- **Technical** - Facts over marketing
+- **Verifiable** - Evidence-based
+
+---
+
+## ⚠️ Final Warning
+
+**DO NOT USE THIS SYSTEM FOR REAL TRADING**
+
+It will lose money because it:
+- Has never been tested
+- Contains crash bugs
+- Lacks error recovery
+- Has no proven strategies
+- Is incomplete
+
+---
+
+## 📧 Contact
+
+**Technical Questions**: praveenkumar.avln@gmail.com  
+**Repository**: [GitHub](https://github.com/praveen686/shrivenQ)  
+**Last Updated**: August 18, 2025
+
+---
+
+<div align="center">
+  
+**Remember**: This is a learning project, not a trading system.
+  
+</div>

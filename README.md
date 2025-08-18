@@ -1,5 +1,8 @@
 # ShrivenQuant - Algorithmic Trading System
 
+## 📊 [View Development Dashboard](DASHBOARD.md) - Complete Project Status
+## 🚀 [New Developer? Start Here](ONBOARDING.md) - Onboarding Guide
+
 ## ⚠️ Development Status: NOT PRODUCTION READY
 
 **Reality Check**: This is a Rust-based microservices trading system in early development. While the architecture is solid, it has NOT been tested with real markets.
@@ -127,9 +130,9 @@ cargo test  # Runs minimal tests
 
 ## Documentation
 
-- [System Status](docs/SYSTEM_STATUS.md) - Detailed current state
+- [System Status](docs/01-status-updates/SYSTEM_STATUS.md) - Detailed current state
 - [Service Documentation](services/) - Individual service READMEs
-- [Architecture](docs/architecture/) - System design docs
+- [Architecture](docs/03-architecture/) - System design docs
 
 ## Directory Structure
 

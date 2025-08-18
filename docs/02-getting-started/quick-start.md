@@ -145,6 +145,6 @@ It's suitable only for:
 ## Support
 
 For issues or questions:
-- Review [Architecture Documentation](../architecture/)
-- Check [System Status](../SYSTEM_STATUS.md)
+- Review [Architecture Documentation](../03-architecture/)
+- Check [System Status](../01-status-updates/SYSTEM_STATUS.md)
 - Contact: praveenkumar.avln@gmail.com
