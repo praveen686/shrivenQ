@@ -15,6 +15,14 @@ pub struct AuthHandlers {
     grpc_clients: Arc<GrpcClients>,
 }
 
+impl std::fmt::Debug for AuthHandlers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthHandlers")
+            .field("grpc_clients", &"Arc<GrpcClients>")
+            .finish()
+    }
+}
+
 impl AuthHandlers {
     pub const fn new(grpc_clients: Arc<GrpcClients>) -> Self {
         Self { grpc_clients }

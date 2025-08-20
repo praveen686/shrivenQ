@@ -5,18 +5,23 @@ use tonic::transport::{Channel, Endpoint};
 use tracing::{error, info, warn};
 
 // Generated gRPC client code
+
+/// Authentication service protobuf definitions
 pub mod auth {
     tonic::include_proto!("shrivenquant.auth.v1");
 }
 
+/// Execution service protobuf definitions
 pub mod execution {
     tonic::include_proto!("shrivenquant.execution.v1");
 }
 
+/// Market data service protobuf definitions
 pub mod market_data {
     tonic::include_proto!("shrivenquant.marketdata.v1");
 }
 
+/// Risk management service protobuf definitions
 pub mod risk {
     tonic::include_proto!("shrivenquant.risk.v1");
 }
@@ -37,6 +42,17 @@ pub struct GrpcClients {
     pub market_data: MarketDataServiceClient<Channel>,
     /// Risk management service client
     pub risk: RiskServiceClient<Channel>,
+}
+
+impl std::fmt::Debug for GrpcClients {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GrpcClients")
+            .field("auth", &"AuthServiceClient")
+            .field("execution", &"ExecutionServiceClient")
+            .field("market_data", &"MarketDataServiceClient")
+            .field("risk", &"RiskServiceClient")
+            .finish()
+    }
 }
 
 impl GrpcClients {
@@ -202,9 +218,14 @@ impl GrpcClients {
 /// Health status for all services
 #[derive(Debug, Default, serde::Serialize)]
 pub struct HealthStatus {
+    /// Overall health status (true if all services are healthy)
     pub overall: bool,
+    /// Authentication service health status
     pub auth: bool,
+    /// Execution service health status
     pub execution: bool,
+    /// Market data service health status
     pub market_data: bool,
+    /// Risk management service health status
     pub risk: bool,
 }

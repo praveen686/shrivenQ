@@ -17,6 +17,7 @@ use dashmap::DashMap;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::{debug, error, info, warn};
@@ -33,6 +34,18 @@ pub struct Router {
     order_id_gen: AtomicU64,
     /// Routing metrics
     metrics: Arc<RoutingMetrics>,
+}
+
+impl std::fmt::Debug for Router {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Router")
+            .field("active_orders", &format!("Arc<DashMap<OrderId, OrderState>> (len: {})", self.active_orders.len()))
+            .field("venues", &"Arc<RwLock<HashMap<String, VenueConnection>>>")
+            .field("algo_engines", &"Arc<RwLock<HashMap<ExecutionAlgorithm, Box<dyn AlgorithmEngine>>>>")
+            .field("order_id_gen", &self.order_id_gen)
+            .field("metrics", &"Arc<RoutingMetrics>")
+            .finish()
+    }
 }
 
 /// Order state for tracking
@@ -143,6 +156,18 @@ pub struct RoutingMetrics {
     pub avg_execution_time_ms: AtomicU64,
     /// Fill rate
     pub fill_rate: AtomicU64,
+}
+
+impl std::fmt::Debug for RoutingMetrics {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RoutingMetrics")
+            .field("orders_routed", &self.orders_routed)
+            .field("algo_usage", &"RwLock<HashMap<ExecutionAlgorithm, u64>>")
+            .field("venue_usage", &"RwLock<HashMap<String, u64>>")
+            .field("avg_execution_time_ms", &self.avg_execution_time_ms)
+            .field("fill_rate", &self.fill_rate)
+            .finish()
+    }
 }
 
 impl Default for Router {
@@ -1269,7 +1294,7 @@ mod tests {
         let request = OrderRequest {
             client_order_id: "test123".to_string(),
             symbol: Symbol(1),
-            side: Side::Buy,
+            side: Side::Bid,
             quantity: Qty::from_i64(10000),
             order_type: OrderType::Limit,
             limit_price: Some(Px::from_i64(1000000)),
@@ -1280,7 +1305,8 @@ mod tests {
             participation_rate: None,
             time_in_force: TimeInForce::GTC,
             venue: None,
-            strategy_id: None,
+            strategy_id: "test_strategy".to_string(),
+            params: FxHashMap::default(),
         };
         
         let order_id = router.route_order(request).await.unwrap();

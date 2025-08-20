@@ -16,37 +16,53 @@ service MlInference {
 
 // Prediction request
 message PredictRequest {
+    // The trading symbol to predict (e.g., "AAPL", "NIFTY")
     string symbol = 1;
-    repeated double custom_features = 2; // Optional custom features
+    // Optional custom features to include in the prediction
+    repeated double custom_features = 2;
 }
 
 // Prediction response
 message PredictResponse {
+    // The trading symbol for which predictions were made
     string symbol = 1;
+    // Array of individual predictions for this symbol
     repeated Prediction predictions = 2;
+    // Overall confidence level of the prediction (0.0 to 1.0)
     double confidence = 3;
+    // Version identifier of the model used for prediction
     string model_version = 4;
+    // Unix timestamp when the prediction was generated
     int64 timestamp = 5;
 }
 
 // Individual prediction
 message Prediction {
+    // Name of the predicted metric (e.g., "price_direction", "volatility")
     string name = 1;
+    // Numerical value of the prediction
     double value = 2;
 }
 
 // Feature update request
 message UpdateFeaturesRequest {
+    // The trading symbol to update features for
     string symbol = 1;
+    // Current price of the symbol
     double price = 2;
+    // Trading volume for the current period
     double volume = 3;
+    // Current bid price
     double bid = 4;
+    // Current ask price
     double ask = 5;
 }
 
 // Feature update response
 message UpdateFeaturesResponse {
+    // Whether the feature update was successful
     bool success = 1;
+    // Descriptive message about the update operation
     string message = 2;
 }
 
@@ -55,14 +71,20 @@ message GetModelsRequest {}
 
 // Get models response
 message GetModelsResponse {
+    // List of available ML models and their information
     repeated ModelInfo models = 1;
 }
 
 // Model information
 message ModelInfo {
+    // Human-readable name of the model
     string name = 1;
+    // Version string of the model
     string version = 2;
+    // Type of the model (e.g., "neural_network", "random_forest")
     string model_type = 3;
+    // Number of samples used to train this model
     uint64 training_samples = 4;
+    // Unix timestamp of the last model update
     int64 last_updated = 5;
 }

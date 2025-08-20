@@ -75,10 +75,18 @@ use tracing::{debug, error, info, warn};
 pub struct OrderId(pub u64);
 
 impl OrderId {
+    /// Create a new OrderId from a u64 value
+    /// 
+    /// # Arguments
+    /// * `id` - The numeric identifier for the order
     #[must_use] pub const fn new(id: u64) -> Self {
         Self(id)
     }
 
+    /// Extract the underlying u64 value from the OrderId
+    /// 
+    /// # Returns
+    /// The numeric order identifier
     #[must_use] pub const fn as_u64(&self) -> u64 {
         self.0
     }
@@ -405,6 +413,21 @@ pub struct ExecutionRouterService {
     metrics: Arc<RwLock<ExecutionMetrics>>,
     /// Risk manager reference
     risk_manager: Option<Arc<dyn risk_manager::RiskManager>>,
+}
+
+impl std::fmt::Debug for ExecutionRouterService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExecutionRouterService")
+            .field("next_order_id", &self.next_order_id)
+            .field("orders", &format!("Arc<DashMap<OrderId, Arc<RwLock<Order>>>> (len: {})", self.orders.len()))
+            .field("client_order_map", &format!("Arc<DashMap<String, OrderId>> (len: {})", self.client_order_map.len()))
+            .field("exchange_order_map", &format!("Arc<DashMap<String, OrderId>> (len: {})", self.exchange_order_map.len()))
+            .field("venue_strategy", &self.venue_strategy)
+            .field("metrics", &"Arc<RwLock<ExecutionMetrics>>")
+            .field("risk_manager", &format!("Option<Arc<dyn RiskManager>> ({})", 
+                if self.risk_manager.is_some() { "Some" } else { "None" }))
+            .finish()
+    }
 }
 
 impl ExecutionRouterService {

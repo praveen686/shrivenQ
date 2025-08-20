@@ -41,10 +41,26 @@ pub struct AuthState {
     pub config: Arc<GatewayConfig>,
 }
 
+impl std::fmt::Debug for AuthState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthState")
+            .field("config", &"Arc<GatewayConfig>")
+            .finish()
+    }
+}
+
 /// Rate limiting middleware state
 #[derive(Clone)]
 pub struct RateLimitState {
     pub limiter: Arc<RateLimiter>,
+}
+
+impl std::fmt::Debug for RateLimitState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RateLimitState")
+            .field("limiter", &"Arc<RateLimiter>")
+            .finish()
+    }
 }
 
 /// Create standardized error response
@@ -348,3 +364,6 @@ pub fn get_user_context_from_headers(headers: &HeaderMap) -> Option<UserContext>
         }
     }
 }
+
+// Re-export utility function for tests
+pub use crate::utils::parse_fixed_point;

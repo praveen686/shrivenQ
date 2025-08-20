@@ -163,6 +163,39 @@ impl WebSocketConnection {
 }
 
 /// gRPC Market Data Service wrapper
+impl std::fmt::Debug for MarketDataGrpcService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MarketDataGrpcService")
+            .field("inner", &self.inner)
+            .field("event_broadcaster", &"Arc<broadcast::Sender<InternalEvent>>")
+            .field("active_connections", &"Arc<RwLock<HashMap<String, WebSocketConnection>>>")
+            .finish()
+    }
+}
+
+/// gRPC service wrapper for market connector functionality
+///
+/// This service provides a gRPC interface to the market connector capabilities,
+/// including real-time market data streaming, instrument management, and
+/// WebSocket connection handling. It acts as a bridge between the internal
+/// market connector service and external gRPC clients.
+///
+/// # Features
+/// - **Market Data Streaming**: Real-time market data via gRPC streams
+/// - **Instrument Services**: Comprehensive instrument lookup and management
+/// - **Connection Management**: WebSocket connection lifecycle management
+/// - **Event Broadcasting**: Multi-client event distribution
+///
+/// # Architecture
+/// The service wraps the core MarketConnectorService and adds:
+/// - gRPC protocol handling and serialization
+/// - Client connection management and tracking
+/// - Event broadcasting for multiple subscribers
+/// - WebSocket connection state management
+///
+/// # Thread Safety
+/// All components are designed for concurrent access with appropriate
+/// synchronization mechanisms for multi-client scenarios.
 pub struct MarketDataGrpcService {
     inner: MarketConnectorService,
     event_broadcaster: Arc<broadcast::Sender<InternalEvent>>,

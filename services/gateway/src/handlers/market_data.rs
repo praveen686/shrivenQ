@@ -18,19 +18,28 @@ use crate::{
 };
 
 /// Query parameters for market data
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct SnapshotQuery {
-    pub symbols: String, // Comma-separated symbols
+    /// Comma-separated list of symbols to retrieve
+    pub symbols: String,
+    /// Exchange identifier
     pub exchange: String,
 }
 
-#[derive(Deserialize)]
+/// Query parameters for historical market data
+#[derive(Debug, Deserialize)]
 pub struct HistoricalQuery {
+    /// Symbol to retrieve data for
     pub symbol: String,
+    /// Exchange identifier
     pub exchange: String,
+    /// Start time (nanoseconds since epoch)
     pub start_time: i64,
+    /// End time (nanoseconds since epoch)
     pub end_time: i64,
+    /// Type of data (ORDER_BOOK, TRADES, QUOTES, CANDLES)
     pub data_type: String,
+    /// Time interval for aggregated data (optional)
     pub interval: Option<String>,
 }
 
@@ -38,6 +47,14 @@ pub struct HistoricalQuery {
 #[derive(Clone)]
 pub struct MarketDataHandlers {
     grpc_clients: Arc<GrpcClients>,
+}
+
+impl std::fmt::Debug for MarketDataHandlers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MarketDataHandlers")
+            .field("grpc_clients", &"Arc<GrpcClients>")
+            .finish()
+    }
 }
 
 impl MarketDataHandlers {

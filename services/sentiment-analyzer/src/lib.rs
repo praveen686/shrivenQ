@@ -9,47 +9,88 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error};
+use tracing::{info, warn, error, debug};
 
 /// Sentiment signal for trading
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SentimentSignal {
+    /// Trading symbol (e.g., "BTC", "ETH")
     pub symbol: String,
-    pub sentiment: f64,      // -1.0 to 1.0
+    /// Sentiment score from -1.0 (bearish) to 1.0 (bullish)
+    pub sentiment: f64,
+    /// Trading signal derived from sentiment
     pub signal: SignalType,
-    pub confidence: f64,      // 0.0 to 1.0
+    /// Confidence level from 0.0 to 1.0
+    pub confidence: f64,
+    /// Timestamp of the sentiment analysis
     pub timestamp: DateTime<Utc>,
+    /// Source of the sentiment data
     pub source: String,
 }
 
+/// Trading signal types based on sentiment
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SignalType {
+    /// Strong buy signal (sentiment > 0.8)
     StrongBuy,
+    /// Buy signal (sentiment > 0.3)
     Buy,
+    /// Neutral signal (-0.3 to 0.3)
     Neutral,
+    /// Sell signal (sentiment < -0.3)
     Sell,
+    /// Strong sell signal (sentiment < -0.8)
     StrongSell,
 }
 
+/// Analysis configuration shared with the service
+#[derive(Debug, Clone)]
+pub struct AnalysisConfig {
+    /// Minimum confidence threshold for signals
+    pub min_confidence: f64,
+    /// Maximum age of posts to analyze (hours)
+    pub max_post_age_hours: u64,
+    /// Enable experimental analysis features
+    pub experimental_mode: bool,
+}
+
+impl Default for AnalysisConfig {
+    fn default() -> Self {
+        Self {
+            min_confidence: 0.7,
+            max_post_age_hours: 24,
+            experimental_mode: false,
+        }
+    }
+}
+
 /// Reddit sentiment analyzer
+#[derive(Debug)]
 pub struct RedditAnalyzer {
     client: Client,
     sentiment_cache: Arc<DashMap<String, SentimentSignal>>,
-    config: SentimentConfig,
+    sentiment_config: SentimentConfig,
+    analysis_config: AnalysisConfig,
     rate_limit: Arc<RwLock<RateLimiter>>,
 }
 
 /// Rate limiter for API calls
+#[derive(Debug)]
 pub struct RateLimiter {
     requests_per_minute: u32,
     last_requests: Vec<DateTime<Utc>>,
 }
 
+/// Configuration for sentiment analysis
 #[derive(Debug, Clone)]
 pub struct SentimentConfig {
+    /// List of subreddits to monitor
     pub subreddits: Vec<String>,
+    /// Keywords indicating bullish sentiment
     pub keywords_bullish: Vec<String>,
+    /// Keywords indicating bearish sentiment
     pub keywords_bearish: Vec<String>,
+    /// How often to update sentiment in seconds
     pub update_interval_secs: u64,
 }
 
@@ -78,19 +119,28 @@ impl Default for SentimentConfig {
 }
 
 impl RedditAnalyzer {
-    pub fn new(config: SentimentConfig) -> Result<Self> {
+    /// Create new Reddit sentiment analyzer with configuration
+    pub fn new(sentiment_config: SentimentConfig, analysis_config: AnalysisConfig) -> Result<Self> {
         Ok(Self {
             client: Client::builder()
                 .user_agent("ShrivenQuant/1.0")
                 .build()
                 .context("Failed to create HTTP client")?,
             sentiment_cache: Arc::new(DashMap::new()),
-            config,
+            sentiment_config,
+            analysis_config,
             rate_limit: Arc::new(RwLock::new(RateLimiter {
                 requests_per_minute: 60,
                 last_requests: Vec::new(),
             })),
         })
+    }
+    
+    /// Update analysis configuration
+    pub fn update_analysis_config(&mut self, config: AnalysisConfig) {
+        self.analysis_config = config;
+        info!("Updated analysis config: max_post_age_hours={}, experimental_mode={}", 
+              self.analysis_config.max_post_age_hours, self.analysis_config.experimental_mode);
     }
     
     /// Check rate limit before making API call
@@ -152,6 +202,17 @@ impl RedditAnalyzer {
         let text = format!("{} {}", post.title, post.selftext.as_deref().unwrap_or(""));
         let text_lower = text.to_lowercase();
         
+        // Check if post is too old based on configured max_post_age_hours
+        let now = Utc::now().timestamp() as f64;
+        let post_age_hours = (now - post.created_utc) / 3600.0;
+        let max_age = self.analysis_config.max_post_age_hours as f64;
+        
+        if post_age_hours > max_age {
+            debug!("Skipping post '{}' - age {:.1}h exceeds max {:.1}h", 
+                   post.title.chars().take(50).collect::<String>(), post_age_hours, max_age);
+            return None;
+        }
+        
         // Extract ticker symbols (basic pattern)
         let symbols = self.extract_symbols(&text);
         if symbols.is_empty() {
@@ -162,22 +223,37 @@ impl RedditAnalyzer {
         let mut bullish_score = 0.0;
         let mut bearish_score = 0.0;
         
-        for keyword in &self.config.keywords_bullish {
+        for keyword in &self.sentiment_config.keywords_bullish {
             if text_lower.contains(keyword) {
-                bullish_score += 1.0;
+                let keyword_weight = if self.analysis_config.experimental_mode {
+                    // In experimental mode, apply weighted scoring based on keyword strength
+                    self.get_keyword_weight(keyword, true)
+                } else {
+                    1.0
+                };
+                bullish_score += keyword_weight;
             }
         }
         
-        for keyword in &self.config.keywords_bearish {
+        for keyword in &self.sentiment_config.keywords_bearish {
             if text_lower.contains(keyword) {
-                bearish_score += 1.0;
+                let keyword_weight = if self.analysis_config.experimental_mode {
+                    // In experimental mode, apply weighted scoring based on keyword strength
+                    self.get_keyword_weight(keyword, false)
+                } else {
+                    1.0
+                };
+                bearish_score += keyword_weight;
             }
         }
         
-        // Weight by post score and comments
+        // Weight by post score and comment engagement
         let engagement_weight = (post.score as f64).log10().max(1.0);
-        bullish_score *= engagement_weight;
-        bearish_score *= engagement_weight;
+        let comment_weight = (post.num_comments as f64).log10().max(1.0);
+        let total_weight = engagement_weight * (1.0 + comment_weight * 0.5);
+        
+        bullish_score *= total_weight;
+        bearish_score *= total_weight;
         
         let total_score = bullish_score + bearish_score;
         if total_score == 0.0 {
@@ -185,7 +261,23 @@ impl RedditAnalyzer {
         }
         
         let sentiment = (bullish_score - bearish_score) / total_score;
-        let confidence = (total_score / 10.0).min(1.0);
+        
+        // Adjust confidence based on comment activity and post freshness
+        let base_confidence = (total_score / 10.0).min(1.0);
+        let comment_confidence_boost = (post.num_comments as f64 / 100.0).min(0.2);
+        let freshness_boost = (1.0 - (post_age_hours / max_age)).max(0.0) * 0.1;
+        
+        let confidence = if self.analysis_config.experimental_mode {
+            // Enhanced confidence calculation in experimental mode
+            let title_sentiment_boost = self.analyze_title_sentiment(&post.title) * 0.15;
+            let length_penalty = if text.len() < 50 { -0.1 } else { 0.0 }; // Penalize very short posts
+            let upvote_ratio_boost = if post.score > 10 { 0.1 } else { 0.0 };
+            
+            (base_confidence + comment_confidence_boost + freshness_boost + 
+             title_sentiment_boost + length_penalty + upvote_ratio_boost).min(1.0).max(0.0)
+        } else {
+            (base_confidence + comment_confidence_boost + freshness_boost).min(1.0)
+        };
         
         let signal = match sentiment {
             s if s > 0.5 => SignalType::StrongBuy,
@@ -229,21 +321,77 @@ impl RedditAnalyzer {
         known.contains(&word_upper.as_str())
     }
     
+    /// Get weighted score for keywords in experimental mode
+    fn get_keyword_weight(&self, keyword: &str, is_bullish: bool) -> f64 {
+        // Stronger sentiment keywords get higher weights
+        match keyword.to_lowercase().as_str() {
+            // High impact bullish keywords
+            "moon" | "rocket" | "breakout" => if is_bullish { 2.0 } else { 1.0 },
+            "pump" | "bullish" | "calls" => if is_bullish { 1.5 } else { 1.0 },
+            "buy" | "long" | "hodl" => if is_bullish { 1.2 } else { 1.0 },
+            
+            // High impact bearish keywords  
+            "crash" | "dump" | "dead" => if !is_bullish { 2.0 } else { 1.0 },
+            "bearish" | "puts" | "short" => if !is_bullish { 1.5 } else { 1.0 },
+            "sell" | "drop" | "rip" => if !is_bullish { 1.2 } else { 1.0 },
+            
+            // Default weight
+            _ => 1.0,
+        }
+    }
+    
+    /// Analyze title sentiment for experimental mode confidence boost
+    fn analyze_title_sentiment(&self, title: &str) -> f64 {
+        let title_lower = title.to_lowercase();
+        
+        // Strong positive indicators in title
+        if title_lower.contains("🚀") || title_lower.contains("💎") || 
+           title_lower.contains("to the moon") || title_lower.contains("yolo") {
+            return 0.3;
+        }
+        
+        // Strong negative indicators in title
+        if title_lower.contains("💀") || title_lower.contains("rip") ||
+           title_lower.contains("crash") || title_lower.contains("dump") {
+            return -0.3;
+        }
+        
+        // Moderate positive
+        if title_lower.contains("bullish") || title_lower.contains("buy") ||
+           title_lower.contains("calls") {
+            return 0.2;
+        }
+        
+        // Moderate negative
+        if title_lower.contains("bearish") || title_lower.contains("sell") ||
+           title_lower.contains("puts") {
+            return -0.2;
+        }
+        
+        0.0
+    }
+    
     /// Run continuous sentiment analysis
     pub async fn run(&self) -> Result<()> {
         let mut interval = tokio::time::interval(
-            tokio::time::Duration::from_secs(self.config.update_interval_secs)
+            tokio::time::Duration::from_secs(self.sentiment_config.update_interval_secs)
         );
         
         loop {
             interval.tick().await;
             
-            for subreddit in &self.config.subreddits {
+            for subreddit in &self.sentiment_config.subreddits {
                 match self.analyze_subreddit(subreddit).await {
                     Ok(signals) => {
                         for signal in signals {
-                            info!("Sentiment signal: {} {:?} (confidence: {:.2})", 
-                                signal.symbol, signal.signal, signal.confidence);
+                            let log_msg = if self.analysis_config.experimental_mode {
+                                format!("[EXPERIMENTAL] Sentiment signal: {} {:?} (confidence: {:.2}, sentiment: {:.2})", 
+                                    signal.symbol, signal.signal, signal.confidence, signal.sentiment)
+                            } else {
+                                format!("Sentiment signal: {} {:?} (confidence: {:.2})", 
+                                    signal.symbol, signal.signal, signal.confidence)
+                            };
+                            info!("{}", log_msg);
                             
                             // Cache the signal
                             self.sentiment_cache.insert(signal.symbol.clone(), signal);

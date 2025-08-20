@@ -40,14 +40,23 @@ impl WalEntry for DataEvent {
 /// OHLCV candle event
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct CandleEvent {
+    /// Timestamp of the candle event
     pub ts: Ts,
+    /// Symbol identifier
     pub symbol: Symbol,
-    pub timeframe: u32, // Seconds
+    /// Timeframe in seconds
+    pub timeframe: u32,
+    /// Opening price
     pub open: Px,
+    /// Highest price
     pub high: Px,
+    /// Lowest price
     pub low: Px,
+    /// Closing price
     pub close: Px,
+    /// Total volume traded
     pub volume: Qty,
+    /// Number of trades
     pub trades: u32,
 }
 
@@ -60,11 +69,17 @@ impl WalEntry for CandleEvent {
 /// Trade aggregation event
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct TradeEvent {
+    /// Timestamp of the trade
     pub ts: Ts,
+    /// Symbol identifier
     pub symbol: Symbol,
+    /// Trade price
     pub price: Px,
+    /// Trade quantity
     pub quantity: Qty,
+    /// True if buy order, false if sell order
     pub is_buy: bool,
+    /// Unique trade identifier
     pub trade_id: u64,
 }
 
@@ -77,11 +92,17 @@ impl WalEntry for TradeEvent {
 /// Volume profile event
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VolumeProfileEvent {
+    /// Timestamp of the volume profile update
     pub ts: Ts,
+    /// Symbol identifier
     pub symbol: Symbol,
+    /// Price level for this volume data
     pub price_level: Px,
+    /// Volume from buy orders at this price level
     pub buy_volume: Qty,
+    /// Volume from sell orders at this price level
     pub sell_volume: Qty,
+    /// Number of trades at this price level
     pub trades: u32,
 }
 
@@ -94,14 +115,22 @@ impl WalEntry for VolumeProfileEvent {
 /// Market microstructure event
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct MicrostructureEvent {
+    /// Timestamp of the microstructure event
     pub ts: Ts,
+    /// Symbol identifier
     pub symbol: Symbol,
+    /// Best bid price
     pub bid: Px,
+    /// Best ask price
     pub ask: Px,
+    /// Size at best bid
     pub bid_size: Qty,
+    /// Size at best ask
     pub ask_size: Qty,
-    pub spread: i64,    // Fixed-point basis points
-    pub imbalance: i64, // Fixed-point ratio
+    /// Spread in fixed-point basis points
+    pub spread: i64,
+    /// Order book imbalance as fixed-point ratio
+    pub imbalance: i64,
 }
 
 impl WalEntry for MicrostructureEvent {
@@ -113,8 +142,11 @@ impl WalEntry for MicrostructureEvent {
 /// System event for metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemEvent {
+    /// Timestamp of the system event
     pub ts: Ts,
+    /// Type of system event
     pub event_type: SystemEventType,
+    /// Human-readable message describing the event
     pub message: String,
 }
 
@@ -127,12 +159,19 @@ impl WalEntry for SystemEvent {
 /// `OrderBook` event for snapshots and updates
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderBookEvent {
+    /// Timestamp of the order book event
     pub ts: Ts,
+    /// Symbol identifier
     pub symbol: Symbol,
+    /// Type of order book event (snapshot, update, or clear)
     pub event_type: OrderBookEventType,
+    /// Sequence number for ordering events
     pub sequence: u64,
-    pub bid_levels: Vec<(Px, Qty, u32)>, // (price, quantity, order_count)
+    /// Bid price levels (price, quantity, order_count)
+    pub bid_levels: Vec<(Px, Qty, u32)>,
+    /// Ask price levels (price, quantity, order_count)
     pub ask_levels: Vec<(Px, Qty, u32)>,
+    /// Checksum for data integrity verification
     pub checksum: u32,
 }
 
@@ -145,18 +184,26 @@ impl WalEntry for OrderBookEvent {
 /// `OrderBook` event types
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum OrderBookEventType {
+    /// Full order book snapshot
     Snapshot,
+    /// Incremental order book update
     Update,
+    /// Clear all order book data
     Clear,
 }
 
 /// System event types
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum SystemEventType {
+    /// System or service startup event
     Start,
+    /// System or service shutdown event
     Stop,
+    /// Checkpoint or milestone event
     Checkpoint,
+    /// Error condition event
     Error,
+    /// Informational event
     Info,
 }
 
@@ -175,11 +222,16 @@ impl std::fmt::Display for SystemEventType {
 /// Statistics for a time period
 #[derive(Debug, Clone, Copy)]
 pub struct PeriodStats {
+    /// Total volume traded in the period
     pub total_volume: Qty,
+    /// Total number of trades in the period
     pub total_trades: u64,
-    pub avg_spread: i64, // Fixed-point
-    pub max_spread: i64, // Fixed-point
-    pub min_spread: i64, // Fixed-point
+    /// Average spread in fixed-point representation
+    pub avg_spread: i64,
+    /// Maximum spread observed in fixed-point representation
+    pub max_spread: i64,
+    /// Minimum spread observed in fixed-point representation
+    pub min_spread: i64,
 }
 
 impl Default for PeriodStats {

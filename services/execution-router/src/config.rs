@@ -48,10 +48,12 @@ pub struct VenueConfig {
 
     /// API credentials
     pub api_key: String,
+    /// API secret for venue authentication and signing requests
     pub api_secret: String,
 
     /// Rate limits
     pub max_orders_per_second: u32,
+    /// Maximum order cancellations allowed per second to avoid rate limits
     pub max_cancels_per_second: u32,
 
     /// Supported symbols
@@ -59,6 +61,7 @@ pub struct VenueConfig {
 
     /// Fee structure
     pub maker_fee_bps: i32,
+    /// Taker fee in basis points (1/100th of a percent) for liquidity-taking orders
     pub taker_fee_bps: i32,
 }
 

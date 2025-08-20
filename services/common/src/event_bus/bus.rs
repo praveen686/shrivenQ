@@ -99,6 +99,11 @@ impl<T: BusMessage> EventBus<T> {
         self.config.capacity
     }
 
+    /// Check if metrics are enabled
+    #[must_use] pub const fn metrics_enabled(&self) -> bool {
+        self.config.enable_metrics
+    }
+
     /// Get or create broadcaster for topic
     fn get_or_create_broadcaster(&self, topic: &str) -> broadcast::Sender<MessageEnvelope<T>> {
         let mut broadcasters = self.broadcasters.write();
@@ -326,7 +331,20 @@ impl<T: BusMessage> EventBus<T> {
     }
 }
 
+impl<T: BusMessage> std::fmt::Debug for EventBus<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EventBus")
+            .field("config", &self.config)
+            .field("metrics", &self.metrics)
+            .field("has_dead_letter_queue", &self.dead_letter_tx.is_some())
+            .field("num_topics", &self.broadcasters.read().len())
+            .field("num_handler_groups", &self.handlers.read().len())
+            .finish()
+    }
+}
+
 /// Publisher implementation for the event bus
+#[derive(Debug)]
 pub struct EventBusPublisher<T: BusMessage> {
     bus: Arc<EventBus<T>>,
     source_service: String,
@@ -367,6 +385,7 @@ impl<T: BusMessage> Publisher<T> for EventBusPublisher<T> {
 }
 
 /// Subscriber implementation for the event bus
+#[derive(Debug)]
 pub struct EventBusSubscriber<T: BusMessage> {
     bus: Arc<EventBus<T>>,
 }
@@ -419,6 +438,7 @@ mod tests {
             }
         }
 
+        #[allow(dead_code)]
         fn received_messages(&self) -> Vec<MessageEnvelope<TestMessage>> {
             self.received.read().clone()
         }
@@ -439,7 +459,7 @@ mod tests {
     #[tokio::test]
     async fn test_event_bus_basic() {
         let config = EventBusConfig::default();
-        let bus = EventBus::new(config);
+        let bus: EventBus<TestMessage> = EventBus::new(config);
 
         assert_eq!(bus.capacity(), 10000);
         assert_eq!(bus.subscriber_count("test_topic"), 0);
@@ -448,7 +468,7 @@ mod tests {
     #[tokio::test]
     async fn test_publish_subscribe() {
         let config = EventBusConfig::default();
-        let bus = Arc::new(EventBus::new(config));
+        let bus = Arc::new(EventBus::<TestMessage>::new(config));
 
         let mut subscriber = bus.subscribe("test_topic").await.unwrap();
 
@@ -467,7 +487,7 @@ mod tests {
     #[tokio::test]
     async fn test_message_handler() {
         let config = EventBusConfig::default();
-        let bus = Arc::new(EventBus::new(config));
+        let bus = Arc::new(EventBus::<TestMessage>::new(config));
 
         let handler = TestHandler::new("test_handler");
         bus.register_handler("test_topic", handler).await.unwrap();
@@ -493,10 +513,10 @@ mod tests {
             enable_metrics: true,
             ..Default::default()
         };
-        let bus = Arc::new(EventBus::new(config));
+        let bus = Arc::new(EventBus::<TestMessage>::new(config));
 
         // Keep subscriber alive for the duration of the test
-        let subscriber = bus.subscribe("test_topic").await.unwrap();
+        let _subscriber = bus.subscribe("test_topic").await.unwrap();
 
         let message = TestMessage {
             id: 1,
@@ -515,7 +535,7 @@ mod tests {
             default_ttl_ms: Some(1), // 1ms TTL
             ..Default::default()
         };
-        let bus = Arc::new(EventBus::new(config));
+        let bus = Arc::new(EventBus::<TestMessage>::new(config));
 
         let message = TestMessage {
             id: 1,

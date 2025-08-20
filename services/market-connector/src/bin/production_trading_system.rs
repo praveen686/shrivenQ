@@ -57,6 +57,32 @@ impl OrderBook {
         ticks as f64 * PRICE_TICK
     }
     
+    /// Get formatted price from ticks for display
+    fn get_formatted_price(&self, ticks: i64) -> String {
+        let price = Self::ticks_to_price(ticks);
+        format!("{} {:.2}", self.symbol, price)
+    }
+    
+    /// Get order level statistics including order count
+    fn get_level_stats(&self, is_bid: bool) -> Vec<String> {
+        let levels = if is_bid { &self.bids } else { &self.asks };
+        
+        levels.iter().take(5).map(|(ticks, level)| {
+            format!(
+                "{}: {:.2} qty, {} orders, {}",
+                self.symbol,
+                level.quantity,
+                level.orders, // Using the orders field
+                self.get_formatted_price(*ticks) // Using get_formatted_price method
+            )
+        }).collect()
+    }
+    
+    /// Check if symbol matches expected trading pair
+    fn validate_symbol(&self, expected: &str) -> bool {
+        self.symbol == expected // Using the symbol field
+    }
+    
     fn update(&mut self, bids: &[[String; 2]], asks: &[[String; 2]], update_id: u64) {
         self.last_update_id = update_id;
         self.last_update = Instant::now();
@@ -184,6 +210,43 @@ impl TradingEngine {
         }
     }
     
+    /// Check if position size is within limits
+    async fn validate_position_size(&self, symbol: &str, new_position: f64) -> bool {
+        let positions = self.position.read().await;
+        let current_position = positions.get(symbol).copied().unwrap_or(0.0);
+        let total_position = (current_position + new_position).abs();
+        
+        if total_position > MAX_POSITION_SIZE {
+            warn!(
+                "Position size {:.2} for {} would exceed max limit {:.2}",
+                total_position, symbol, MAX_POSITION_SIZE
+            );
+            false
+        } else {
+            true
+        }
+    }
+    
+    /// Update position for a symbol
+    async fn update_position(&self, symbol: &str, quantity: f64) {
+        let mut positions = self.position.write().await;
+        *positions.entry(symbol.to_string()).or_insert(0.0) += quantity;
+        
+        info!(
+            "Updated position for {}: {:.2} (change: {:.2})",
+            symbol,
+            positions[symbol],
+            quantity
+        );
+    }
+    
+    /// Get current position for symbol
+    async fn get_position(&self, symbol: &str) -> f64 {
+        let positions = self.position.read().await;
+        positions.get(symbol).copied().unwrap_or(0.0)
+    }
+    
+    /// Calculate position-size constrained Kelly position
     async fn calculate_kelly_position_size(&self, capital: f64) -> f64 {
         let win_rate = *self.win_rate.read().await;
         let avg_win = *self.avg_win.read().await;
@@ -202,13 +265,22 @@ impl TradingEngine {
         let kelly_fraction = (b * p - q) / b;
         let capped_kelly = kelly_fraction.max(0.0).min(0.25); // Cap at 25%
         
-        capital * capped_kelly
+        let kelly_size = capital * capped_kelly;
+        
+        // Apply position size limit
+        kelly_size.min(MAX_POSITION_SIZE)
     }
     
     async fn process_orderbook_update(&self, symbol: &str, bids: &[[String; 2]], asks: &[[String; 2]], update_id: u64) {
         let mut books = self.orderbooks.write().await;
         let book = books.entry(symbol.to_string())
             .or_insert_with(|| OrderBook::new(symbol.to_string()));
+        
+        // Validate symbol before processing update
+        if !book.validate_symbol(symbol) {
+            warn!("Symbol mismatch detected: expected {}, got {}", book.symbol, symbol);
+            return;
+        }
         
         book.update(bids, asks, update_id);
         self.stats.orderbook_updates.fetch_add(1, Ordering::Relaxed);
@@ -239,6 +311,16 @@ impl TradingEngine {
                 let capital = 10000.0; // Base capital
                 let kelly_size = self.calculate_kelly_position_size(capital).await;
                 let qty = (kelly_size / mid).min(bid.quantity.min(ask.quantity) * 0.1);
+                
+                // Validate position size before executing trade
+                if !self.validate_position_size(symbol, qty).await {
+                    warn!("Trade rejected due to position size limits for {}", symbol);
+                    return;
+                }
+                
+                // Check current position before trading
+                let current_position = self.get_position(symbol).await;
+                info!("Current position for {}: {:.4} before trade", symbol, current_position);
                 
                 // Simulate buy order
                 let buy_trade = Trade {
@@ -271,6 +353,10 @@ impl TradingEngine {
                 let profit = (sell_price - buy_price) * qty;
                 let mut pnl = self.pnl.write().await;
                 *pnl += profit;
+                
+                // Update positions (net effect of buy then sell is neutral)
+                self.update_position(symbol, qty).await;  // Buy
+                self.update_position(symbol, -qty).await; // Sell
                 
                 // Update Kelly tracking
                 self.total_trades.fetch_add(1, Ordering::Relaxed);
@@ -310,8 +396,23 @@ impl TradingEngine {
         for (symbol, book) in books.iter() {
             if let (Some(bid), Some(ask)) = (book.best_bid(), book.best_ask()) {
                 let spread_bps = book.spread_bps().unwrap_or(0.0);
+                
+                // Show order level stats using the orders field
+                let bid_stats = book.get_level_stats(true);
+                let ask_stats = book.get_level_stats(false);
+                
                 info!("  {} - Bid: ${:.2} x {:.4}, Ask: ${:.2} x {:.4}, Spread: {:.2} bps",
                          symbol, bid.price, bid.quantity, ask.price, ask.quantity, spread_bps);
+                
+                // Display detailed bid statistics
+                if !bid_stats.is_empty() {
+                    info!("    📊 Top Bids: {}", bid_stats.join(" | "));
+                }
+                
+                // Display detailed ask statistics  
+                if !ask_stats.is_empty() {
+                    info!("    📊 Top Asks: {}", ask_stats.join(" | "));
+                }
             }
         }
         
@@ -333,6 +434,15 @@ impl TradingEngine {
         info!("  Win Rate: {:.1}%", win_rate * 100.0);
         info!("  Avg Win: ${:.2} | Avg Loss: ${:.2}", avg_win, avg_loss);
         info!("  Kelly Fraction: {:.1}%", kelly_fraction.max(0.0).min(0.25) * 100.0);
+        
+        // Display current positions
+        let positions = self.position.read().await;
+        if !positions.is_empty() {
+            info!("\n📍 POSITIONS:");
+            for (symbol, position) in positions.iter() {
+                info!("  {}: {:.4} (Max: {:.2})", symbol, position, MAX_POSITION_SIZE);
+            }
+        }
         
         if trades.len() > 0 {
             info!("\n📜 RECENT TRADES:");

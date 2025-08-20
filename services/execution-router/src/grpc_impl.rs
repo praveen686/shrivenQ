@@ -31,7 +31,23 @@ pub struct ExecutionServiceImpl {
     execution_broadcaster: broadcast::Sender<ExecutionReport>,
 }
 
+impl std::fmt::Debug for ExecutionServiceImpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExecutionServiceImpl")
+            .field("router", &"Arc<ExecutionRouterService>")
+            .field("execution_broadcaster", &format!("broadcast::Sender<ExecutionReport> (capacity: {})", STREAM_CHANNEL_CAPACITY))
+            .finish()
+    }
+}
+
 impl ExecutionServiceImpl {
+    /// Create a new ExecutionServiceImpl with the given router service
+    /// 
+    /// # Arguments
+    /// * `router` - Arc-wrapped ExecutionRouterService for handling order operations
+    /// 
+    /// # Returns
+    /// A new ExecutionServiceImpl instance with broadcast channel for execution reports
     pub fn new(router: Arc<ExecutionRouterService>) -> Self {
         let (execution_broadcaster, _) = broadcast::channel(STREAM_CHANNEL_CAPACITY);
         
@@ -51,7 +67,7 @@ impl ExecutionServiceImpl {
             // Safe conversion: internal OrderStatus enum to i32 (proto-generated requirement)
             status: if let Ok(val) = i32::try_from(order.status as u32) { val } else {
                 tracing::error!("OrderStatus {:?} exceeds i32 range", order.status);
-                0 // UNSPECIFIED status
+                PROTO_I32_OVERFLOW
             },
             filled_qty: order.filled_quantity.as_i64(),
             last_qty: 0, // Will be set from fill information
@@ -279,10 +295,7 @@ impl ExecutionService for ExecutionServiceImpl {
                 avg_fill_time_ms: metrics.avg_fill_time_ms as i64,
                 total_volume: metrics.total_volume as i64,
                 total_commission: metrics.total_commission as i64,
-                fill_rate: if let Ok(val) = i32::try_from(metrics.fill_rate) { val } else {
-                    warn!("Fill rate {} exceeds i32 range", metrics.fill_rate);
-                    PROTO_I32_OVERFLOW
-                },
+                fill_rate: metrics.fill_rate,
                 // Proto-generated code requires std::collections::HashMap for map fields
                 #[allow(clippy::disallowed_types)] // Required by protobuf for map<string, int64>
                 venues_used: metrics.venues_used.into_iter()
@@ -317,19 +330,19 @@ fn convert_order_to_proto(order: crate::Order) -> Order {
         // Safe conversion: internal OrderStatus enum to i32 (proto-generated requirement)
         status: if let Ok(val) = i32::try_from(order.status as u32) { val } else {
             tracing::error!("OrderStatus {:?} exceeds i32 range", order.status);
-            0 // UNSPECIFIED status
+            PROTO_I32_OVERFLOW
         },
         // Safe conversion: internal OrderType enum to i32 (proto-generated requirement)
         order_type: if let Ok(val) = i32::try_from(order.order_type as u32) { val } else {
             tracing::error!("OrderType {:?} exceeds i32 range", order.order_type);
-            0 // UNSPECIFIED type
+            PROTO_I32_OVERFLOW
         },
         limit_price: order.limit_price.map_or(0, |p| p.as_i64()),
         stop_price: order.stop_price.map_or(0, |p| p.as_i64()),
         // Safe conversion: internal TimeInForce enum to i32 (proto-generated requirement)
         time_in_force: if let Ok(val) = i32::try_from(order.time_in_force as u32) { val } else {
             tracing::error!("TimeInForce {:?} exceeds i32 range", order.time_in_force);
-            0 // UNSPECIFIED time in force
+            PROTO_I32_OVERFLOW
         },
         venue: order.venue,
         strategy_id: order.strategy_id,

@@ -4,76 +4,119 @@ package options;
 
 // Option type
 enum OptionType {
+    // Call option (right to buy)
     CALL = 0;
+    // Put option (right to sell)
     PUT = 1;
 }
 
 // Indian index options
 enum IndexOption {
+    // NSE NIFTY 50 index options
     NIFTY50 = 0;
+    // NSE Bank NIFTY index options
     BANKNIFTY = 1;
+    // NSE Financial Services index options
     FINNIFTY = 2;
+    // NSE Midcap NIFTY index options
     MIDCAPNIFTY = 3;
 }
 
 // Greeks for option pricing
 message Greeks {
+    // Delta: sensitivity to underlying price changes
     double delta = 1;
+    // Gamma: rate of change of delta
     double gamma = 2;
+    // Theta: time decay of option value
     double theta = 3;
+    // Vega: sensitivity to volatility changes
     double vega = 4;
+    // Rho: sensitivity to interest rate changes
     double rho = 5;
+    // Lambda: leverage or elasticity
     double lambda = 6;
+    // Vanna: sensitivity of vega to underlying price
     double vanna = 7;
+    // Charm: rate of change of delta over time
     double charm = 8;
 }
 
 // Option contract details
 message OptionContract {
+    // Index type (NIFTY50, BANKNIFTY, etc.)
     IndexOption index = 1;
+    // Call or Put option
     OptionType option_type = 2;
+    // Strike price of the option
     double strike = 3;
+    // Expiry date in YYYY-MM-DD format
     string expiry = 4;
+    // Lot size for trading
     uint32 lot_size = 5;
+    // Current premium/price of the option
     double premium = 6;
+    // Total open interest
     uint64 open_interest = 7;
+    // Trading volume
     uint64 volume = 8;
+    // Implied volatility percentage
     double implied_volatility = 9;
+    // Greek values for the option
     Greeks greeks = 10;
 }
 
 // Pricing request
 message PricingRequest {
+    // Call or Put option type
     OptionType option_type = 1;
+    // Current spot price of underlying
     double spot = 2;
+    // Strike price of the option
     double strike = 3;
+    // Risk-free interest rate
     double rate = 4;
+    // Volatility of the underlying
     double volatility = 5;
+    // Time to expiry in years
     double time_to_expiry = 6;
 }
 
 // Pricing response
 message PricingResponse {
+    // Calculated option price
     double price = 1;
+    // Greek values for the option
     Greeks greeks = 2;
+    // Implied volatility
     double implied_volatility = 3;
 }
 
 // Strategy request
 message StrategyRequest {
+    // Type of strategy (e.g., "iron_condor", "butterfly")
     string strategy_type = 1;
+    // Index for the strategy
     IndexOption index = 2;
+    // Current spot price
     double spot = 3;
+    // Option legs in the strategy
     repeated OptionContract legs = 4;
 }
 
 // Strategy response
 message StrategyResponse {
+    // Name of the analyzed strategy
     string strategy_name = 1;
+    // Maximum potential profit
     double max_profit = 2;
+    // Maximum potential loss
     double max_loss = 3;
+    // Break-even points for the strategy
     repeated double breakeven_points = 4;
+    // Combined Greek values for all legs
     Greeks aggregate_greeks = 5;
+    // Margin requirement for the strategy
     double margin_required = 6;
 }
 
@@ -97,18 +140,24 @@ service OptionsEngine {
 
 // Option chain request
 message OptionChainRequest {
+    // Index to get option chain for
     IndexOption index = 1;
+    // Expiry date in YYYY-MM-DD format
     string expiry = 2;
 }
 
 // Option chain response
 message OptionChainResponse {
+    // List of option contracts for the expiry
     repeated OptionContract options = 1;
+    // Current spot price of the underlying
     double spot_price = 2;
+    // Timestamp of the data
     string timestamp = 3;
 }
 
 // Stream Greeks request
 message StreamGreeksRequest {
+    // Contracts to stream Greeks updates for
     repeated OptionContract contracts = 1;
 }

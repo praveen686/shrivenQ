@@ -63,6 +63,7 @@ pub struct AlgorithmState {
 }
 
 /// TWAP algorithm - splits order evenly over time
+#[derive(Debug)]
 pub struct TwapAlgorithm {
     state: AlgorithmState,
     _slice_interval: Duration, // Reserved for next slice timing
@@ -139,6 +140,7 @@ impl TwapAlgorithm {
 }
 
 /// VWAP algorithm - matches market volume distribution
+#[derive(Debug)]
 pub struct VwapAlgorithm {
     state: AlgorithmState,
     _volume_curve: Vec<i32>, // Reserved for volume-weighted distribution
@@ -217,6 +219,7 @@ impl VwapAlgorithm {
 }
 
 /// Iceberg algorithm - shows only partial quantity
+#[derive(Debug)]
 pub struct IcebergAlgorithm {
     state: AlgorithmState,
     display_qty: Qty,

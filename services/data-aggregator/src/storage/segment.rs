@@ -208,6 +208,18 @@ impl Segment {
     }
 }
 
+impl std::fmt::Debug for Segment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Segment")
+            .field("path", &self.path)
+            .field("file", &"<BufWriter<File>>")
+            .field("size", &self.size)
+            .field("max_size", &self.max_size)
+            .field("entries", &self.entries)
+            .finish()
+    }
+}
+
 /// Reader for a WAL segment
 pub struct SegmentReader {
     reader: BufReader<File>,
@@ -282,6 +294,16 @@ impl SegmentReader {
         }
 
         Ok(())
+    }
+}
+
+impl std::fmt::Debug for SegmentReader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SegmentReader")
+            .field("reader", &"<BufReader<File>>")
+            .field("entries", &self.entries)
+            .field("current", &self.current)
+            .finish()
     }
 }
 

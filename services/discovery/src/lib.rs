@@ -10,16 +10,24 @@ use tracing::{debug, info, warn};
 /// Service instance information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceInstance {
+    /// Service name
     pub name: String,
+    /// Unique instance ID
     pub id: String,
+    /// Network address
     pub address: String,
+    /// Service port
     pub port: u16,
+    /// Health check endpoint URL
     pub health_check_url: String,
+    /// Additional metadata
     pub metadata: FxHashMap<String, String>,
+    /// Last heartbeat timestamp
     pub last_heartbeat: u64,
 }
 
 /// Service registry
+#[derive(Debug)]
 pub struct ServiceRegistry {
     instances: Arc<RwLock<FxHashMap<String, Vec<ServiceInstance>>>>,
     health_check_interval: u64,
@@ -173,6 +181,7 @@ impl ServiceRegistry {
 }
 
 /// Client for service discovery
+#[derive(Debug)]
 pub struct DiscoveryClient {
     _registry_url: String, // Reserved for external registry integration
     service_name: String,

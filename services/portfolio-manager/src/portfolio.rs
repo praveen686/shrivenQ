@@ -80,6 +80,7 @@ pub struct PerformanceMetrics {
 }
 
 /// Portfolio analyzer
+#[derive(Debug)]
 pub struct PortfolioAnalyzer {
     /// Historical returns buffer (pre-allocated)
     returns_buffer: Vec<i64>,

@@ -9,6 +9,7 @@ use tonic::transport::Channel;
 use tracing::{debug, error};
 
 /// Execution service client wrapper
+#[derive(Debug)]
 pub struct ExecutionClient {
     client: GrpcClient<Channel>,
     endpoint: String,

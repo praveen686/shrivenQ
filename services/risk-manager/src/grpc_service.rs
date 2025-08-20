@@ -133,7 +133,7 @@ pub(crate) const DRAWDOWN_CRITICAL_THRESHOLD: i32 = 2000;  // 20% in fixed-point
 pub(crate) const DAILY_LOSS_CRITICAL: i64 = -10_000_000;   // $1M loss
 
 /// Enhanced gRPC service with production features
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RiskManagerGrpcService {
     /// Core risk manager
     pub risk_manager: Arc<RiskManagerService>,
@@ -154,9 +154,13 @@ pub struct RiskManagerGrpcService {
 /// Health status tracking
 #[derive(Debug, Clone)]
 pub struct HealthStatus {
+    /// Whether the service is currently healthy
     pub is_healthy: bool,
+    /// Time of the last health check
     pub last_check: Instant,
+    /// Number of consecutive failed health checks
     pub consecutive_failures: u32,
+    /// Error message if unhealthy
     pub error_message: Option<String>,
 }
 
@@ -172,12 +176,14 @@ impl Default for HealthStatus {
 }
 
 /// Rate limiter implementation
+#[derive(Debug)]
 pub struct RateLimiter {
     max_requests_per_second: u32,
     window: Arc<RwLock<Vec<Instant>>>,
 }
 
 impl RateLimiter {
+    /// Create a new rate limiter with max requests per second
     #[must_use] pub fn new(max_rps: u32) -> Self {
         // Use MAX_CONCURRENT_REQUESTS to bound the rate limiter
         let effective_max_rps = max_rps.min(MAX_CONCURRENT_REQUESTS as u32);
@@ -197,6 +203,7 @@ impl RateLimiter {
         }
     }
 
+    /// Check if the current request is within rate limits
     pub async fn check_rate_limit(&self) -> Result<(), Status> {
         let now = Instant::now();
         let mut window = self.window.write().await;
@@ -469,18 +476,29 @@ async fn update_prometheus_metrics(monitor: &Arc<RiskMonitor>) {
 /// Risk event for streaming
 #[derive(Debug, Clone)]
 pub struct RiskEvent {
+    /// Unix timestamp of the event
     pub timestamp: i64,
+    /// Type of risk event
     pub event_type: RiskEventType,
+    /// Symbol if applicable
     pub symbol: Option<Symbol>,
+    /// Event message
     pub message: String,
 }
 
+/// Risk event types for notifications
 #[derive(Debug, Clone)]
 pub enum RiskEventType {
+    /// Order passed risk checks
     OrderChecked,
+    /// Order rejected by risk manager
     OrderRejected,
+    /// Position was updated
     PositionUpdated,
+    /// Risk limit was breached
     LimitBreached,
+    /// Circuit breaker was triggered
     CircuitBreakerTriggered,
+    /// Kill switch was activated
     KillSwitchActivated,
 }

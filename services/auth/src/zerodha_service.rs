@@ -15,6 +15,7 @@ use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 /// Enhanced auth service with Zerodha integration
+#[derive(Debug)]
 pub struct ZerodhaAuthService {
     /// Zerodha authentication handler
     zerodha_auth: Arc<ZerodhaAuth>,

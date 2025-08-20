@@ -4,6 +4,8 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+/// Circuit breaker for risk management
+#[derive(Debug)]
 pub struct CircuitBreaker {
     is_open: AtomicBool,
     failure_count: AtomicU64,
@@ -13,6 +15,7 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
+    /// Create a new circuit breaker with specified threshold and timeout
     #[must_use] pub const fn new(threshold: u64, timeout_ms: u64) -> Self {
         Self {
             is_open: AtomicBool::new(false),
@@ -23,6 +26,7 @@ impl CircuitBreaker {
         }
     }
 
+    /// Check if the circuit breaker is open (blocking requests)
     pub fn is_open(&self) -> bool {
         if self.is_open.load(Ordering::Relaxed) {
             // Check if timeout has elapsed
@@ -43,11 +47,13 @@ impl CircuitBreaker {
         }
     }
 
+    /// Record a successful operation
     pub fn record_success(&self) {
         self.failure_count.store(0, Ordering::Relaxed);
         self.is_open.store(false, Ordering::Relaxed);
     }
 
+    /// Record a failed operation
     pub fn record_failure(&self) {
         let count = self.failure_count.fetch_add(1, Ordering::Relaxed) + 1;
         if count >= self.threshold {

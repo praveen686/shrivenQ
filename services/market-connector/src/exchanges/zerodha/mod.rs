@@ -18,6 +18,54 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info, trace, warn};
 
 /// Zerodha WebSocket feed
+impl std::fmt::Debug for ZerodhaFeed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ZerodhaFeed")
+            .field("config", &self.config)
+            .field("auth", &"ZerodhaAuth")
+            .field("symbols", &self.symbols)
+            .field("symbol_map", &format!("{} symbols", self.symbol_map.len()))
+            .finish()
+    }
+}
+
+/// Zerodha KiteConnect WebSocket feed adapter
+///
+/// This adapter provides connectivity to Zerodha's KiteConnect WebSocket API,
+/// handling both text-based JSON messages and binary tick data formats.
+/// It's designed for high-frequency market data consumption with proper
+/// error handling and reconnection capabilities.
+///
+/// # Protocol Support
+/// - **JSON Messages**: Order updates, quotes, control messages
+/// - **Binary Ticks**: Compact market data in LTP, Quote, and Full modes
+/// - **Authentication**: API key and access token based authentication
+/// - **Symbol Management**: Efficient token-to-symbol mapping for fast lookups
+///
+/// # Message Processing
+/// The feed handles multiple message types:
+/// - Depth messages for order book updates
+/// - Tick messages for price/volume updates  
+/// - Control messages for connection status
+/// - Error messages for troubleshooting
+///
+/// # Performance Characteristics
+/// - FxHashMap for O(1) symbol lookups during message processing
+/// - Zero-copy message parsing where possible
+/// - Efficient binary data processing for tick streams
+///
+/// # Examples
+/// ```
+/// use zerodha::ZerodhaFeed;
+/// use services_common::{ZerodhaAuth, FeedConfig};
+///
+/// let config = FeedConfig::default();
+/// let auth = ZerodhaAuth::new();
+/// 
+/// let mut feed = ZerodhaFeed::new(config, auth);
+/// // feed.connect().await?;
+/// // feed.subscribe(symbols).await?;
+/// ```
 pub struct ZerodhaFeed {
     config: FeedConfig,
     auth: ZerodhaAuth,

@@ -16,18 +16,40 @@ use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 /// Single position - cache-line aligned for optimal performance
 #[repr(C, align(64))]
 pub struct Position {
+    /// Symbol identifier
     pub symbol: Symbol,
-    pub quantity: AtomicI64,     // Positive = long, Negative = short
-    pub avg_price: AtomicU64,    // Fixed point (multiply by 10000)
-    pub realized_pnl: AtomicI64, // In smallest unit
+    /// Position quantity (positive = long, negative = short)
+    pub quantity: AtomicI64,
+    /// Average entry price (fixed point, multiply by 10000)
+    pub avg_price: AtomicU64,
+    /// Realized P&L in smallest unit
+    pub realized_pnl: AtomicI64,
+    /// Unrealized P&L based on current market prices
     pub unrealized_pnl: AtomicI64,
-    pub last_update: AtomicU64, // Timestamp nanos
+    /// Last update timestamp in nanoseconds
+    pub last_update: AtomicU64,
 
-    // Market data for PnL calculation
+    /// Last bid price for mark-to-market
     pub last_bid: AtomicU64,
+    /// Last ask price for mark-to-market
     pub last_ask: AtomicU64,
 
     _padding: [u8; 8],
+}
+
+impl std::fmt::Debug for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Position")
+            .field("symbol", &self.symbol)
+            .field("quantity", &self.quantity.load(Ordering::Relaxed))
+            .field("avg_price", &self.avg_price.load(Ordering::Relaxed))
+            .field("realized_pnl", &self.realized_pnl.load(Ordering::Relaxed))
+            .field("unrealized_pnl", &self.unrealized_pnl.load(Ordering::Relaxed))
+            .field("last_update", &self.last_update.load(Ordering::Relaxed))
+            .field("last_bid", &self.last_bid.load(Ordering::Relaxed))
+            .field("last_ask", &self.last_ask.load(Ordering::Relaxed))
+            .finish()
+    }
 }
 
 impl Position {
@@ -178,12 +200,19 @@ impl Position {
 /// Position snapshot for external consumption
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PositionSnapshot {
+    /// Symbol identifier
     pub symbol: Symbol,
+    /// Current position quantity
     pub quantity: i64,
+    /// Average entry price
     pub avg_price: Px,
+    /// Realized profit and loss
     pub realized_pnl: i64,
+    /// Unrealized profit and loss
     pub unrealized_pnl: i64,
+    /// Total profit and loss (realized + unrealized)
     pub total_pnl: i64,
+    /// Timestamp of last update
     pub last_update: Ts,
 }
 
@@ -202,6 +231,19 @@ pub struct PositionTracker {
     // Reconciliation tracking
     update_counter: AtomicU64,
     last_reconcile_ts: AtomicU64,
+}
+
+impl std::fmt::Debug for PositionTracker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PositionTracker")
+            .field("positions_count", &self.positions.read().len())
+            .field("pending_orders_count", &self.pending_orders.read().len())
+            .field("total_realized", &self.total_realized.load(Ordering::Relaxed))
+            .field("total_unrealized", &self.total_unrealized.load(Ordering::Relaxed))
+            .field("update_counter", &self.update_counter.load(Ordering::Relaxed))
+            .field("last_reconcile_ts", &self.last_reconcile_ts.load(Ordering::Relaxed))
+            .finish()
+    }
 }
 
 impl PositionTracker {

@@ -11,6 +11,7 @@ use services_common::{Qty, Side, Symbol};
 use rustc_hash::FxHashMap;
 
 /// Portfolio rebalancer
+#[derive(Debug)]
 pub struct Rebalancer {
     /// Pending rebalance orders
     pending_orders: FxHashMap<u64, RebalanceOrder>,
@@ -21,10 +22,15 @@ pub struct Rebalancer {
 /// Rebalance order
 #[derive(Debug, Clone)]
 pub struct RebalanceOrder {
+    /// Unique order identifier
     pub order_id: u64,
+    /// Symbol to rebalance
     pub symbol: Symbol,
+    /// Buy or sell side
     pub side: Side,
+    /// Quantity to trade
     pub quantity: Qty,
+    /// Target portfolio weight (fixed-point percentage)
     pub target_weight: i32,
 }
 

@@ -47,6 +47,16 @@ pub struct SmartOrderRouter {
     default_venue: String,
 }
 
+impl std::fmt::Debug for SmartOrderRouter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SmartOrderRouter")
+            .field("venues", &format!("FxHashMap<String, VenueInfo> (len: {})", self.venues.len()))
+            .field("symbol_venues", &format!("FxHashMap<Symbol, Vec<String>> (len: {})", self.symbol_venues.len()))
+            .field("default_venue", &self.default_venue)
+            .finish()
+    }
+}
+
 impl SmartOrderRouter {
     /// Create new router
     #[must_use] pub fn new(default_venue: String) -> Self {

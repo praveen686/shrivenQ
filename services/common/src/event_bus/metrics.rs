@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 /// Bus metrics collector
+#[derive(Debug)]
 pub struct BusMetrics {
     /// Publish attempts by topic
     publish_attempts: RwLock<FxHashMap<String, AtomicU64>>,
@@ -278,6 +279,7 @@ impl Default for BusMetrics {
 }
 
 /// Duration tracker for calculating averages
+#[derive(Debug)]
 struct DurationTracker {
     total_duration: Duration,
     count: u64,

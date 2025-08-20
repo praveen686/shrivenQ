@@ -14,6 +14,7 @@ use crate::order::{Order, OrderStatus, Fill};
 use crate::persistence::PersistenceManager;
 
 /// Recovery manager for handling system restarts
+#[derive(Debug)]
 pub struct RecoveryManager {
     /// Database pool
     db_pool: PgPool,
@@ -128,6 +129,49 @@ impl RecoveryManager {
         );
         
         Ok(stats)
+    }
+    
+    /// Validate recovery using persistence manager
+    pub async fn validate_recovery(&self, recovered_orders: &[Order]) -> Result<bool> {
+        info!("Validating recovery using persistence manager");
+        
+        // Use persistence manager to cross-verify recovered orders
+        let persistence_orders = self.persistence.load_active_orders().await?;
+        
+        if recovered_orders.len() != persistence_orders.len() {
+            error!(
+                "Recovery validation failed: recovered {} orders, persistence has {}",
+                recovered_orders.len(),
+                persistence_orders.len()
+            );
+            return Ok(false);
+        }
+        
+        // Check each order exists in persistence
+        for recovered_order in recovered_orders {
+            match self.persistence.load_order(recovered_order.id).await {
+                Ok(Some(persistent_order)) => {
+                    if recovered_order.version != persistent_order.version {
+                        error!(
+                            "Order {} version mismatch: recovered={}, persistent={}",
+                            recovered_order.id, recovered_order.version, persistent_order.version
+                        );
+                        return Ok(false);
+                    }
+                }
+                Ok(None) => {
+                    error!("Order {} not found in persistence", recovered_order.id);
+                    return Ok(false);
+                }
+                Err(e) => {
+                    error!("Error loading order {} from persistence: {}", recovered_order.id, e);
+                    return Ok(false);
+                }
+            }
+        }
+        
+        info!("Recovery validation passed");
+        Ok(true)
     }
     
     /// Load orders for recovery

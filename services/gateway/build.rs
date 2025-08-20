@@ -1,8 +1,10 @@
+//! Build script for compiling protobuf definitions
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Compile protobuf definitions for gRPC client integration
-    tonic_build::configure()
-        .build_server(false) // We only need clients
-        .build_client(true)
+    tonic_prost_build::configure()
+        .file_descriptor_set_path("src/proto_descriptor.bin")
+        .type_attribute(".", "#[allow(missing_docs)]")
         .compile_protos(
             &[
                 "../../proto/auth.proto",

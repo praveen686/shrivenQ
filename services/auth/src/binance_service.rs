@@ -13,6 +13,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 /// Binance auth service with gRPC integration
+#[derive(Debug)]
 pub struct BinanceAuthService {
     /// Binance Spot authentication
     spot_auth: Option<Arc<BinanceAuth>>,

@@ -38,6 +38,21 @@ pub struct AuthContext {
     pub metadata: FxHashMap<String, String>,
 }
 
+/// JWT Claims structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Claims {
+    /// Subject (user_id)
+    sub: String,
+    /// Expiration time
+    exp: i64,
+    /// Not before
+    nbf: i64,
+    /// Issued at
+    iat: i64,
+    /// Custom auth context
+    context: AuthContext,
+}
+
 /// Permission types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Permission {
@@ -72,14 +87,25 @@ pub trait AuthService: Send + Sync {
 
     /// Revoke token
     async fn revoke_token(&self, token: &str) -> Result<()>;
+    
+    /// Validate credentials without generating token (useful for health checks)
+    async fn validate_credentials(&self, username: &str, password: &str) -> Result<bool> {
+        // Default implementation: try to authenticate and return success/failure
+        match self.authenticate(username, password).await {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        }
+    }
 }
 
 /// Service implementation
+#[derive(Debug)]
 pub struct AuthServiceImpl {
     config: AuthConfig,
 }
 
 impl AuthServiceImpl {
+    /// Create a new AuthServiceImpl instance with the provided configuration
     #[must_use] pub const fn new(config: AuthConfig) -> Self {
         Self { config }
     }
@@ -104,13 +130,15 @@ impl AuthService for AuthServiceImpl {
     }
 
     async fn validate_token(&self, token: &str) -> Result<AuthContext> {
-        use jsonwebtoken::{DecodingKey, Validation, decode};
+        use jsonwebtoken::{DecodingKey, Validation, decode, Algorithm};
 
         let key = DecodingKey::from_secret(self.config.jwt_secret.as_bytes());
-        let validation = Validation::default();
+        let mut validation = Validation::new(Algorithm::HS256);
+        validation.validate_exp = true;
+        validation.validate_nbf = true;
 
-        match decode::<AuthContext>(token, &key, &validation) {
-            Ok(token_data) => Ok(token_data.claims),
+        match decode::<Claims>(token, &key, &validation) {
+            Ok(token_data) => Ok(token_data.claims.context),
             Err(e) => Err(anyhow::anyhow!("Invalid token: {}", e)),
         }
     }
@@ -120,14 +148,27 @@ impl AuthService for AuthServiceImpl {
 
         let key = EncodingKey::from_secret(self.config.jwt_secret.as_bytes());
         let header = Header::default();
+        
+        let now = chrono::Utc::now();
+        let claims = Claims {
+            sub: context.user_id.clone(),
+            exp: (now + chrono::Duration::seconds(self.config.token_expiry as i64)).timestamp(),
+            nbf: now.timestamp(),
+            iat: now.timestamp(),
+            context: context.clone(),
+        };
 
-        match encode(&header, context, &key) {
+        match encode(&header, &claims, &key) {
             Ok(token) => Ok(token),
             Err(e) => Err(anyhow::anyhow!("Failed to generate token: {}", e)),
         }
     }
 
     async fn check_permission(&self, context: &AuthContext, permission: Permission) -> bool {
+        // Admin has all permissions
+        if context.permissions.contains(&Permission::Admin) {
+            return true;
+        }
         context.permissions.contains(&permission)
     }
 

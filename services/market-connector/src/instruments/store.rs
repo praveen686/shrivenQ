@@ -24,16 +24,87 @@ use super::types::{Instrument, InstrumentFilter, InstrumentType, OptionType};
 const DEFAULT_SEGMENT_SIZE: u64 = DEFAULT_WAL_SEGMENT_SIZE_MB as u64 * BYTES_PER_MB; // 100MB default
 
 /// WAL-backed instrument store
+impl std::fmt::Debug for InstrumentWalStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InstrumentWalStore")
+            .field("wal", &"Wal")
+            .field("by_token", &format!("{} instruments", self.by_token.len()))
+            .field("by_symbol", &format!("{} symbols", self.by_symbol.len()))
+            .field("by_exchange_symbol", &format!("{} exchange symbols", self.by_exchange_symbol.len()))
+            .field("active_futures", &format!("{} futures", self.active_futures.len()))
+            .field("indices", &format!("{} indices", self.indices.len()))
+            .field("option_chains", &format!("{} option chains", self.option_chains.len()))
+            .field("options_by_strike", &format!("{} strike mappings", self.options_by_strike.len()))
+            .field("total_instruments", &self.total_instruments)
+            .field("last_update", &self.last_update)
+            .finish()
+    }
+}
+
+/// High-performance WAL-backed instrument store with optimized lookups
+///
+/// This store provides enterprise-grade instrument data management with persistent
+/// storage using Write-Ahead Logging (WAL) and multiple optimized indices for
+/// different access patterns required in high-frequency trading.
+///
+/// # Storage Architecture
+/// - **WAL Backend**: All instrument data is persisted to WAL for durability
+/// - **Memory Indices**: Multiple FxHashMap-based indices for fast lookups
+/// - **Type-Specific Collections**: Specialized collections for futures, options, and indices
+/// - **Strike-Based Indexing**: Efficient option chain queries by strike price
+///
+/// # Index Types
+/// - **Primary Index**: Token-based O(1) instrument lookup
+/// - **Symbol Indices**: Trading symbol and exchange symbol mappings  
+/// - **Futures Index**: Active futures contracts by underlying
+/// - **Option Chains**: Strike-based option lookups with call/put separation
+/// - **Indices Collection**: Quick access to index instruments
+///
+/// # Performance Characteristics
+/// - **Hot Path Optimized**: Sub-microsecond lookups for trading operations
+/// - **Memory Efficient**: Compact data structures with minimal overhead
+/// - **Batch Operations**: Efficient bulk inserts during daily updates
+/// - **Zero Copy**: Reference-based access to avoid unnecessary allocations
+///
+/// # Data Integrity
+/// - **WAL Persistence**: All changes are logged before memory updates
+/// - **Crash Recovery**: Automatic reconstruction from WAL on startup
+/// - **Consistent Views**: Atomic updates ensure consistent data views
+///
+/// # Examples
+/// ```
+/// use instrument_store::InstrumentWalStore;
+/// use std::path::PathBuf;
+///
+/// let store = InstrumentWalStore::new(
+///     PathBuf::from("./data/instruments"),
+///     Some(100), // 100MB segments
+/// )?;
+///
+/// // Fast token-based lookup
+/// if let Some(instrument) = store.get_by_token(12345) {
+///     println!("Found: {}", instrument.trading_symbol);
+/// }
+///
+/// // Get active futures
+/// let futures = store.get_active_futures("NIFTY");
+/// println!("Active NIFTY futures: {}", futures.len());
+/// ```
 pub struct InstrumentWalStore {
     /// WAL for persistent storage
     wal: Wal,
 
     /// In-memory indices for fast lookups
+    /// Primary instrument index by token for O(1) lookups
     pub by_token: FxHashMap<u32, Instrument>,
+    /// Trading symbol to tokens mapping for symbol-based queries
     pub by_symbol: FxHashMap<String, Vec<u32>>,
+    /// Exchange symbol to tokens mapping for underlying-based queries
     pub by_exchange_symbol: FxHashMap<String, Vec<u32>>,
+    /// Active futures contracts by underlying symbol
     pub active_futures: FxHashMap<String, Vec<u32>>,
-    pub indices: FxHashMap<u32, ()>, // Use FxHashMap as HashSet
+    /// Index instruments collection (using FxHashMap as HashSet for performance)
+    pub indices: FxHashMap<u32, ()>,
 
     /// Option chains by underlying and expiry: (underlying, expiry_timestamp) -> Vec<token>
     pub option_chains: FxHashMap<(String, u64), Vec<u32>>,
@@ -42,7 +113,9 @@ pub struct InstrumentWalStore {
     pub options_by_strike: FxHashMap<String, FxHashMap<u64, (Option<u32>, Option<u32>)>>,
 
     /// Statistics
+    /// Total number of instruments in the store
     pub total_instruments: usize,
+    /// Timestamp of the last successful data update
     pub last_update: Option<Ts>,
 }
 
@@ -490,12 +563,23 @@ impl InstrumentWalStore {
 
 /// Instrument store statistics
 #[derive(Debug, Clone)]
+/// Comprehensive statistics about the instrument store contents and performance
+///
+/// Provides insight into the current state of the instrument store including
+/// counts of different instrument types, index sizes, and last update information.
+/// Used for monitoring, debugging, and performance optimization.
 pub struct InstrumentStats {
+    /// Total number of instruments loaded in the store
     pub total_instruments: usize,
+    /// Number of index instruments (like NIFTY 50, BANK NIFTY)
     pub indices_count: usize,
+    /// Number of active (non-expired) futures contracts
     pub active_futures_count: usize,
+    /// Number of unique trading symbols in the symbol index
     pub symbols_count: usize,
+    /// Number of unique exchange symbols in the exchange symbol index
     pub exchange_symbols_count: usize,
+    /// Timestamp of the last successful data update
     pub last_update: Option<Ts>,
 }
 

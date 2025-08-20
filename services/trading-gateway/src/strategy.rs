@@ -13,7 +13,24 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::info;
 
-/// Momentum trading strategy
+/// Momentum trading strategy based on moving average crossovers
+/// 
+/// The `MomentumStrategy` implements a classic momentum-based trading approach
+/// using short-term and long-term moving averages. It generates buy signals
+/// when the short MA crosses above the long MA with price confirmation (golden cross),
+/// and sell signals when the short MA crosses below the long MA (death cross).
+/// 
+/// # Strategy Logic
+/// - Short MA: 20-period moving average
+/// - Long MA: 50-period moving average
+/// - Signal strength: Percentage difference between MAs
+/// - Signal confidence: Strength scaled to 0-100%
+/// - Rate limiting: Maximum 1 signal per second per symbol
+/// 
+/// # Risk Management
+/// - Requires minimum 50 price points for signal generation
+/// - Price confirmation required (price must be above/below short MA)
+/// - Built-in signal rate limiting to prevent overtrading
 pub struct MomentumStrategy {
     /// Strategy name
     name: String,
@@ -30,8 +47,31 @@ pub struct MomentumStrategy {
     health: Arc<RwLock<ComponentHealth>>,
 }
 
+impl std::fmt::Debug for MomentumStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MomentumStrategy")
+            .field("name", &self.name)
+            .field("signals_generated", &self.signals_generated.load(std::sync::atomic::Ordering::Relaxed))
+            .field("price_history_len", &self.price_history.read().len())
+            .field("ma_short", &*self.ma_short.read())
+            .field("ma_long", &*self.ma_long.read())
+            .field("has_recent_signal", &self.last_signal.read().is_some())
+            .finish()
+    }
+}
+
 impl MomentumStrategy {
-    /// Create new momentum strategy
+    /// Creates a new momentum trading strategy instance
+    /// 
+    /// # Returns
+    /// A new `MomentumStrategy` with:
+    /// - Empty price history (capacity: 200 data points)
+    /// - Zero-initialized moving averages
+    /// - Healthy component status
+    /// - Reset signal generation counter
+    /// 
+    /// The strategy requires market data to build sufficient price history
+    /// before generating trading signals.
     pub fn new() -> Self {
         Self {
             name: "Momentum".to_string(),
@@ -51,7 +91,19 @@ impl MomentumStrategy {
         }
     }
     
-    /// Calculate moving averages
+    /// Calculates short-term and long-term moving averages from price history
+    /// 
+    /// Computes 20-period and 50-period simple moving averages from the most
+    /// recent price data. Moving averages are only calculated when sufficient
+    /// data points are available.
+    /// 
+    /// # Requirements
+    /// - Minimum 20 data points for short MA calculation
+    /// - Minimum 50 data points for long MA calculation
+    /// 
+    /// # Thread Safety
+    /// Updates are performed under write locks to ensure consistency
+    /// between price history reads and moving average calculations.
     fn calculate_moving_averages(&self) {
         let history = self.price_history.read();
         
@@ -76,7 +128,24 @@ impl MomentumStrategy {
         }
     }
     
-    /// Detect momentum signal
+    /// Detects momentum trading signals based on moving average analysis
+    /// 
+    /// Analyzes current price relative to short and long moving averages
+    /// to identify momentum signals. Generates buy signals for golden cross
+    /// patterns and sell signals for death cross patterns.
+    /// 
+    /// # Arguments
+    /// * `current_price` - The current market price to analyze
+    /// 
+    /// # Returns
+    /// * `Some((Side, strength, confidence))` - If a valid signal is detected
+    /// * `None` - If no signal conditions are met
+    /// 
+    /// # Signal Conditions
+    /// - **Buy Signal**: Short MA > Long MA AND Price > Short MA
+    /// - **Sell Signal**: Short MA < Long MA AND Price < Short MA
+    /// - **Strength**: Percentage difference between moving averages
+    /// - **Confidence**: Strength normalized to 0-100% range
     fn detect_signal(&self, current_price: Px) -> Option<(Side, f64, f64)> {
         let ma_short = *self.ma_short.read();
         let ma_long = *self.ma_long.read();
@@ -189,7 +258,24 @@ impl TradingStrategy for MomentumStrategy {
     }
 }
 
-/// Arbitrage trading strategy
+/// Arbitrage trading strategy for cross-venue price discrepancies
+/// 
+/// The `ArbitrageStrategy` identifies and exploits price differences between
+/// trading venues or order book inefficiencies. It monitors bid-ask spreads
+/// and detects negative spreads that indicate arbitrage opportunities.
+/// 
+/// # Strategy Logic
+/// - Monitors bid-ask spread compression
+/// - Detects negative spreads (arbitrage opportunities)
+/// - Minimum threshold: 0.1% spread for signal generation
+/// - Signal strength: Absolute percentage of negative spread
+/// - Signal confidence: Strength scaled by factor of 10
+/// 
+/// # Implementation Notes
+/// - Currently simplified to single-venue spread analysis
+/// - Production version would compare across multiple exchanges
+/// - Considers available liquidity for position sizing
+/// - Optimized for high-frequency detection
 pub struct ArbitrageStrategy {
     /// Strategy name
     name: String,
@@ -201,8 +287,27 @@ pub struct ArbitrageStrategy {
     health: Arc<RwLock<ComponentHealth>>,
 }
 
+impl std::fmt::Debug for ArbitrageStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ArbitrageStrategy")
+            .field("name", &self.name)
+            .field("signals_generated", &self.signals_generated.load(std::sync::atomic::Ordering::Relaxed))
+            .field("spreads_tracked", &self.spreads.read().len())
+            .finish()
+    }
+}
+
 impl ArbitrageStrategy {
-    /// Create new arbitrage strategy
+    /// Creates a new arbitrage trading strategy instance
+    /// 
+    /// # Returns
+    /// A new `ArbitrageStrategy` with:
+    /// - Empty spread tracking storage
+    /// - Zero-initialized signal counter
+    /// - Healthy component status
+    /// 
+    /// The strategy is immediately ready to analyze market data
+    /// for arbitrage opportunities.
     pub fn new() -> Self {
         Self {
             name: "Arbitrage".to_string(),
@@ -219,7 +324,29 @@ impl ArbitrageStrategy {
         }
     }
     
-    /// Detect arbitrage opportunity
+    /// Detects arbitrage opportunities from bid-ask spread analysis
+    /// 
+    /// Analyzes the current bid-ask spread to identify negative spreads
+    /// or unusually tight spreads that may indicate arbitrage opportunities.
+    /// 
+    /// # Arguments
+    /// * `bid` - Best bid price and quantity, if available
+    /// * `ask` - Best ask price and quantity, if available
+    /// 
+    /// # Returns
+    /// * `Some((Side, strength, confidence))` - If arbitrage opportunity detected
+    /// * `None` - If no opportunity or insufficient data
+    /// 
+    /// # Detection Logic
+    /// - Calculates spread as (ask_price - bid_price)
+    /// - Converts spread to percentage of bid price
+    /// - Triggers on negative spreads exceeding 0.1% threshold
+    /// - Considers available liquidity for opportunity sizing
+    /// 
+    /// # Signal Properties
+    /// - **Side**: Always Buy (capitalize on negative spread)
+    /// - **Strength**: Absolute percentage of negative spread
+    /// - **Confidence**: Strength scaled by factor of 10, capped at 100%
     fn detect_arbitrage(&self, bid: Option<(Px, Qty)>, ask: Option<(Px, Qty)>) -> Option<(Side, f64, f64)> {
         if let (Some((bid_price, bid_qty)), Some((ask_price, ask_qty))) = (bid, ask) {
             // Simple cross-exchange arbitrage detection

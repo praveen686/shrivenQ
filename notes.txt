@@ -68,3 +68,14 @@ You are taking over as the CTO of ShrivenQuant, an algorithmic trading system cu
   4. 134 unwrap() calls - Critical technical debt
   5. Never tested - No false confidence
   6. 6-12 months - Realistic timeline
+
+
+
+
+
+    1. reporting - 94 errors
+  2. options-engine - 95 errors
+  3. market-connector - 142 errors
+  4. backtesting - 161 errors
+  5. test-utils - 248 errors
+  6. api-gateway - 455 errors (largest!)

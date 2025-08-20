@@ -10,6 +10,18 @@ use std::time::{Duration, Instant};
 use tracing::info;
 
 /// Signal aggregator for combining strategy signals
+/// 
+/// The `SignalAggregator` consolidates signals from multiple trading strategies
+/// and determines whether to generate trading orders based on weighted signal consensus.
+/// It maintains a time-windowed history of signals and applies configurable weights
+/// to different signal types to compute aggregate trading decisions.
+/// 
+/// # Features
+/// - Time-based signal expiry (default 5 seconds)
+/// - Weighted signal aggregation by signal type
+/// - Confidence threshold filtering
+/// - Position sizing based on signal strength
+/// - Thread-safe signal storage with RwLock
 pub struct SignalAggregator {
     /// Recent signals by symbol
     recent_signals: Arc<RwLock<HashMap<Symbol, Vec<SignalEntry>>>>,
@@ -19,6 +31,18 @@ pub struct SignalAggregator {
     min_confidence: f64,
     /// Signal expiry duration
     signal_expiry: Duration,
+}
+
+impl std::fmt::Debug for SignalAggregator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let signal_count = self.recent_signals.read().len();
+        f.debug_struct("SignalAggregator")
+            .field("active_symbols", &signal_count)
+            .field("signal_weights", &self.signal_weights)
+            .field("min_confidence", &self.min_confidence)
+            .field("signal_expiry", &self.signal_expiry)
+            .finish()
+    }
 }
 
 /// Signal entry with metadata
@@ -32,7 +56,22 @@ struct SignalEntry {
 }
 
 impl SignalAggregator {
-    /// Create new signal aggregator
+    /// Creates a new signal aggregator with default configuration
+    /// 
+    /// # Returns
+    /// A new `SignalAggregator` instance with:
+    /// - Pre-configured signal weights for different signal types
+    /// - Minimum confidence threshold of 0.6
+    /// - Signal expiry duration of 5 seconds
+    /// - Empty signal storage
+    /// 
+    /// # Signal Weights
+    /// - Momentum: 0.3
+    /// - MeanReversion: 0.2  
+    /// - MarketMaking: 0.15
+    /// - Arbitrage: 0.5
+    /// - ToxicFlow: -0.3 (negative weight)
+    /// - Microstructure: 0.25
     pub fn new() -> Self {
         let mut signal_weights = HashMap::new();
         signal_weights.insert(SignalType::Momentum, 0.3);
@@ -50,7 +89,25 @@ impl SignalAggregator {
         }
     }
     
-    /// Aggregate signal with existing signals
+    /// Aggregates a new signal with existing signals for the same symbol
+    /// 
+    /// This method processes incoming trading signals, stores them in the symbol's
+    /// signal history, removes expired signals, and calculates whether the aggregated
+    /// signal strength meets the confidence threshold for generating a trading order.
+    /// 
+    /// # Arguments
+    /// * `signal` - The trading signal event to aggregate
+    /// 
+    /// # Returns
+    /// * `Ok(Some(TradingEvent::OrderRequest))` - If aggregated signals meet confidence threshold
+    /// * `Ok(None)` - If signals don't meet threshold or no trading action needed
+    /// * `Err(anyhow::Error)` - If aggregation calculation fails
+    /// 
+    /// # Behavior
+    /// 1. Extracts signal details from the trading event
+    /// 2. Adds signal to symbol's history and removes expired signals
+    /// 3. Calculates weighted aggregate score for buy/sell sides
+    /// 4. Generates market order if aggregate confidence exceeds minimum threshold
     pub async fn aggregate(&self, signal: TradingEvent) -> Result<Option<TradingEvent>> {
         if let TradingEvent::Signal {
             id,
@@ -106,7 +163,25 @@ impl SignalAggregator {
         Ok(None)
     }
     
-    /// Calculate aggregate signal
+    /// Calculates aggregate signal strength and direction for a symbol
+    /// 
+    /// Computes weighted buy/sell scores from all active signals for the given symbol,
+    /// normalizes the scores, and determines if the net signal meets the confidence threshold.
+    /// 
+    /// # Arguments
+    /// * `symbol` - The trading symbol to calculate aggregation for
+    /// 
+    /// # Returns
+    /// A tuple containing:
+    /// * `bool` - Whether to execute a trade based on signal strength
+    /// * `Side` - The recommended trading side (Buy/Sell)
+    /// * `f64` - The normalized signal strength (0.0 to 1.0+)
+    /// 
+    /// # Algorithm
+    /// 1. Retrieves all active signals for the symbol
+    /// 2. Applies signal type weights to compute buy/sell scores
+    /// 3. Normalizes scores by total weight
+    /// 4. Compares net score against minimum confidence threshold
     fn calculate_aggregate(&self, symbol: Symbol) -> Result<(bool, Side, f64)> {
         let signals = self.recent_signals.read();
         
@@ -155,7 +230,22 @@ impl SignalAggregator {
         Ok((false, Side::Buy, 0.0))
     }
     
-    /// Calculate position size based on signal strength
+    /// Calculates position size based on aggregated signal strength
+    /// 
+    /// Determines the quantity to trade by scaling a base position size
+    /// according to the strength of the aggregated signal, with a maximum
+    /// scaling factor to prevent excessive position sizes.
+    /// 
+    /// # Arguments
+    /// * `strength` - The normalized signal strength (typically 0.0 to 2.0)
+    /// 
+    /// # Returns
+    /// The calculated position size as a `Qty`
+    /// 
+    /// # Implementation
+    /// - Base size: 10,000 units (1.0 in decimal representation)
+    /// - Maximum strength multiplier: 2.0
+    /// - Formula: `base_size * min(strength, 2.0)`
     fn calculate_position_size(&self, strength: f64) -> Qty {
         // Base size with scaling by strength
         let base_size = 10000; // 1 unit

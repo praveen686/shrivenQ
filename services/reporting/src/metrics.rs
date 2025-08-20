@@ -53,18 +53,39 @@ pub struct MetricsEngine {
     _padding: [u8; 32],
 }
 
+impl std::fmt::Debug for MetricsEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MetricsEngine")
+            .field("total_trades", &self.total_trades.load(Ordering::Relaxed))
+            .field("winning_trades", &self.winning_trades.load(Ordering::Relaxed))
+            .field("losing_trades", &self.losing_trades.load(Ordering::Relaxed))
+            .field("total_volume", &self.total_volume.load(Ordering::Relaxed))
+            .field("buffer_capacity", &self.buffer_capacity)
+            .finish()
+    }
+}
+
 /// Per-symbol metrics
 #[repr(C, align(64))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SymbolMetrics {
+    /// Symbol identifier
     pub symbol: Symbol,
+    /// Total number of trades for this symbol
     pub trades: u64,
+    /// Total volume traded for this symbol
     pub volume: u64,
+    /// Profit and loss for this symbol
     pub pnl: i64,
+    /// Last traded price for this symbol
     pub last_price: u64,
+    /// Best bid price for this symbol
     pub best_bid: u64,
+    /// Best ask price for this symbol
     pub best_ask: u64,
+    /// Sum of all spreads observed for this symbol
     pub spread_sum: u64,
+    /// Count of spread observations for this symbol
     pub spread_count: u64,
     _padding: [u8; 16],
 }
@@ -454,26 +475,39 @@ impl MetricsEngine {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TradingMetrics {
     // Basic trading metrics
+    /// Total number of trades executed
     pub total_trades: u64,
+    /// Number of profitable trades
     pub winning_trades: u64,
+    /// Number of losing trades
     pub losing_trades: u64,
+    /// Percentage of winning trades
     pub win_rate: f64,
+    /// Ratio of gross profit to gross loss
     pub profit_factor: f64,
 
     // Performance metrics
+    /// Risk-adjusted return measure (Sharpe ratio)
     pub sharpe_ratio: f64,
+    /// Maximum peak-to-trough decline in portfolio value
     pub max_drawdown: i64,
 
     // Volume metrics
+    /// Total trading volume across all trades
     pub total_volume: u64,
+    /// Volume from buy-side trades
     pub buy_volume: u64,
+    /// Volume from sell-side trades
     pub sell_volume: u64,
 
     // Time metrics
+    /// Timestamp of the first trade
     pub first_trade_time: u64,
+    /// Timestamp of the most recent trade
     pub last_trade_time: u64,
 
     // Symbol breakdown
+    /// Per-symbol trading metrics breakdown
     pub symbol_breakdown: FxHashMap<Symbol, SymbolMetrics>,
 }
 
@@ -512,9 +546,13 @@ impl TradingMetrics {
 #[repr(C, align(64))]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct PnL {
+    /// Realized profit and loss from closed positions
     pub realized: i64,
+    /// Unrealized profit and loss from open positions
     pub unrealized: i64,
+    /// Total profit and loss (realized + unrealized)
     pub total: i64,
+    /// Timestamp when the PnL was calculated
     pub timestamp: u64,
 }
 

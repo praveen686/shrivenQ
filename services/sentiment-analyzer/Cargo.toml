@@ -8,8 +8,9 @@ edition = "2024"
 tokio = { version = "1.47", features = ["full"] }
 
 # gRPC
-tonic = "0.12"
-prost = "0.13"
+tonic = { workspace = true }
+prost = { workspace = true }
+tonic-prost = { workspace = true }
 
 # HTTP client for Reddit API
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
@@ -39,4 +40,4 @@ dashmap = "6.1"
 sentiment = "0.1"
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-prost-build = "0.14"

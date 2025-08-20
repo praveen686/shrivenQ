@@ -10,6 +10,7 @@ use crate::order::{Order, OrderStatus, Fill, Amendment};
 use tracing::{debug, info};
 
 /// Audit trail manager
+#[derive(Debug)]
 pub struct AuditTrail {
     /// Database pool
     db_pool: PgPool,
@@ -20,55 +21,87 @@ pub struct AuditTrail {
 pub enum AuditEvent {
     /// Order created
     OrderCreated {
+        /// Unique identifier for the order
         order_id: Uuid,
+        /// Optional client-provided order identifier for tracking
         client_order_id: Option<String>,
+        /// Account identifier that placed the order
         account: String,
+        /// Symbol identifier for the trading instrument
         symbol: u16,
+        /// Order side (Buy/Sell)
         side: String,
+        /// Type of order (Market, Limit, Stop, etc.)
         order_type: String,
+        /// Order quantity in base units
         quantity: i64,
+        /// Order price in price units (None for market orders)
         price: Option<i64>,
     },
     /// Order status changed
     StatusChanged {
+        /// Unique identifier for the order whose status changed
         order_id: Uuid,
+        /// Previous order status before the change
         old_status: String,
+        /// New order status after the change
         new_status: String,
+        /// Optional reason for the status change
         reason: Option<String>,
     },
     /// Order filled
     OrderFilled {
+        /// Unique identifier for the order that was filled
         order_id: Uuid,
+        /// Unique identifier for this specific fill
         fill_id: Uuid,
+        /// Quantity filled in base units
         quantity: i64,
+        /// Fill price in price units
         price: i64,
+        /// Commission charged for this fill in base currency units
         commission: i64,
     },
     /// Order amended
     OrderAmended {
+        /// Unique identifier for the order being amended
         order_id: Uuid,
+        /// Unique identifier for this amendment request
         amendment_id: Uuid,
+        /// New quantity if being modified (None if unchanged)
         new_quantity: Option<i64>,
+        /// New price if being modified (None if unchanged)
         new_price: Option<i64>,
+        /// Reason for the amendment
         reason: String,
     },
     /// Order cancelled
     OrderCancelled {
+        /// Unique identifier for the order being cancelled
         order_id: Uuid,
+        /// Reason for the cancellation
         reason: String,
+        /// Quantity remaining unfilled when cancelled
         remaining_quantity: i64,
     },
     /// Risk check failed
     RiskCheckFailed {
+        /// Unique identifier for the order that failed risk checks
         order_id: Uuid,
+        /// Type of risk check that failed (e.g., "position_limit", "credit_limit")
         check_type: String,
+        /// Detailed reason why the risk check failed
         reason: String,
     },
     /// Position update
     PositionUpdate {
+        /// Symbol identifier for the position being updated
         symbol: u16,
+        /// Position quantity before the update
         old_position: i64,
+        /// Position quantity after the update
         new_position: i64,
+        /// Profit and loss realized from this position change
         pnl: i64,
     },
 }
@@ -348,6 +381,7 @@ pub struct AuditRecord {
 }
 
 /// Compliance report generator
+#[derive(Debug)]
 pub struct ComplianceReporter {
     /// Audit trail
     audit_trail: AuditTrail,
@@ -433,6 +467,64 @@ pub struct ComplianceReport {
     pub total_volume: i64,
     /// Audit records
     pub audit_records: usize,
+}
+
+/// Audit statistics summary
+#[derive(Debug, Clone)]
+pub struct AuditStatistics {
+    /// Total audit events in period
+    pub total_events: u64,
+    /// Number of orders created
+    pub orders_created: u64,
+    /// Number of status changes
+    pub status_changes: u64,
+    /// Number of order fills
+    pub order_fills: u64,
+    /// Number of cancellations
+    pub cancellations: u64,
+    /// Period start
+    pub period_start: DateTime<Utc>,
+    /// Period end
+    pub period_end: DateTime<Utc>,
+}
+
+impl AuditTrail {
+    /// Get audit statistics using raw SQL queries with Row extraction
+    pub async fn get_audit_statistics(&self, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<AuditStatistics> {
+        let row = sqlx::query(
+            r#"
+            SELECT 
+                COUNT(*) as total_events,
+                COUNT(CASE WHEN event_type = 'OrderCreated' THEN 1 END) as orders_created,
+                COUNT(CASE WHEN event_type = 'StatusChanged' THEN 1 END) as status_changes,
+                COUNT(CASE WHEN event_type = 'OrderFilled' THEN 1 END) as order_fills,
+                COUNT(CASE WHEN event_type = 'OrderCancelled' THEN 1 END) as cancellations
+            FROM audit_log 
+            WHERE timestamp BETWEEN $1 AND $2
+            "#
+        )
+        .bind(from)
+        .bind(to)
+        .fetch_one(&self.db_pool)
+        .await?;
+        
+        // Use Row trait to extract values manually
+        let total_events: i64 = row.get("total_events");
+        let orders_created: i64 = row.get("orders_created");
+        let status_changes: i64 = row.get("status_changes");
+        let order_fills: i64 = row.get("order_fills");
+        let cancellations: i64 = row.get("cancellations");
+        
+        Ok(AuditStatistics {
+            total_events: total_events as u64,
+            orders_created: orders_created as u64,
+            status_changes: status_changes as u64,
+            order_fills: order_fills as u64,
+            cancellations: cancellations as u64,
+            period_start: from,
+            period_end: to,
+        })
+    }
 }
 
 #[cfg(test)]

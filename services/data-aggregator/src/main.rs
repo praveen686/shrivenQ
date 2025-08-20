@@ -36,7 +36,7 @@ const DEFAULT_WAL_PATH: &str = "./data/wal";
 const HEALTH_CHECK_INTERVAL_SECS: u64 = 10;
 
 /// Data Aggregator gRPC Service Implementation
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DataAggregatorService {
     /// WAL storage for persistence
     wal: Arc<RwLock<Wal>>,

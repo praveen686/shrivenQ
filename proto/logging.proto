@@ -2,49 +2,71 @@ syntax = "proto3";
 
 package logging;
 
-// Single log request
+/// Single log request
 message LogRequest {
+    /// Service name that generated the log
     string service = 1;
-    string level = 2;  // TRACE, DEBUG, INFO, WARN, ERROR
+    /// Log level: TRACE, DEBUG, INFO, WARN, ERROR
+    string level = 2;
+    /// Log message content
     string message = 3;
-    string fields = 4;  // JSON encoded fields
+    /// JSON encoded structured fields
+    string fields = 4;
+    /// Distributed tracing trace ID
     string trace_id = 5;
+    /// Distributed tracing span ID
     string span_id = 6;
+    /// Correlation ID for request tracking
     string correlation_id = 7;
 }
 
-// Batch of logs
+/// Batch of logs for efficient bulk submission
 message LogBatch {
+    /// Collection of log requests
     repeated LogRequest logs = 1;
 }
 
-// Log response
+/// Response for log submission operations
 message LogResponse {
+    /// Whether the log operation was successful
     bool success = 1;
 }
 
-// Log entry in response
+/// Log entry in query responses
 message LogEntry {
+    /// Unix timestamp in milliseconds
     int64 timestamp = 1;
+    /// Log level string
     string level = 2;
+    /// Service that generated the log
     string service = 3;
+    /// Log message content
     string message = 4;
+    /// JSON encoded structured fields
     string fields = 5;
+    /// Distributed tracing trace ID
     string trace_id = 6;
+    /// Distributed tracing span ID
     string span_id = 7;
+    /// Correlation ID for request tracking
     string correlation_id = 8;
 }
 
-// Get logs request
+/// Request to query historical logs
 message GetLogsRequest {
+    /// Filter by service name
     string service = 1;
+    /// Maximum number of logs to return
     int32 limit = 2;
-    int64 since_timestamp = 3;  // Unix timestamp in milliseconds
-    string level_filter = 4;    // Minimum level to return
+    /// Only return logs after this timestamp (Unix milliseconds)
+    int64 since_timestamp = 3;
+    /// Minimum log level to include in results
+    string level_filter = 4;
 }
 
-// Get logs response
+/// Response containing queried logs
 message GetLogsResponse {
+    /// Array of matching log entries
     repeated LogEntry logs = 1;
 }
 

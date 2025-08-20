@@ -11,7 +11,30 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{debug, info};
 
-/// Market making strategy
+/// Market making strategy for continuous bid/ask quoting
+/// 
+/// The `MarketMakingStrategy` provides liquidity to the market by continuously
+/// quoting bid and ask prices around the fair value. It dynamically adjusts
+/// spreads based on market toxicity (VPIN) and skews prices based on order
+/// book imbalance to manage adverse selection risk.
+/// 
+/// # Strategy Features
+/// - **Dynamic Spread Adjustment**: Widens spreads during toxic flow periods
+/// - **Price Skewing**: Adjusts quotes based on order book imbalance
+/// - **Inventory Management**: Tracks and limits position exposure per symbol
+/// - **Quote Staleness Detection**: Monitors quote freshness for risk control
+/// - **Risk Controls**: Enforces maximum inventory limits per symbol
+/// 
+/// # Risk Management
+/// - Maximum inventory limits prevent excessive directional exposure
+/// - Spread widening during high VPIN periods reduces adverse selection
+/// - Quote staleness checks ensure prices remain competitive
+/// - Circuit breaker integration for emergency risk control
+/// 
+/// # Performance Characteristics
+/// - Low latency quote updates using atomic operations and RwLocks
+/// - Thread-safe inventory tracking across multiple symbols
+/// - Configurable spread and inventory parameters
 pub struct MarketMakingStrategy {
     /// Strategy name
     name: String,
@@ -39,8 +62,35 @@ struct QuoteState {
     last_update: Instant,
 }
 
+impl std::fmt::Debug for MarketMakingStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MarketMakingStrategy")
+            .field("name", &self.name)
+            .field("orders_generated", &self.orders_generated.load(std::sync::atomic::Ordering::Relaxed))
+            .field("target_spread_bps", &self.target_spread_bps)
+            .field("max_inventory", &self.max_inventory)
+            .field("active_quotes_count", &self.active_quotes.read().len())
+            .field("inventory_symbols", &self.inventory.read().len())
+            .finish()
+    }
+}
+
 impl MarketMakingStrategy {
-    /// Create new market making strategy
+    /// Creates a new market making strategy with default configuration
+    /// 
+    /// # Returns
+    /// A new `MarketMakingStrategy` instance with:
+    /// - Target spread of 10 basis points
+    /// - Maximum inventory limit of 100,000 units (10.0 in decimal)
+    /// - Empty quote and inventory tracking
+    /// - Healthy component status
+    /// 
+    /// # Default Configuration
+    /// - **Target Spread**: 10 basis points (0.1%)
+    /// - **Max Inventory**: 100,000 units per symbol
+    /// - **Base Quote Size**: 10,000 units (1.0 in decimal)
+    /// - **Spread Adjustment**: Dynamic based on VPIN toxicity
+    /// - **Price Skewing**: Based on order book imbalance
     pub fn new() -> Self {
         Self {
             name: "MarketMaker".to_string(),
@@ -87,7 +137,17 @@ impl MarketMakingStrategy {
         (bid_price, ask_price, bid_size, ask_size)
     }
     
-    /// Get current quotes for a symbol
+    /// Retrieves the current bid and ask quotes for a symbol
+    /// 
+    /// # Arguments
+    /// * `symbol` - The trading symbol to get quotes for
+    /// 
+    /// # Returns
+    /// * `Some((bid_price, ask_price, bid_size, ask_size))` - If valid quotes exist
+    /// * `None` - If no quotes available or quotes are incomplete
+    /// 
+    /// This method provides read-only access to the current market making
+    /// quotes. It only returns quotes when both bid and ask prices are available.
     pub fn get_quotes(&self, symbol: &Symbol) -> Option<(Px, Px, Qty, Qty)> {
         let quotes = self.active_quotes.read();
         quotes.get(symbol).and_then(|q| {
@@ -98,7 +158,18 @@ impl MarketMakingStrategy {
         })
     }
     
-    /// Check if quotes are stale
+    /// Checks if the quotes for a symbol are stale based on age
+    /// 
+    /// # Arguments
+    /// * `symbol` - The trading symbol to check
+    /// * `max_age_secs` - Maximum allowed age in seconds
+    /// 
+    /// # Returns
+    /// * `true` - If quotes don't exist or are older than max_age_secs
+    /// * `false` - If quotes exist and are fresh
+    /// 
+    /// This method helps determine when quotes need to be refreshed
+    /// based on market data updates or time-based expiration.
     pub fn quotes_are_stale(&self, symbol: &Symbol, max_age_secs: u64) -> bool {
         let quotes = self.active_quotes.read();
         quotes.get(symbol).map_or(true, |q| {
@@ -106,7 +177,22 @@ impl MarketMakingStrategy {
         })
     }
     
-    /// Check inventory limits
+    /// Validates if a proposed trade would violate inventory limits
+    /// 
+    /// # Arguments
+    /// * `symbol` - The trading symbol
+    /// * `side` - The proposed trade side (Buy/Sell)
+    /// * `size` - The proposed trade size
+    /// 
+    /// # Returns
+    /// * `true` - If the trade is within inventory limits
+    /// * `false` - If the trade would exceed maximum position limits
+    /// 
+    /// # Risk Management
+    /// - For Buy orders: Checks if position + size <= max_inventory
+    /// - For Sell orders: Checks if position - size >= -max_inventory
+    /// - Uses current inventory position for each symbol
+    /// - Prevents excessive long or short positions
     fn check_inventory(&self, symbol: Symbol, side: Side, size: Qty) -> bool {
         let inventory = self.inventory.read();
         let current = inventory.get(&symbol).copied().unwrap_or(0);

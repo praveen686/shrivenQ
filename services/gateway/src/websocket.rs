@@ -20,7 +20,16 @@ pub struct WebSocketHandler {
     grpc_clients: Arc<GrpcClients>,
 }
 
+impl std::fmt::Debug for WebSocketHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WebSocketHandler")
+            .field("grpc_clients", &"Arc<GrpcClients>")
+            .finish()
+    }
+}
+
 impl WebSocketHandler {
+    /// Create a new WebSocket handler
     pub const fn new(grpc_clients: Arc<GrpcClients>) -> Self {
         Self { grpc_clients }
     }

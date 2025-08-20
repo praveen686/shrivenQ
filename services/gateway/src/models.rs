@@ -6,50 +6,74 @@ use serde::{Deserialize, Serialize};
 /// Authentication models
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginRequest {
+    /// Username for authentication
     pub username: String,
+    /// Password for authentication
     pub password: String,
+    /// Optional exchange identifier
     pub exchange: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginResponse {
+    /// JWT access token
     pub token: String,
+    /// Refresh token for obtaining new access tokens
     pub refresh_token: String,
+    /// Token expiration timestamp
     pub expires_at: i64,
+    /// User permissions
     pub permissions: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RefreshTokenRequest {
+    /// Refresh token to exchange for new access token
     pub refresh_token: String,
 }
 
 /// Order management models
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SubmitOrderRequest {
+    /// Optional client-generated order ID
     pub client_order_id: Option<String>,
+    /// Trading symbol (e.g., "BTCUSDT")
     pub symbol: String,
-    pub side: String,                  // "BUY" or "SELL"
-    pub quantity: String,              // Fixed-point as string to preserve precision
-    pub order_type: String,            // "MARKET", "LIMIT", etc.
-    pub limit_price: Option<String>,   // Fixed-point as string
-    pub stop_price: Option<String>,    // Fixed-point as string
-    pub time_in_force: Option<String>, // "GTC", "IOC", "FOK", "DAY"
+    /// Order side: "BUY" or "SELL"
+    pub side: String,
+    /// Order quantity as fixed-point string
+    pub quantity: String,
+    /// Order type: "MARKET", "LIMIT", etc.
+    pub order_type: String,
+    /// Limit price as fixed-point string (for limit orders)
+    pub limit_price: Option<String>,
+    /// Stop price as fixed-point string (for stop orders)
+    pub stop_price: Option<String>,
+    /// Time in force: "GTC", "IOC", "FOK", "DAY"
+    pub time_in_force: Option<String>,
+    /// Target venue/exchange
     pub venue: Option<String>,
+    /// Strategy identifier
     pub strategy_id: Option<String>,
+    /// Additional order parameters
     pub params: Option<FxHashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SubmitOrderResponse {
+    /// Generated order ID
     pub order_id: i64,
+    /// Order submission status
     pub status: String,
+    /// Status message
     pub message: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CancelOrderRequest {
+    /// Order ID to cancel
     pub order_id: Option<i64>,
+    /// Client order ID to cancel
     pub client_order_id: Option<String>,
 }
 
@@ -189,34 +213,46 @@ pub struct PositionInfo {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KillSwitchRequest {
+    /// Whether to activate the kill switch
     pub activate: bool,
+    /// Reason for activation/deactivation
     pub reason: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KillSwitchResponse {
+    /// Whether the operation was successful
     pub success: bool,
+    /// Current kill switch status
     pub is_active: bool,
 }
 
 /// Error response model
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ErrorResponse {
+    /// Error code identifier
     pub error: String,
+    /// Human-readable error message
     pub message: String,
+    /// Additional error details
     pub details: Option<FxHashMap<String, String>>,
 }
 
 /// Generic API response wrapper
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApiResponse<T> {
+    /// Whether the request was successful
     pub success: bool,
+    /// Response data (if successful)
     pub data: Option<T>,
+    /// Error details (if failed)
     pub error: Option<ErrorResponse>,
+    /// Response timestamp
     pub timestamp: i64,
 }
 
 impl<T> ApiResponse<T> {
+    /// Create a successful API response
     pub fn success(data: T) -> Self {
         Self {
             success: true,
@@ -226,6 +262,7 @@ impl<T> ApiResponse<T> {
         }
     }
 
+    /// Create an error API response
     #[must_use] pub fn error(error: ErrorResponse) -> Self {
         Self {
             success: false,
@@ -239,16 +276,23 @@ impl<T> ApiResponse<T> {
 /// WebSocket message types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebSocketMessage {
+    /// Message type identifier
     pub message_type: String,
+    /// Message payload
     pub data: serde_json::Value,
+    /// Message timestamp
     pub timestamp: i64,
 }
 
 /// Health check response
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HealthCheckResponse {
+    /// Overall health status
     pub status: String,
+    /// Service health status map
     pub services: FxHashMap<String, bool>,
+    /// Service version
     pub version: String,
+    /// Service uptime in seconds
     pub uptime_seconds: u64,
 }

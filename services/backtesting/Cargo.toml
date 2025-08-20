@@ -8,8 +8,8 @@ edition = "2024"
 tokio = { version = "1.47", features = ["full"] }
 
 # gRPC
-tonic = "0.12"
-prost = "0.13"
+tonic = { workspace = true }
+prost = { workspace = true }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -40,5 +40,14 @@ statrs = "0.18"
 # Performance analysis
 hdrhistogram = "7.5"
 
+[dev-dependencies]
+# Testing framework
+rstest = "0.23"
+tokio-test = "0.4"
+
+# Test utilities
+tempfile = "3.10"
+assert_matches = "1.5"
+
 [build-dependencies]
-tonic-build = "0.12"
+tonic-prost-build = "0.14"

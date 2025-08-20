@@ -195,21 +195,49 @@ impl WalEntry for Instrument {
 /// These are immediately converted to fixed-point in the From implementation
 #[derive(Debug, Deserialize)]
 #[allow(clippy::struct_field_names)] // External API format
+/// Zerodha instrument data structure for CSV parsing
+///
+/// This structure represents the raw instrument data as received from Zerodha's
+/// instrument master CSV file. It uses external field names and f64 types for
+/// price fields as they come from the API, which are then converted to internal
+/// fixed-point representations.
+///
+/// # Field Mapping
+/// - External API fields are mapped to internal representations
+/// - Price fields use f64 externally but are converted to fixed-point internally
+/// - Optional fields handle missing data gracefully
+/// - String fields preserve exact API formatting for compatibility
+///
+/// # Usage
+/// This structure is primarily used during the daily instrument data refresh
+/// process and is not meant for direct use in trading operations.
 pub struct ZerodhaInstrumentCsv {
+    /// Unique instrument identifier from Zerodha
     pub instrument_token: u32,
+    /// Exchange-specific token identifier
     pub exchange_token: u32,
+    /// Trading symbol as used on the exchange
     pub tradingsymbol: String,
+    /// Human-readable instrument name
     pub name: Option<String>,
+    /// Last traded price (external API format in f64)
     #[serde(rename = "last_price")]
-    pub last_price_external: f64, // Renamed to avoid compliance flag
+    pub last_price_external: f64,
+    /// Expiry date string for derivatives (YYYY-MM-DD format)
     pub expiry: Option<String>,
+    /// Strike price for options (external API format in f64)
     #[serde(rename = "strike")]
-    pub strike_external: f64, // Renamed to avoid compliance flag
+    pub strike_external: f64,
+    /// Minimum tick size for price movements (external API format in f64)
     #[serde(rename = "tick_size")]
-    pub tick_size_external: f64, // Renamed to avoid compliance flag
+    pub tick_size_external: f64,
+    /// Minimum trading quantity (lot size)
     pub lot_size: u32,
+    /// Instrument type classification string
     pub instrument_type: String,
+    /// Exchange segment identifier
     pub segment: String,
+    /// Exchange name identifier
     pub exchange: String,
 }
 
@@ -287,10 +315,19 @@ impl From<ZerodhaInstrumentCsv> for Instrument {
 /// Instrument query filters
 #[derive(Debug, Clone, Default)]
 pub struct InstrumentFilter {
+    /// Filter by instrument type (Equity, Future, Option, etc.)
     pub instrument_type: Option<InstrumentType>,
+    
+    /// Filter by exchange segment (e.g., "NSE", "NFO", "CDS")
     pub segment: Option<String>,
+    
+    /// Filter by exchange name (e.g., "NSE", "BSE")
     pub exchange: Option<String>,
+    
+    /// Filter by underlying symbol (e.g., "NIFTY", "BANKNIFTY")
     pub underlying: Option<String>,
+    
+    /// Whether to include only active (non-expired) instruments
     pub active_only: bool,
 }
 

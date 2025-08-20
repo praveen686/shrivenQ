@@ -58,6 +58,7 @@ struct AlertSubscriptionState {
 }
 
 /// Risk service client with production-grade streaming support
+#[derive(Debug)]
 pub struct RiskClient {
     /// gRPC client
     client: Arc<RwLock<Option<GrpcClient<Channel>>>>,

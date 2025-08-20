@@ -20,8 +20,9 @@ use crate::{
 };
 
 /// Query parameters for order lookup
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct OrderQuery {
+    /// Optional client order ID for order lookup
     pub client_order_id: Option<String>,
 }
 
@@ -29,6 +30,14 @@ pub struct OrderQuery {
 #[derive(Clone)]
 pub struct ExecutionHandlers {
     grpc_clients: Arc<GrpcClients>,
+}
+
+impl std::fmt::Debug for ExecutionHandlers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExecutionHandlers")
+            .field("grpc_clients", &"Arc<GrpcClients>")
+            .finish()
+    }
 }
 
 impl ExecutionHandlers {

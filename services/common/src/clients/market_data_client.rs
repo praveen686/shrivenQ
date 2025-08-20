@@ -1,6 +1,6 @@
 //! Market data service gRPC client wrapper with production-grade streaming support
 
-use crate::network::{DEFAULT_CONNECT_TIMEOUT_SECS, DEFAULT_REQUEST_TIMEOUT_SECS, MAX_RECONNECT_ATTEMPTS, RECONNECT_BACKOFF_MS, EVENT_BUFFER_SIZE, DEFAULT_HEARTBEAT_INTERVAL_SECS, MAX_BACKOFF_MS};
+use crate::types::constants::network::{DEFAULT_CONNECT_TIMEOUT_SECS, DEFAULT_REQUEST_TIMEOUT_SECS, MAX_RECONNECT_ATTEMPTS, RECONNECT_BACKOFF_MS, EVENT_BUFFER_SIZE, DEFAULT_HEARTBEAT_INTERVAL_SECS, MAX_BACKOFF_MS};
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use rustc_hash::FxHashMap;
@@ -60,6 +60,7 @@ struct SubscriptionState {
 }
 
 /// Market data service client with production-grade streaming support
+#[derive(Debug)]
 pub struct MarketDataClient {
     /// gRPC client
     client: Arc<RwLock<Option<GrpcClient<Channel>>>>,

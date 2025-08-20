@@ -16,7 +16,25 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, RwLock as TokioRwLock};
 use tracing::{debug, info, warn};
 
-/// Execution engine for order management
+/// Execution engine for intelligent order management and routing
+///
+/// The ExecutionEngine provides sophisticated order execution capabilities with smart routing
+/// to optimize trade execution. It supports multiple order types including market, limit,
+/// TWAP (Time-Weighted Average Price), and VWAP (Volume-Weighted Average Price) orders.
+///
+/// # Features
+/// - Smart order routing with venue optimization
+/// - Real-time order state tracking
+/// - Execution metrics and performance monitoring
+/// - Support for algorithmic execution strategies
+/// - Thread-safe concurrent order processing
+///
+/// # Example
+/// ```rust
+/// let execution_engine = ExecutionEngine::new(event_bus.clone());
+/// execution_engine.initialize().await?;
+/// execution_engine.submit_order(order_event).await?;
+/// ```
 pub struct ExecutionEngine {
     /// Event bus
     event_bus: Arc<broadcast::Sender<TradingEvent>>,
@@ -33,7 +51,27 @@ pub struct ExecutionEngine {
     update_rx: Arc<TokioRwLock<mpsc::UnboundedReceiver<OrderUpdate>>>,
 }
 
-/// Order state tracking
+impl std::fmt::Debug for ExecutionEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExecutionEngine")
+            .field("active_orders_count", &self.active_orders.len())
+            .field("next_order_id", &self.order_id_gen.load(std::sync::atomic::Ordering::Relaxed))
+            .field("has_router", &self.router.read().is_some())
+            .field("metrics", &self.metrics)
+            .finish()
+    }
+}
+
+/// Comprehensive order state tracking for execution monitoring
+///
+/// Maintains the complete lifecycle state of an order from submission to completion.
+/// Used for tracking execution progress, calculating average fill prices, and
+/// monitoring order status changes.
+///
+/// # Fields
+/// - Immutable order identification and parameters
+/// - Mutable execution state (quantity filled, average price)
+/// - Status tracking with timestamps
 #[derive(Debug, Clone)]
 pub struct OrderState {
     /// Order ID
@@ -60,7 +98,16 @@ pub struct OrderState {
     pub updated_at: Ts,
 }
 
-/// Order update message
+/// Order execution update message for internal communication
+///
+/// Used internally to communicate order execution events between the execution
+/// engine and order update processors. Contains execution details that trigger
+/// order state updates and event notifications.
+///
+/// # Purpose
+/// - Communicate partial and complete fills
+/// - Update order status changes
+/// - Trigger execution report generation
 #[derive(Debug, Clone)]
 pub struct OrderUpdate {
     /// Order ID
@@ -75,7 +122,17 @@ pub struct OrderUpdate {
     pub timestamp: Ts,
 }
 
-/// Execution metrics
+/// Real-time execution performance metrics
+///
+/// Tracks key performance indicators for order execution including throughput,
+/// fill rates, latency, and volume statistics. All metrics are thread-safe
+/// and updated atomically during order processing.
+///
+/// # Metrics Tracked
+/// - Order submission and completion counts
+/// - Execution volume and fill rates
+/// - Performance timing (fill latency)
+/// - Order lifecycle statistics
 pub struct ExecutionMetrics {
     /// Total orders submitted
     pub orders_submitted: AtomicU64,
@@ -91,8 +148,32 @@ pub struct ExecutionMetrics {
     pub avg_fill_latency_us: AtomicU64,
 }
 
+impl std::fmt::Debug for ExecutionMetrics {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExecutionMetrics")
+            .field("orders_submitted", &self.orders_submitted.load(Ordering::Relaxed))
+            .field("orders_filled", &self.orders_filled.load(Ordering::Relaxed))
+            .field("orders_cancelled", &self.orders_cancelled.load(Ordering::Relaxed))
+            .field("orders_rejected", &self.orders_rejected.load(Ordering::Relaxed))
+            .field("volume_executed", &self.volume_executed.load(Ordering::Relaxed))
+            .field("avg_fill_latency_us", &self.avg_fill_latency_us.load(Ordering::Relaxed))
+            .finish()
+    }
+}
+
 impl ExecutionEngine {
-    /// Create new execution engine
+    /// Creates a new execution engine instance
+    ///
+    /// # Arguments
+    /// * `event_bus` - Shared event bus for broadcasting trading events
+    ///
+    /// # Returns
+    /// A new ExecutionEngine ready for initialization
+    ///
+    /// # Example
+    /// ```rust
+    /// let execution_engine = ExecutionEngine::new(event_bus.clone());
+    /// ```
     pub fn new(event_bus: Arc<broadcast::Sender<TradingEvent>>) -> Self {
         let (update_tx, update_rx) = mpsc::unbounded_channel();
         
@@ -114,7 +195,19 @@ impl ExecutionEngine {
         }
     }
     
-    /// Initialize connection to execution router
+    /// Initializes the execution engine and establishes connections
+    ///
+    /// Sets up the execution router connection and starts internal order update
+    /// processing. Must be called before submitting orders.
+    ///
+    /// # Returns
+    /// - `Ok(())` if initialization succeeds
+    /// - `Err` if router setup or processor start fails
+    ///
+    /// # Example
+    /// ```rust
+    /// execution_engine.initialize().await?;
+    /// ```
     pub async fn initialize(&self) -> Result<()> {
         info!("Initializing execution engine");
         
@@ -129,7 +222,35 @@ impl ExecutionEngine {
         Ok(())
     }
     
-    /// Submit order for execution
+    /// Submits an order for execution through the smart routing system
+    ///
+    /// Processes order requests and routes them to appropriate execution algorithms
+    /// based on order type. Generates unique order IDs and tracks order state.
+    ///
+    /// # Arguments
+    /// * `order` - Trading event containing order details (symbol, side, quantity, etc.)
+    ///
+    /// # Returns
+    /// - `Ok(())` if order is successfully submitted for execution
+    /// - `Err` if order validation or routing fails
+    ///
+    /// # Supported Order Types
+    /// - Market: Immediate execution at current market price
+    /// - Limit: Execution at specified price or better
+    /// - TWAP: Time-weighted average price algorithm
+    /// - VWAP: Volume-weighted average price algorithm
+    ///
+    /// # Example
+    /// ```rust
+    /// let order = TradingEvent::OrderRequest {
+    ///     symbol: Symbol::from("BTCUSDT"),
+    ///     side: Side::Buy,
+    ///     order_type: OrderType::Market,
+    ///     quantity: Qty::from(100),
+    ///     // ... other fields
+    /// };
+    /// execution_engine.submit_order(order).await?;
+    /// ```
     pub async fn submit_order(&self, order: TradingEvent) -> Result<()> {
         let start = Ts::now();
         
@@ -332,7 +453,26 @@ impl ExecutionEngine {
         Ok(())
     }
     
-    /// Cancel order
+    /// Cancels an active order by order ID
+    ///
+    /// Attempts to cancel an order that is currently pending, accepted, or partially filled.
+    /// Updates order state to cancelled and broadcasts cancellation event.
+    ///
+    /// # Arguments
+    /// * `order_id` - Unique identifier of the order to cancel
+    ///
+    /// # Returns
+    /// - `Ok(())` if cancellation is processed successfully
+    /// - `Err` if cancellation fails
+    ///
+    /// # Note
+    /// Only orders in Pending, Accepted, or PartiallyFilled status can be cancelled.
+    /// Completed or already cancelled orders are ignored.
+    ///
+    /// # Example
+    /// ```rust
+    /// execution_engine.cancel_order(12345).await?;
+    /// ```
     pub async fn cancel_order(&self, order_id: u64) -> Result<()> {
         if let Some(mut order) = self.active_orders.get_mut(&order_id) {
             if matches!(order.status, OrderStatus::Pending | OrderStatus::Accepted | OrderStatus::PartiallyFilled) {
@@ -360,7 +500,20 @@ impl ExecutionEngine {
         Ok(())
     }
     
-    /// Cancel all orders
+    /// Cancels all active orders in the system
+    ///
+    /// Emergency function to cancel all pending, accepted, and partially filled orders.
+    /// Useful for risk management or system shutdown scenarios.
+    ///
+    /// # Returns
+    /// - `Ok(())` if all cancellations are processed successfully
+    /// - `Err` if any cancellation fails
+    ///
+    /// # Example
+    /// ```rust
+    /// // Emergency stop - cancel everything
+    /// execution_engine.cancel_all_orders().await?;
+    /// ```
     pub async fn cancel_all_orders(&self) -> Result<()> {
         let order_ids: Vec<u64> = self.active_orders
             .iter()
@@ -445,12 +598,38 @@ impl ExecutionEngine {
         });
     }
     
-    /// Get order state
+    /// Retrieves the current state of an order by ID
+    ///
+    /// # Arguments
+    /// * `order_id` - Unique identifier of the order
+    ///
+    /// # Returns
+    /// - `Some(OrderState)` if order exists
+    /// - `None` if order ID is not found
+    ///
+    /// # Example
+    /// ```rust
+    /// if let Some(order) = execution_engine.get_order(12345) {
+    ///     println!("Order status: {:?}", order.status);
+    /// }
+    /// ```
     pub fn get_order(&self, order_id: u64) -> Option<OrderState> {
         self.active_orders.get(&order_id).map(|e| e.clone())
     }
     
-    /// Get all active orders
+    /// Returns all currently active orders
+    ///
+    /// Filters orders to include only those in Pending, Accepted, or PartiallyFilled status.
+    /// Useful for monitoring current trading activity and risk exposure.
+    ///
+    /// # Returns
+    /// Vector of OrderState for all active orders
+    ///
+    /// # Example
+    /// ```rust
+    /// let active_orders = execution_engine.get_active_orders();
+    /// println!("Currently tracking {} active orders", active_orders.len());
+    /// ```
     pub fn get_active_orders(&self) -> Vec<OrderState> {
         self.active_orders
             .iter()
@@ -460,7 +639,20 @@ impl ExecutionEngine {
             .collect()
     }
     
-    /// Get execution metrics
+    /// Returns a snapshot of current execution performance metrics
+    ///
+    /// Provides comprehensive statistics about execution engine performance including
+    /// order counts, fill rates, volume, and latency measurements.
+    ///
+    /// # Returns
+    /// ExecutionMetricsSnapshot containing current performance statistics
+    ///
+    /// # Example
+    /// ```rust
+    /// let metrics = execution_engine.get_metrics();
+    /// println!("Fill rate: {:.2}%", metrics.fill_rate);
+    /// println!("Avg latency: {}μs", metrics.avg_fill_latency_us);
+    /// ```
     pub fn get_metrics(&self) -> ExecutionMetricsSnapshot {
         ExecutionMetricsSnapshot {
             orders_submitted: self.metrics.orders_submitted.load(Ordering::Relaxed),
@@ -479,7 +671,15 @@ impl ExecutionEngine {
     }
 }
 
-/// Execution metrics snapshot
+/// Immutable snapshot of execution engine performance metrics
+///
+/// Contains point-in-time statistics about execution engine performance.
+/// All metrics are computed from atomic counters to ensure consistency.
+///
+/// # Key Metrics
+/// - Order lifecycle statistics (submitted, filled, cancelled, rejected)
+/// - Volume and performance measurements
+/// - Calculated ratios (fill rate percentage)
 #[derive(Debug, Clone)]
 pub struct ExecutionMetricsSnapshot {
     /// Total orders submitted

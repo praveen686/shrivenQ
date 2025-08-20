@@ -179,6 +179,19 @@ pub struct Wal {
     segment_index: u64,
 }
 
+impl std::fmt::Debug for Wal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Wal")
+            .field("path", &self.path)
+            .field("has_current_file", &self.current_file.is_some())
+            .field("sequence", &self.sequence)
+            .field("segment_size", &self.segment_size)
+            .field("current_segment_size", &self.current_segment_size)
+            .field("segment_index", &self.segment_index)
+            .finish()
+    }
+}
+
 impl Wal {
     /// Create new WAL
     pub fn new(path: &Path, segment_size: Option<usize>) -> Result<Self> {
@@ -263,6 +276,17 @@ pub struct WalIterator<T> {
     current_file: Option<std::fs::File>,
     from_ts: Option<crate::Ts>,
     _marker: std::marker::PhantomData<T>,
+}
+
+impl<T> std::fmt::Debug for WalIterator<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WalIterator")
+            .field("segment_files", &self.segment_files)
+            .field("current_file_index", &self.current_file_index)
+            .field("has_current_file", &self.current_file.is_some())
+            .field("from_ts", &self.from_ts)
+            .finish()
+    }
 }
 
 impl<T> WalIterator<T> {

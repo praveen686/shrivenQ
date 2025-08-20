@@ -92,18 +92,35 @@ pub struct MarketFeedManager {
     market_client: Option<Channel>,
 }
 
+impl std::fmt::Debug for MarketFeedManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MarketFeedManager")
+            .field("price_cache_count", &self.price_cache.len())
+            .field("index_cache_count", &self.index_cache.len())
+            .field("has_market_client", &self.market_client.is_some())
+            .finish()
+    }
+}
+
 /// Price update message
 #[derive(Debug, Clone)]
 pub struct PriceUpdate {
+    /// Symbol being updated
     pub symbol: Symbol,
+    /// Best bid price (fixed-point)
     pub bid: i64,
+    /// Best ask price (fixed-point)
     pub ask: i64,
+    /// Last traded price (fixed-point)
     pub last: i64,
+    /// Trading volume
     pub volume: i64,
+    /// Update timestamp in nanoseconds
     pub timestamp: u64,
 }
 
 /// Historical returns buffer for calculations
+#[derive(Debug)]
 pub struct ReturnsBuffer {
     /// Symbol returns (pre-allocated)
     symbol_returns: FxHashMap<Symbol, Vec<i64>>,

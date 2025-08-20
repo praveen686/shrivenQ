@@ -94,30 +94,32 @@ macro_rules! assert_err_matches {
 }
 
 /// Assert that two collections have the same elements (order independent)
+/// 
+/// This function checks that two collections contain the same elements with
+/// the same frequencies, regardless of order. It properly handles duplicates
+/// by counting occurrences of each element.
 pub fn assert_same_elements<T: PartialEq + Debug + Clone>(left: &[T], right: &[T]) {
-    let mut left_sorted = left.to_vec();
-    let mut right_sorted = right.to_vec();
-    
-    // Note: This requires T: Ord, but for simplicity we'll just check lengths
+    // First check lengths for fast failure
     assert_eq!(
-        left_sorted.len(),
-        right_sorted.len(),
-        "Collections have different lengths"
+        left.len(),
+        right.len(),
+        "Collections have different lengths: left has {} elements, right has {} elements",
+        left.len(),
+        right.len()
     );
     
+    // Count occurrences of each element in both collections
     for element in left {
-        assert!(
-            right.contains(element),
-            "Right collection does not contain element: {:?}",
-            element
-        );
-    }
-    
-    for element in right {
-        assert!(
-            left.contains(element),
-            "Left collection does not contain element: {:?}",
-            element
+        let left_count = left.iter().filter(|&e| e == element).count();
+        let right_count = right.iter().filter(|&e| e == element).count();
+        
+        assert_eq!(
+            left_count,
+            right_count,
+            "Element {:?} appears {} times in left collection but {} times in right collection",
+            element,
+            left_count,
+            right_count
         );
     }
 }
@@ -133,7 +135,12 @@ macro_rules! assert_panics {
     };
 }
 
-/// Performance assertion
+/// Performance assertion for testing execution time limits
+/// 
+/// This struct measures the time taken by operations and automatically
+/// asserts that they complete within specified time limits when dropped.
+/// Useful for ensuring performance requirements in tests.
+#[derive(Debug)]
 pub struct PerformanceAssertion {
     name: String,
     start: std::time::Instant,
@@ -141,6 +148,16 @@ pub struct PerformanceAssertion {
 }
 
 impl PerformanceAssertion {
+    /// Creates a new performance assertion that starts timing immediately
+    /// 
+    /// The assertion will automatically check performance when dropped.
+    /// 
+    /// # Arguments
+    /// * `name` - A descriptive name for the operation being timed
+    /// * `max_duration` - The maximum allowed duration for the operation
+    /// 
+    /// # Returns
+    /// * A new PerformanceAssertion that starts timing immediately
     pub fn new(name: impl Into<String>, max_duration: std::time::Duration) -> Self {
         Self {
             name: name.into(),
@@ -237,39 +254,76 @@ where
     results
 }
 
-/// Custom assertion traits
+/// Extension trait providing additional assertion methods for Option types
+/// 
+/// This trait adds convenient assertion methods to Option types for testing,
+/// making it easier to assert on Some/None variants with clear error messages.
 pub trait AssertionExt<T> {
+    /// Asserts that the Option is Some and returns the contained value
+    /// 
+    /// # Panics
+    /// Panics if the Option is None
+    /// 
+    /// # Returns
+    /// The contained value if Some
     fn assert_some(self) -> T;
+    
+    /// Asserts that the Option is None
+    /// 
+    /// # Panics
+    /// Panics if the Option is Some
     fn assert_none(self);
 }
 
 impl<T: Debug> AssertionExt<T> for Option<T> {
+    /// Implementation of assert_some for Option types
     fn assert_some(self) -> T {
         self.expect("Expected Some, got None")
     }
     
+    /// Implementation of assert_none for Option types
     fn assert_none(self) {
         assert!(self.is_none(), "Expected None, got Some({:?})", self);
     }
 }
 
-/// Assertion for async streams
+/// Extension trait providing assertion methods for async streams
+/// 
+/// This trait adds convenient assertion methods for testing async streams,
+/// making it easier to verify stream behavior and state in tests.
+#[allow(async_fn_in_trait)]
 pub trait StreamAssertionExt {
+    /// Asserts that the stream produces a next item and returns it
+    /// 
+    /// # Type Parameters
+    /// * `T` - The type of items produced by the stream
+    /// 
+    /// # Returns
+    /// The next item from the stream
+    /// 
+    /// # Panics
+    /// Panics if the stream has ended unexpectedly
     async fn assert_next<T>(&mut self) -> T
     where
         Self: futures::Stream<Item = T> + Unpin,
         T: Debug;
     
+    /// Asserts that the stream is closed (produces no more items)
+    /// 
+    /// # Panics
+    /// Panics if the stream produces an item when it should be closed
     async fn assert_closed(&mut self)
     where
         Self: futures::Stream + Unpin,
         Self::Item: Debug;
 }
 
+#[allow(async_fn_in_trait)]
 impl<S> StreamAssertionExt for S
 where
     S: futures::Stream + Unpin,
 {
+    /// Implementation of assert_next for stream types
     async fn assert_next<T>(&mut self) -> T
     where
         Self: futures::Stream<Item = T>,
@@ -281,9 +335,10 @@ where
             .expect("Stream ended unexpectedly")
     }
     
+    /// Implementation of assert_closed for stream types
     async fn assert_closed(&mut self)
     where
-        Self::Item: Debug,
+        <Self as futures::Stream>::Item: Debug,
     {
         use futures::StreamExt;
         assert!(

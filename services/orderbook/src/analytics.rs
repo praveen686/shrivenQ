@@ -32,6 +32,7 @@ struct VolumeBucket {
 }
 
 /// Market microstructure analytics engine
+#[derive(Debug)]
 pub struct MicrostructureAnalytics {
     /// Rolling volume buckets for VPIN
     volume_buckets: RwLock<VecDeque<VolumeBucket>>,
@@ -300,6 +301,7 @@ impl MicrostructureAnalytics {
 }
 
 /// Imbalance calculator for order book analysis
+#[derive(Debug)]
 pub struct ImbalanceCalculator;
 
 impl ImbalanceCalculator {
@@ -403,6 +405,7 @@ impl ImbalanceMetrics {
 }
 
 /// Advanced toxicity metrics for detecting adverse selection
+#[derive(Debug)]
 pub struct ToxicityDetector {
     /// Recent trade directions
     recent_trades: RwLock<VecDeque<(bool, Qty, Ts)>>,

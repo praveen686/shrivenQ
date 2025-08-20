@@ -9,6 +9,7 @@ use parking_lot::RwLock;
 use hdrhistogram::Histogram;
 
 /// Performance metrics for orderbook operations
+#[derive(Debug)]
 #[repr(align(64))] // Cache-line aligned
 pub struct PerformanceMetrics {
     /// Symbol being tracked
@@ -276,6 +277,15 @@ pub struct LatencyTracker {
     sample_counts: [AtomicU64; 7],
 }
 
+impl std::fmt::Debug for LatencyTracker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LatencyTracker")
+            .field("sample_counts", &self.sample_counts)
+            .field("histograms", &"<histograms>")
+            .finish()
+    }
+}
+
 impl Default for LatencyTracker {
     fn default() -> Self {
         Self::new()
@@ -292,7 +302,8 @@ impl LatencyTracker {
                 // Fallback to precision 2 if 3 fails (unlikely but safe)
                 Histogram::new(2).unwrap_or_else(|_| {
                     // Last resort: precision 1 (this should never fail)
-                    Histogram::new(1).unwrap_or_default()
+                    // We use new_with_max for a simple histogram with reasonable defaults
+                    Histogram::new_with_max(1_000_000, 1).expect("Failed to create fallback histogram")
                 })
             })
         };
@@ -416,24 +427,43 @@ pub struct LatencyStats {
 /// Snapshot of all metrics
 #[derive(Debug, Clone)]
 pub struct MetricsSnapshot {
+    /// Symbol identifier
     pub symbol: String,
+    /// Number of orders added
     pub orders_added: u64,
+    /// Number of orders modified
     pub orders_modified: u64,
+    /// Number of orders canceled
     pub orders_canceled: u64,
+    /// Number of trades executed
     pub trades_executed: u64,
+    /// Total volume added to the book
     pub total_volume_added: i64,
+    /// Total volume canceled from the book
     pub total_volume_canceled: i64,
+    /// Total volume traded
     pub total_volume_traded: i64,
+    /// Maximum number of bid levels observed
     pub max_bid_levels: u64,
+    /// Maximum number of ask levels observed
     pub max_ask_levels: u64,
+    /// Average bid depth
     pub avg_bid_depth: i64,
+    /// Average ask depth
     pub avg_ask_depth: i64,
+    /// Minimum spread observed
     pub min_spread: i64,
+    /// Maximum spread observed
     pub max_spread: i64,
+    /// Average spread
     pub avg_spread: i64,
+    /// Updates processed per second
     pub updates_per_second: u64,
+    /// Number of checksum matches
     pub checksum_matches: u64,
+    /// Number of checksum mismatches
     pub checksum_mismatches: u64,
+    /// Latency statistics
     pub latency_stats: LatencyStats,
 }
 

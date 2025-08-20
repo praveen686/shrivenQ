@@ -19,6 +19,61 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info, warn};
 
 /// Binance WebSocket feed
+impl std::fmt::Debug for BinanceFeed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BinanceFeed")
+            .field("config", &self.config)
+            .field("auth", &"BinanceAuth")
+            .field("market", &self.market)
+            .field("symbols", &self.symbols)
+            .field("symbol_map", &self.symbol_map)
+            .field("stream_id", &self.stream_id)
+            .finish()
+    }
+}
+
+/// Binance market data feed adapter
+///
+/// This adapter provides connectivity to Binance's WebSocket market data streams
+/// across different market types (Spot, USD Futures, Coin Futures). It handles
+/// the specific protocols and message formats used by Binance APIs.
+///
+/// # Features
+/// - Support for multiple Binance market types through BinanceMarket enum
+/// - WebSocket-based real-time market data streaming
+/// - Automatic authentication and listen key management for private streams
+/// - Symbol mapping and normalization for internal representation
+/// - Depth update parsing with proper level-by-level processing
+///
+/// # Authentication
+/// - Public streams (market data) don't require authentication
+/// - Private streams (user data) require API key and secret
+/// - Listen keys are automatically managed for user data streams
+///
+/// # Message Processing
+/// The feed processes various Binance message types:
+/// - Depth updates for order book changes
+/// - Trade execution events
+/// - User account updates (when authenticated)
+///
+/// # Performance Considerations
+/// - Uses FxHashMap for fast symbol lookups during message processing
+/// - Processes messages in streaming fashion to minimize latency
+/// - Batches updates when possible to reduce downstream pressure
+///
+/// # Examples
+/// ```
+/// use binance::BinanceFeed;
+/// use services_common::{BinanceAuth, BinanceMarket, FeedConfig};
+///
+/// let config = FeedConfig::default();
+/// let auth = BinanceAuth::new();
+/// let market = BinanceMarket::Spot;
+/// 
+/// let mut feed = BinanceFeed::new(config, auth, market);
+/// // feed.connect().await?;
+/// // feed.subscribe(symbols).await?;
+/// ```
 pub struct BinanceFeed {
     config: FeedConfig,
     auth: BinanceAuth,

@@ -7,19 +7,28 @@ use thiserror::Error;
 pub enum OmsError {
     /// Order not found in the system
     #[error("Order not found: {order_id}")]
-    OrderNotFound { order_id: String },
+    OrderNotFound { 
+        /// The identifier of the order that could not be found
+        order_id: String 
+    },
 
     /// Order is in an invalid state for the requested operation
     #[error("Order {order_id} cannot be {operation} in current state {current_state}")]
     InvalidOrderState {
+        /// The identifier of the order in invalid state
         order_id: String,
+        /// The operation that was attempted on the order
         operation: String,
+        /// The current state of the order that prevents the operation
         current_state: String,
     },
 
     /// Invalid quantity specified
     #[error("Invalid quantity: {reason}")]
-    InvalidQuantity { reason: String },
+    InvalidQuantity { 
+        /// The reason why the quantity is invalid
+        reason: String 
+    },
 
     /// Persistence layer error
     #[error("Persistence error: {0}")]
@@ -27,11 +36,17 @@ pub enum OmsError {
 
     /// Validation error
     #[error("Validation error: {message}")]
-    Validation { message: String },
+    Validation { 
+        /// Detailed validation error message
+        message: String 
+    },
 
     /// Risk check failure
     #[error("Risk check failed: {reason}")]
-    RiskCheckFailed { reason: String },
+    RiskCheckFailed { 
+        /// The reason why the risk check failed
+        reason: String 
+    },
 
     /// Audit trail error
     #[error("Audit trail error: {0}")]
@@ -39,15 +54,24 @@ pub enum OmsError {
 
     /// Configuration error
     #[error("Configuration error: {message}")]
-    Configuration { message: String },
+    Configuration { 
+        /// Configuration error message detailing what went wrong
+        message: String 
+    },
 
     /// System capacity exceeded
     #[error("System capacity exceeded: {details}")]
-    CapacityExceeded { details: String },
+    CapacityExceeded { 
+        /// Details about which capacity limit was exceeded
+        details: String 
+    },
     
     /// Date/time parsing error
     #[error("Invalid date/time: {context}")]
-    InvalidDateTime { context: String },
+    InvalidDateTime { 
+        /// Context information about the invalid date/time
+        context: String 
+    },
 }
 
 /// Type alias for OMS results

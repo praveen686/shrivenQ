@@ -41,6 +41,7 @@ pub struct VenueStats {
 }
 
 /// Venue connection
+#[derive(Debug)]
 pub struct VenueConnection {
     /// Venue name
     pub name: String,
@@ -58,6 +59,15 @@ pub struct VenueManager {
     connections: Arc<RwLock<FxHashMap<String, VenueConnection>>>,
     /// Primary venue
     primary_venue: String,
+}
+
+impl std::fmt::Debug for VenueManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VenueManager")
+            .field("connections", &"Arc<RwLock<FxHashMap<String, VenueConnection>>>")
+            .field("primary_venue", &self.primary_venue)
+            .finish()
+    }
 }
 
 impl VenueManager {

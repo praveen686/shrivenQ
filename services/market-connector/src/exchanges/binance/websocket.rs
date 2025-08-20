@@ -13,18 +13,31 @@ use tracing::{debug, error, info, warn};
 /// Binance depth update message
 #[derive(Debug, Deserialize)]
 pub struct DepthUpdate {
+    /// Event type identifier (always "depthUpdate" for depth updates)
     #[serde(rename = "e")]
     pub event_type: String,
+    
+    /// Event time in milliseconds since Unix epoch
     #[serde(rename = "E")]
     pub event_time: u64,
+    
+    /// Symbol name in uppercase (e.g., "BTCUSDT")
     #[serde(rename = "s")]
     pub symbol: String,
+    
+    /// First update ID in this event
     #[serde(rename = "U")]
     pub first_update_id: u64,
+    
+    /// Final update ID in this event
     #[serde(rename = "u")]
     pub final_update_id: u64,
+    
+    /// Array of bid price levels, each containing [price, quantity] as strings
     #[serde(rename = "b")]
     pub bids: Vec<[String; 2]>,
+    
+    /// Array of ask price levels, each containing [price, quantity] as strings
     #[serde(rename = "a")]
     pub asks: Vec<[String; 2]>,
 }
@@ -32,25 +45,41 @@ pub struct DepthUpdate {
 /// Binance depth snapshot (REST API)
 #[derive(Debug, Deserialize)]
 pub struct DepthSnapshot {
+    /// Last update ID from the order book snapshot
     #[serde(rename = "lastUpdateId")]
     pub last_update_id: u64,
+    
+    /// Array of bid price levels, each containing [price, quantity] as strings
     pub bids: Vec<[String; 2]>,
+    
+    /// Array of ask price levels, each containing [price, quantity] as strings
     pub asks: Vec<[String; 2]>,
 }
 
 /// Binance trade message
 #[derive(Debug, Deserialize)]
 pub struct TradeUpdate {
+    /// Event type identifier (always "trade" for trade updates)
     #[serde(rename = "e")]
     pub event_type: String,
+    
+    /// Event time in milliseconds since Unix epoch
     #[serde(rename = "E")]
     pub event_time: u64,
+    
+    /// Symbol name in uppercase (e.g., "BTCUSDT")
     #[serde(rename = "s")]
     pub symbol: String,
+    
+    /// Trade price as string (use parse() to convert to numeric)
     #[serde(rename = "p")]
     pub price: String,
+    
+    /// Trade quantity as string (use parse() to convert to numeric)
     #[serde(rename = "q")]
     pub quantity: String,
+    
+    /// Whether the buyer is the market maker (true if buyer is maker, false if seller is maker)
     #[serde(rename = "m")]
     pub is_buyer_maker: bool,
 }
@@ -58,20 +87,35 @@ pub struct TradeUpdate {
 /// Binance 24hr ticker
 #[derive(Debug, Deserialize)]
 pub struct TickerUpdate {
+    /// Event type identifier (always "24hrTicker" for ticker updates)
     #[serde(rename = "e")]
     pub event_type: String,
+    
+    /// Event time in milliseconds since Unix epoch
     #[serde(rename = "E")]
     pub event_time: u64,
+    
+    /// Symbol name in uppercase (e.g., "BTCUSDT")
     #[serde(rename = "s")]
     pub symbol: String,
+    
+    /// Last traded price as string
     #[serde(rename = "c")]
     pub last_price: String,
+    
+    /// Best bid price as string
     #[serde(rename = "b")]
     pub best_bid: String,
+    
+    /// Best bid quantity as string
     #[serde(rename = "B")]
     pub best_bid_qty: String,
+    
+    /// Best ask price as string
     #[serde(rename = "a")]
     pub best_ask: String,
+    
+    /// Best ask quantity as string
     #[serde(rename = "A")]
     pub best_ask_qty: String,
 }
@@ -79,11 +123,15 @@ pub struct TickerUpdate {
 /// Combined stream message
 #[derive(Debug, Deserialize)]
 pub struct StreamMessage {
+    /// Stream name identifier (e.g., "btcusdt@depth@100ms")
     pub stream: String,
+    
+    /// Raw JSON data payload for the specific stream type
     pub data: serde_json::Value,
 }
 
 /// Order book manager for each symbol
+#[derive(Debug)]
 struct OrderBookManager {
     symbol: Symbol,
     bids: Vec<(Px, Qty)>, // Using fixed-point types
@@ -227,6 +275,60 @@ impl OrderBookManager {
 }
 
 /// Binance WebSocket feed with testnet support
+impl std::fmt::Debug for BinanceWebSocketFeed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BinanceWebSocketFeed")
+            .field("_config", &self._config)
+            .field("auth", &"BinanceAuth")
+            .field("market", &self.market)
+            .field("testnet", &self.testnet)
+            .field("symbols", &self.symbols)
+            .field("symbol_map", &format!("{} symbols", self.symbol_map.len()))
+            .field("symbol_names", &format!("{} names", self.symbol_names.len()))
+            .field("order_books", &format!("{} books", self.order_books.len()))
+            .finish()
+    }
+}
+
+/// Advanced Binance WebSocket feed with testnet support and order book management
+///
+/// This implementation provides enterprise-grade connectivity to Binance's WebSocket
+/// streams with full support for both production and testnet environments. It includes
+/// sophisticated order book reconstruction and management capabilities.
+///
+/// # Key Features
+/// - **Multi-environment support**: Seamless switching between mainnet and testnet
+/// - **Order book reconstruction**: Full L2 order book building from depth updates
+/// - **Market type flexibility**: Support for Spot, USD Futures, and Coin Futures
+/// - **Snapshot management**: Automatic initial snapshots via REST API
+/// - **Performance optimized**: Uses FxHashMap for fast symbol lookups
+///
+/// # Order Book Management
+/// The feed maintains individual OrderBookManager instances for each subscribed symbol,
+/// providing accurate order book reconstruction through:
+/// - Initial REST API snapshots for proper book initialization
+/// - Incremental depth updates with sequence validation
+/// - Gap detection and recovery mechanisms
+///
+/// # Threading and Performance
+/// - Non-blocking WebSocket processing
+/// - Efficient memory usage with pre-allocated data structures
+/// - Minimal allocations in the hot path
+///
+/// # Examples
+/// ```
+/// use binance::websocket::BinanceWebSocketFeed;
+/// use services_common::{BinanceAuth, BinanceMarket, FeedConfig};
+///
+/// let config = FeedConfig::default();
+/// let auth = BinanceAuth::new();
+/// let market = BinanceMarket::Spot;
+/// let testnet = false;
+/// 
+/// let mut feed = BinanceWebSocketFeed::new(config, auth, market, testnet);
+/// // feed.connect().await?;
+/// // feed.subscribe(symbols).await?;
+/// ```
 pub struct BinanceWebSocketFeed {
     _config: FeedConfig,
     auth: BinanceAuth,

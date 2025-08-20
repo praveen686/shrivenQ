@@ -20,8 +20,9 @@ use crate::{
 };
 
 /// Query parameters for positions
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct PositionsQuery {
+    /// Optional symbol filter for positions
     pub symbol: Option<String>,
 }
 
@@ -29,6 +30,14 @@ pub struct PositionsQuery {
 #[derive(Clone)]
 pub struct RiskHandlers {
     grpc_clients: Arc<GrpcClients>,
+}
+
+impl std::fmt::Debug for RiskHandlers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RiskHandlers")
+            .field("grpc_clients", &"Arc<GrpcClients>")
+            .finish()
+    }
 }
 
 impl RiskHandlers {

@@ -46,6 +46,7 @@ pub struct Order {
 }
 
 /// A price level in the order book containing multiple orders
+#[derive(Debug)]
 #[repr(align(64))] // Cache-line aligned for performance
 pub struct PriceLevel {
     /// Price of this level
@@ -141,9 +142,9 @@ impl PriceLevel {
 }
 
 /// The main order book structure
+#[derive(Debug)]
 pub struct OrderBook {
     /// Symbol for this order book
-    #[allow(dead_code)]
     symbol: String,
     
     /// Bid levels (buy orders) - `BTreeMap` keeps them sorted
@@ -193,6 +194,11 @@ impl OrderBook {
             order_map: RwLock::new(AHashMap::new()),
             checksum: AtomicU64::new(0),
         }
+    }
+
+    /// Get the symbol for this order book
+    pub fn symbol(&self) -> &str {
+        &self.symbol
     }
 
     /// Add a new order to the book

@@ -24,7 +24,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 pub mod error;
@@ -72,6 +72,7 @@ impl Default for OmsConfig {
 }
 
 /// Main Order Management System
+#[derive(Debug)]
 pub struct OrderManagementSystem {
     /// Configuration
     config: Arc<OmsConfig>,
@@ -163,6 +164,7 @@ pub enum UpdateType {
 }
 
 /// OMS Metrics
+#[derive(Debug)]
 pub struct OmsMetrics {
     /// Total orders created
     pub orders_created: AtomicU64,
@@ -279,6 +281,17 @@ impl OrderManagementSystem {
         
         // Store in memory
         self.active_orders.write().insert(order_id, order.clone());
+        
+        // Send order update through update channel for async processing
+        let order_update = OrderUpdate {
+            order_id: order.id,
+            update_type: UpdateType::StatusChange(order.status),
+            timestamp: order.created_at,
+        };
+        
+        if let Err(e) = self.update_tx.send(order_update) {
+            error!("Failed to send order update: {}", e);
+        }
         
         // Persist to database
         self.persistence_manager.save_order(&order).await?;
@@ -602,6 +615,13 @@ impl OrderManagementSystem {
     async fn recover_orders(&self) -> Result<()> {
         info!("Recovering orders from database");
         
+        // Use direct database access for complex recovery queries
+        let row_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM orders WHERE status IN ('pending', 'partially_filled')")
+            .fetch_one(&*self.db_pool)
+            .await?;
+        
+        info!("Found {} active orders in database", row_count);
+        
         let orders = self.persistence_manager.load_active_orders().await?;
         
         let mut active_orders = self.active_orders.write();
@@ -609,7 +629,7 @@ impl OrderManagementSystem {
             active_orders.insert(order.id, order);
         }
         
-        info!("Recovered {} orders", active_orders.len());
+        info!("Recovered {} orders into memory", active_orders.len());
         Ok(())
     }
     

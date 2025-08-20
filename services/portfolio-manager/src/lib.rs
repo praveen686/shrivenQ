@@ -26,28 +26,42 @@ use std::sync::Arc;
 pub enum PortfolioEvent {
     /// Position opened
     PositionOpened {
+        /// Symbol that was traded
         symbol: Symbol,
+        /// Buy or sell side
         side: Side,
+        /// Quantity of the position
         quantity: Qty,
+        /// Average entry price
         avg_price: Px,
+        /// Event timestamp
         timestamp: Ts,
     },
     /// Position closed
     PositionClosed {
+        /// Symbol that was closed
         symbol: Symbol,
+        /// Realized profit/loss from closing
         realized_pnl: i64,
+        /// Event timestamp
         timestamp: Ts,
     },
     /// Position updated
     PositionUpdated {
+        /// Symbol that was updated
         symbol: Symbol,
+        /// New position quantity
         quantity: i64,
+        /// Current unrealized P&L
         unrealized_pnl: i64,
+        /// Event timestamp
         timestamp: Ts,
     },
     /// Portfolio rebalanced
     Rebalanced {
+        /// Rebalance timestamp
         timestamp: Ts,
+        /// List of position changes made
         changes: Vec<RebalanceChange>,
     },
 }
@@ -55,9 +69,13 @@ pub enum PortfolioEvent {
 /// Rebalance change
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RebalanceChange {
+    /// Symbol being rebalanced
     pub symbol: Symbol,
-    pub old_weight: i32, // Fixed-point percentage (SCALE_4 = 100%)
+    /// Previous portfolio weight (fixed-point percentage, SCALE_4 = 100%)
+    pub old_weight: i32,
+    /// New target portfolio weight
     pub new_weight: i32,
+    /// Quantity change required (positive = buy, negative = sell)
     pub quantity_change: i64,
 }
 
@@ -177,6 +195,7 @@ pub trait PortfolioManager: Send + Sync {
 }
 
 /// Portfolio manager service
+#[derive(Debug)]
 pub struct PortfolioManagerService {
     /// Position tracker
     tracker: Arc<position::PositionTracker>,

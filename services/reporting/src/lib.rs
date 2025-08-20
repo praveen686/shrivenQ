@@ -24,19 +24,27 @@ use std::sync::Arc;
 pub enum ReportingEvent {
     /// Trading metrics updated
     MetricsUpdated {
+        /// Timestamp when the metrics were updated
         timestamp: Ts,
+        /// Updated trading metrics data
         metrics: metrics::TradingMetrics,
     },
     /// Performance report generated
     PerformanceReport {
+        /// Timestamp when the report was generated
         timestamp: Ts,
+        /// Generated performance report data
         report: performance::PerformanceReport,
     },
     /// Alert triggered
     Alert {
+        /// Timestamp when the alert was triggered
         timestamp: Ts,
+        /// Severity level of the alert
         level: AlertLevel,
+        /// Human-readable alert message
         message: String,
+        /// Source component that triggered the alert
         source: String,
     },
 }
@@ -44,9 +52,13 @@ pub enum ReportingEvent {
 /// Alert levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AlertLevel {
+    /// Informational alert for general system status
     Info,
+    /// Warning alert for potential issues requiring attention
     Warning,
+    /// Critical alert for serious issues requiring immediate action
     Critical,
+    /// Emergency alert for system-threatening conditions
     Emergency,
 }
 
@@ -77,6 +89,7 @@ pub trait ReportingService: Send + Sync {
 }
 
 /// Main reporting service implementation
+#[derive(Debug)]
 pub struct ReportingServiceImpl {
     /// SIMD-optimized metrics engine
     metrics_engine: Arc<metrics::MetricsEngine>,

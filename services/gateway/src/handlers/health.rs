@@ -17,6 +17,15 @@ pub struct HealthHandlers {
     start_time: Instant,
 }
 
+impl std::fmt::Debug for HealthHandlers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HealthHandlers")
+            .field("grpc_clients", &"Arc<GrpcClients>")
+            .field("start_time", &self.start_time)
+            .finish()
+    }
+}
+
 impl HealthHandlers {
     pub const fn new(grpc_clients: Arc<GrpcClients>, start_time: Instant) -> Self {
         Self {

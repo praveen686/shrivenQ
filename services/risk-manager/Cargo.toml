@@ -20,8 +20,8 @@ async-trait = "0.1"
 
 # gRPC dependencies
 tonic = { workspace = true }
-tonic-health = "0.12"
-tonic-reflection = "0.12"
+tonic-health = "0.14"
+tonic-reflection = "0.14"
 prost = { workspace = true }
 # HTTP server for metrics
 warp = "0.3"
@@ -48,3 +48,6 @@ chrono = { workspace = true }
 [[bin]]
 name = "risk-manager"
 path = "src/main.rs"
+
+[dev-dependencies]
+rstest = "0.23"

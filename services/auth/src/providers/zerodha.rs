@@ -7,6 +7,7 @@ use reqwest::{Client, cookie::Jar};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use services_common::clients::SecretsClient;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;
@@ -80,7 +81,35 @@ impl ZerodhaConfig {
         }
     }
 
-    /// Load configuration from .env file
+    /// Load configuration from secrets manager
+    ///
+    /// # Errors
+    /// Returns an error if secrets service is unavailable or credentials are missing
+    pub async fn from_secrets_manager(secrets_client: &mut SecretsClient) -> Result<Self> {
+        info!("Loading Zerodha configuration from secrets manager");
+        
+        // Fetch all required credentials
+        let user_id = secrets_client.get_credential("ZERODHA_USER_ID").await
+            .map_err(|e| anyhow!("Failed to get ZERODHA_USER_ID from secrets manager: {}", e))?;
+        let password = secrets_client.get_credential("ZERODHA_PASSWORD").await
+            .map_err(|e| anyhow!("Failed to get ZERODHA_PASSWORD from secrets manager: {}", e))?;
+        let totp_secret = secrets_client.get_credential("ZERODHA_TOTP_SECRET").await
+            .map_err(|e| anyhow!("Failed to get ZERODHA_TOTP_SECRET from secrets manager: {}", e))?;
+        let api_key = secrets_client.get_credential("ZERODHA_API_KEY").await
+            .map_err(|e| anyhow!("Failed to get ZERODHA_API_KEY from secrets manager: {}", e))?;
+        let api_secret = secrets_client.get_credential("ZERODHA_API_SECRET").await
+            .map_err(|e| anyhow!("Failed to get ZERODHA_API_SECRET from secrets manager: {}", e))?;
+        
+        Ok(Self::new(
+            user_id,
+            password,
+            totp_secret,
+            api_key,
+            api_secret,
+        ))
+    }
+    
+    /// Load configuration from .env file (fallback method)
     ///
     /// # Errors
     /// Returns an error if .env file is missing or required variables are not set
@@ -107,6 +136,30 @@ impl ZerodhaConfig {
             api_key,
             api_secret,
         ))
+    }
+    
+    /// Load configuration with fallback
+    /// First tries secrets manager, then falls back to .env file
+    pub async fn load_config(secrets_client: Option<&mut SecretsClient>) -> Result<Self> {
+        match secrets_client {
+            Some(client) => {
+                // Try secrets manager first
+                match Self::from_secrets_manager(client).await {
+                    Ok(config) => {
+                        info!("Successfully loaded config from secrets manager");
+                        Ok(config)
+                    }
+                    Err(e) => {
+                        warn!("Failed to load from secrets manager: {}, falling back to .env", e);
+                        Self::from_env_file()
+                    }
+                }
+            }
+            None => {
+                // No secrets client, use .env directly
+                Self::from_env_file()
+            }
+        }
     }
 
     /// Set cache directory
@@ -192,6 +245,16 @@ pub struct ZerodhaAuth {
     config: ZerodhaConfig,
     http_client: Client,
     access_token: Arc<RwLock<Option<String>>>,
+}
+
+impl std::fmt::Debug for ZerodhaAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ZerodhaAuth")
+            .field("config", &"ZerodhaConfig { /* sensitive data */ }")
+            .field("http_client", &"Client { /* HTTP client */ }")
+            .field("access_token", &"Arc<RwLock<Option<String>>>")
+            .finish()
+    }
 }
 
 impl ZerodhaAuth {

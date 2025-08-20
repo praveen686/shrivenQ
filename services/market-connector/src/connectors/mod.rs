@@ -9,6 +9,7 @@ use services_common::ZerodhaAuth;
 use std::sync::Arc;
 
 /// Generic connector wrapper that implements MarketConnector trait
+#[derive(Debug)]
 pub struct GenericConnector {
     exchange: String,
     zerodha_auth: Option<Arc<ZerodhaAuth>>,
@@ -17,6 +18,25 @@ pub struct GenericConnector {
 }
 
 impl GenericConnector {
+    /// Create a new generic connector for the specified exchange
+    ///
+    /// Creates a new connector instance that can be used to manage connections
+    /// and subscriptions for the given exchange. The connector starts in a
+    /// disconnected state and needs to be connected before use.
+    ///
+    /// # Arguments
+    /// * `exchange` - The name of the exchange (e.g., "binance", "zerodha")
+    ///
+    /// # Returns
+    /// A new `GenericConnector` instance ready for configuration and connection
+    ///
+    /// # Examples
+    /// ```
+    /// use market_connector::connectors::GenericConnector;
+    ///
+    /// let connector = GenericConnector::new("binance".to_string());
+    /// assert!(!connector.is_connected());
+    /// ```
     pub fn new(exchange: String) -> Self {
         Self {
             exchange,
@@ -26,6 +46,32 @@ impl GenericConnector {
         }
     }
 
+    /// Configure the connector with Zerodha authentication credentials
+    ///
+    /// Adds Zerodha authentication to the connector, which is required for
+    /// connecting to Zerodha's market data services. This method uses the
+    /// builder pattern, allowing for method chaining.
+    ///
+    /// # Arguments
+    /// * `auth` - ZerodhaAuth instance containing API credentials and configuration
+    ///
+    /// # Returns
+    /// Self with authentication configured, allowing for method chaining
+    ///
+    /// # Examples
+    /// ```
+    /// use market_connector::connectors::GenericConnector;
+    /// use services_common::ZerodhaAuth;
+    ///
+    /// let auth = ZerodhaAuth::new("api_key", "access_token");
+    /// let connector = GenericConnector::new("zerodha".to_string())
+    ///     .with_zerodha_auth(auth);
+    /// ```
+    ///
+    /// # Notes
+    /// - This method is only relevant for Zerodha connectors
+    /// - The authentication is wrapped in an Arc for thread-safe sharing
+    /// - Authentication will be validated when the connector attempts to connect
     pub fn with_zerodha_auth(mut self, auth: ZerodhaAuth) -> Self {
         self.zerodha_auth = Some(Arc::new(auth));
         self
@@ -108,6 +154,7 @@ impl MarketConnector for GenericConnector {
 /// MarketConnectorService. For actual market data streaming, specialized feed
 /// adapters (ZerodhaFeed, BinanceFeed) should be used directly as they provide
 /// optimized implementations for each exchange's specific protocols.
+#[derive(Debug)]
 pub struct ConnectorFactory;
 
 impl ConnectorFactory {

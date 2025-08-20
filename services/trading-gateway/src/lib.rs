@@ -36,53 +36,89 @@ pub mod telemetry;
 pub enum TradingEvent {
     /// Market data update from orderbook
     MarketUpdate {
+        /// Symbol being updated
         symbol: Symbol,
+        /// Best bid price and quantity
         bid: Option<(Px, Qty)>,
+        /// Best ask price and quantity
         ask: Option<(Px, Qty)>,
+        /// Mid price
         mid: Px,
+        /// Bid-ask spread in ticks
         spread: i64,
+        /// Order book imbalance ratio
         imbalance: f64,
+        /// Volume-Synchronized Probability of Informed Trading
         vpin: f64,
+        /// Kyle's lambda (adverse selection parameter)
         kyles_lambda: f64,
+        /// Update timestamp
         timestamp: Ts,
     },
     /// Trading signal from strategy
     Signal {
+        /// Unique signal identifier
         id: u64,
+        /// Symbol for the signal
         symbol: Symbol,
+        /// Buy or sell direction
         side: Side,
+        /// Type of signal (momentum, mean reversion, etc.)
         signal_type: SignalType,
+        /// Signal strength (0.0 to 1.0)
         strength: f64,
+        /// Confidence level (0.0 to 1.0)
         confidence: f64,
+        /// Signal generation timestamp
         timestamp: Ts,
     },
     /// Order request
     OrderRequest {
+        /// Unique request identifier
         id: u64,
+        /// Symbol to trade
         symbol: Symbol,
+        /// Buy or sell side
         side: Side,
+        /// Order type (market, limit, stop, etc.)
         order_type: OrderType,
+        /// Order quantity
         quantity: Qty,
+        /// Limit price (for limit orders)
         price: Option<Px>,
+        /// Time in force policy
         time_in_force: TimeInForce,
+        /// Originating strategy identifier
         strategy_id: String,
     },
     /// Execution report
     ExecutionReport {
+        /// Order identifier
         order_id: u64,
+        /// Symbol that was traded
         symbol: Symbol,
+        /// Buy or sell side
         side: Side,
+        /// Quantity that was executed
         executed_qty: Qty,
+        /// Price at which execution occurred
         executed_price: Px,
+        /// Remaining unfilled quantity
         remaining_qty: Qty,
+        /// Current order status
         status: OrderStatus,
+        /// Execution timestamp
         timestamp: Ts,
     },
     /// Risk alert
     RiskAlert {
+        /// Alert severity level
         severity: Severity,
+        /// Human-readable alert message
         message: String,
+        /// Recommended action to take
         action: RiskAction,
+        /// Alert timestamp
         timestamp: Ts,
     },
 }
@@ -292,6 +328,29 @@ pub struct CircuitBreaker {
     trip_reason: Option<String>,
     /// Auto-reset duration
     auto_reset_duration: Duration,
+}
+
+impl std::fmt::Debug for TradingGateway {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TradingGateway")
+            .field("status", &*self.status.read())
+            .field("config", &self.config)
+            .field("component_count", &self.health_status.len())
+            .field("strategy_count", &self.strategies.read().len())
+            .field("circuit_breaker_tripped", &self.circuit_breaker.read().is_tripped)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for CircuitBreaker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CircuitBreaker")
+            .field("is_tripped", &self.is_tripped)
+            .field("tripped_at", &self.tripped_at)
+            .field("trip_reason", &self.trip_reason)
+            .field("auto_reset_duration", &self.auto_reset_duration)
+            .finish()
+    }
 }
 
 /// Trading strategy trait

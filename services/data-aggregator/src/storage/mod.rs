@@ -102,3 +102,11 @@ impl StorageBackend for RedisStorage {
         Ok(Vec::new())
     }
 }
+
+impl std::fmt::Debug for RedisStorage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RedisStorage")
+            .field("client", &"<ConnectionManager>")
+            .finish()
+    }
+}

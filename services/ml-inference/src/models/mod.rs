@@ -1,7 +1,7 @@
 //! ML Models for Trading Predictions
 
-use anyhow::{Result, Context};
-use ndarray::{Array1, Array2};
+use anyhow::Result;
+use ndarray::Array1;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -17,43 +17,68 @@ pub trait TradingModel: Send + Sync {
     fn update(&mut self, features: &Array1<f64>, target: f64) -> Result<()>;
 }
 
+/// Output from a machine learning model prediction
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelOutput {
+    /// Named predictions (e.g., "price_change": 0.05)
     pub predictions: HashMap<String, f64>,
+    /// Confidence score for the prediction (0.0 to 1.0)
     pub confidence: f64,
+    /// Optional feature importance scores
     pub feature_importance: Option<Vec<f64>>,
 }
 
+/// Metadata describing a machine learning model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelMetadata {
+    /// Human-readable name of the model
     pub name: String,
+    /// Version string for this model
     pub version: String,
+    /// Type of machine learning algorithm
     pub model_type: ModelType,
+    /// Names of input features expected by the model
     pub input_features: Vec<String>,
+    /// Type of output produced by the model
     pub output_type: OutputType,
+    /// Number of samples used to train this model
     pub training_samples: u64,
+    /// When this model was last updated
     pub last_updated: chrono::DateTime<chrono::Utc>,
 }
 
+/// Types of machine learning algorithms supported
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ModelType {
+    /// Linear regression model
     LinearRegression,
+    /// Random forest ensemble model
     RandomForest,
+    /// Feed-forward neural network
     NeuralNetwork,
+    /// Long Short-Term Memory network
     LSTM,
+    /// Extreme Gradient Boosting
     XGBoost,
+    /// Ensemble of multiple models
     Ensemble,
 }
 
+/// Types of outputs that models can produce
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OutputType {
-    Regression,      // Continuous price prediction
-    Classification,  // Up/Down/Neutral
-    Probability,     // Probability distribution
-    MultiOutput,     // Multiple predictions
+    /// Continuous value prediction
+    Regression,
+    /// Discrete class prediction (Up/Down/Neutral)
+    Classification,
+    /// Probability distribution over outcomes
+    Probability,
+    /// Multiple simultaneous predictions
+    MultiOutput,
 }
 
 /// Simple linear model for demonstration
+#[derive(Debug)]
 pub struct LinearModel {
     weights: Array1<f64>,
     bias: f64,
@@ -61,6 +86,7 @@ pub struct LinearModel {
 }
 
 impl LinearModel {
+    /// Create a new linear model with the specified input dimension
     pub fn new(input_dim: usize) -> Self {
         Self {
             weights: Array1::zeros(input_dim),
@@ -145,7 +171,18 @@ pub struct EnsembleModel {
     metadata: ModelMetadata,
 }
 
+impl std::fmt::Debug for EnsembleModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EnsembleModel")
+            .field("models", &format!("[{} models]", self.models.len()))
+            .field("weights", &self.weights)
+            .field("metadata", &self.metadata)
+            .finish()
+    }
+}
+
 impl EnsembleModel {
+    /// Create a new ensemble model from multiple models and their weights
     pub fn new(models: Vec<Box<dyn TradingModel>>, weights: Vec<f64>) -> Self {
         Self {
             metadata: ModelMetadata {

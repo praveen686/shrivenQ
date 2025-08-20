@@ -21,6 +21,7 @@ pub struct GatewayConfig {
     pub monitoring: MonitoringConfig,
 }
 
+/// HTTP server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     /// Server host
@@ -37,6 +38,7 @@ pub struct ServerConfig {
     pub tls: Option<TlsConfig>,
 }
 
+/// TLS configuration for HTTPS
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TlsConfig {
     /// Path to certificate file
@@ -45,6 +47,7 @@ pub struct TlsConfig {
     pub key_path: String,
 }
 
+/// gRPC service endpoints configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceEndpoints {
     /// Authentication service endpoint
@@ -61,6 +64,7 @@ pub struct ServiceEndpoints {
     pub reporting_service: Option<String>,
 }
 
+/// Authentication configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
     /// JWT secret key for token validation
@@ -73,6 +77,7 @@ pub struct AuthConfig {
     pub allowed_algorithms: Vec<String>,
 }
 
+/// Rate limiting configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RateLimitConfig {
     /// Enable rate limiting
@@ -85,6 +90,7 @@ pub struct RateLimitConfig {
     pub endpoint_limits: FxHashMap<String, EndpointRateLimit>,
 }
 
+/// Per-endpoint rate limiting configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EndpointRateLimit {
     /// Requests per minute for this endpoint
@@ -93,6 +99,7 @@ pub struct EndpointRateLimit {
     pub burst_size: u32,
 }
 
+/// CORS configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorsConfig {
     /// Enable CORS
@@ -109,6 +116,7 @@ pub struct CorsConfig {
     pub max_age_seconds: u64,
 }
 
+/// Monitoring and metrics configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MonitoringConfig {
     /// Enable Prometheus metrics

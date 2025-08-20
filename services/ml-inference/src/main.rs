@@ -14,6 +14,7 @@ use tonic::{transport::Server, Request, Response, Status};
 use tracing::{info, error, warn};
 use tracing_subscriber;
 
+/// Protocol buffer definitions for ML inference service
 pub mod pb {
     tonic::include_proto!("ml_inference");
 }
@@ -26,12 +27,17 @@ use pb::{
     ModelInfo, Prediction,
 };
 
+/// ML inference service implementation
+#[derive(Debug)]
 pub struct MLInferenceService {
+    /// Feature store for computing indicators
     feature_store: Arc<FeatureStore>,
+    /// Registry of available trading models
     model_registry: Arc<ModelRegistry>,
 }
 
 impl MLInferenceService {
+    /// Create new ML inference service
     pub fn new() -> Self {
         // Initialize feature store
         let feature_store = Arc::new(FeatureStore::new(FeatureConfig::default()));
@@ -42,16 +48,58 @@ impl MLInferenceService {
         // Register default models
         Self::register_default_models(&model_registry);
         
-        // Start background feature computation
+        // Start background signal generation
         let feature_store_clone = feature_store.clone();
+        let model_registry_clone = model_registry.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(
-                tokio::time::Duration::from_millis(100)
+                tokio::time::Duration::from_secs(1)
             );
             
             loop {
                 interval.tick().await;
-                // Feature computation happens automatically on price updates
+                
+                // Generate ML signals for active symbols
+                if let Some(model) = model_registry_clone.get_active_model() {
+                    let symbols = vec!["BTCUSDT".to_string(), "ETHUSDT".to_string()];
+                    
+                    for symbol in symbols {
+                        if let Some(features) = feature_store_clone.get_features(&symbol) {
+                            let feature_array = Array1::from_vec(vec![
+                                features.returns.first().copied().unwrap_or(0.0),
+                                features.moving_averages.first().copied().unwrap_or(0.0),
+                                features.volatility.first().copied().unwrap_or(0.0),
+                                features.rsi,
+                                features.macd,
+                                features.volume_imbalance,
+                            ]);
+                            
+                            if let Ok(output) = model.predict(&feature_array) {
+                                // Create ML signal from prediction
+                                let price_prob = output.predictions.get("price_direction").copied().unwrap_or(0.5);
+                                let signal = MLSignal {
+                                    symbol: symbol.clone(),
+                                    prediction: if let Some(target_price) = output.predictions.get("price_target") {
+                                        PredictionType::PriceTarget { 
+                                            target: *target_price,
+                                            horizon_minutes: 60 
+                                        }
+                                    } else {
+                                        PredictionType::PriceDirection { 
+                                            probability_up: price_prob 
+                                        }
+                                    },
+                                    confidence: output.confidence,
+                                    features: feature_array.to_vec(),
+                                    model_version: model.metadata().version.clone(),
+                                    timestamp: chrono::Utc::now(),
+                                };
+                                
+                                info!("Generated ML signal: {:?}", signal);
+                            }
+                        }
+                    }
+                }
             }
         });
         
@@ -75,7 +123,12 @@ impl MLInferenceService {
             0.001, // Small bias
         );
         
-        registry.register_model("price_predictor".to_string(), Box::new(linear_model));
+        // Wrap in TradingModel interface for proper integration
+        let trading_model: Box<dyn TradingModel> = Box::new(linear_model);
+        registry.register_model("price_predictor".to_string(), trading_model);
+        
+        warn!("Registered default linear model for price prediction");
+        error!("Production deployment requires trained models - using placeholder model");
         
         // Could add more models here:
         // - Volatility predictor

@@ -156,6 +156,7 @@ pub trait RiskManager: Send + Sync {
 }
 
 /// Per-symbol risk tracking
+#[derive(Debug)]
 struct SymbolRisk {
     position: RwLock<Position>,
     orders_sent: AtomicU64,
@@ -185,6 +186,7 @@ impl SymbolRisk {
 }
 
 /// Risk manager service implementation
+#[derive(Debug)]
 pub struct RiskManagerService {
     /// Risk limits
     limits: RiskLimits,
@@ -544,7 +546,7 @@ mod tests {
         let mut risk_manager = RiskManagerService::new(RiskLimits::default());
 
         // Activate kill switch
-        risk_manager.activate_kill_switch("Test reason").await.ok();
+        risk_manager.activate_kill_switch("Test reason");
 
         // Check order should be rejected
         let result = risk_manager

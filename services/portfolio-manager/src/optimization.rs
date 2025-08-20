@@ -22,6 +22,16 @@ pub struct PortfolioOptimizer {
     work_matrix: DMatrix<f64>,
 }
 
+impl std::fmt::Debug for PortfolioOptimizer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PortfolioOptimizer")
+            .field("has_covariance_cache", &self.covariance_cache.is_some())
+            .field("has_returns_cache", &self.returns_cache.is_some())
+            .field("work_matrix_shape", &(self.work_matrix.nrows(), self.work_matrix.ncols()))
+            .finish()
+    }
+}
+
 impl PortfolioOptimizer {
     /// Create new optimizer
     pub fn new() -> Self {

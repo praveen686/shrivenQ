@@ -112,23 +112,35 @@ pub trait MessageHandler<T: BusMessage>: Send + Sync {
 /// Error types for event bus operations
 #[derive(Debug, thiserror::Error)]
 pub enum EventBusError {
+    /// Bus capacity exceeded error
     #[error("Bus capacity exceeded")]
     CapacityExceeded,
 
+    /// Message TTL expired error
     #[error("Message TTL expired")]
     MessageExpired,
 
+    /// No subscribers for topic error
     #[error("No subscribers for topic: {topic}")]
-    NoSubscribers { topic: String },
+    NoSubscribers { 
+        /// Topic name
+        topic: String 
+    },
 
+    /// Serialization error
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
+    /// Channel error
     #[error("Channel error: {0}")]
     Channel(String),
 
+    /// Handler error
     #[error("Handler error: {source}")]
-    Handler { source: anyhow::Error },
+    Handler { 
+        /// Source error
+        source: anyhow::Error 
+    },
 }
 
 /// Result type for event bus operations
@@ -139,69 +151,109 @@ pub type BusResult<T> = std::result::Result<T, EventBusError>;
 pub enum ShrivenQuantMessage {
     /// Market data update
     MarketData {
+        /// Trading symbol
         symbol: String,
+        /// Exchange name
         exchange: String,
-        bid: i64, // Fixed-point
-        ask: i64, // Fixed-point
+        /// Bid price (fixed-point)
+        bid: i64,
+        /// Ask price (fixed-point)
+        ask: i64,
+        /// Event timestamp
         timestamp: u64,
     },
 
     /// Order event
     OrderEvent {
+        /// Order ID
         order_id: u64,
+        /// Trading symbol
         symbol: String,
+        /// Order side (BUY/SELL)
         side: String,
-        quantity: i64, // Fixed-point
-        price: i64,    // Fixed-point
+        /// Order quantity (fixed-point)
+        quantity: i64,
+        /// Order price (fixed-point)
+        price: i64,
+        /// Order status
         status: String,
+        /// Event timestamp
         timestamp: u64,
     },
 
     /// Fill event
     FillEvent {
+        /// Order ID
         order_id: u64,
+        /// Fill ID
         fill_id: String,
+        /// Trading symbol
         symbol: String,
-        quantity: i64, // Fixed-point
-        price: i64,    // Fixed-point
+        /// Fill quantity (fixed-point)
+        quantity: i64,
+        /// Fill price (fixed-point)
+        price: i64,
+        /// Event timestamp
         timestamp: u64,
     },
 
     /// Position update
     PositionUpdate {
+        /// Trading symbol
         symbol: String,
-        quantity: i64,  // Fixed-point
-        avg_price: i64, // Fixed-point
+        /// Position quantity (fixed-point)
+        quantity: i64,
+        /// Average price (fixed-point)
+        avg_price: i64,
+        /// Unrealized P&L
         unrealized_pnl: i64,
+        /// Realized P&L
         realized_pnl: i64,
+        /// Event timestamp
         timestamp: u64,
     },
 
     /// Risk alert
     RiskAlert {
-        level: String, // INFO, WARNING, CRITICAL, EMERGENCY
+        /// Alert level (INFO, WARNING, CRITICAL, EMERGENCY)
+        level: String,
+        /// Alert message
         message: String,
+        /// Alert source
         source: String,
+        /// Optional symbol
         symbol: Option<String>,
+        /// Optional value
         value: Option<i64>,
+        /// Event timestamp
         timestamp: u64,
     },
 
     /// Performance metrics
     PerformanceMetrics {
+        /// Service name
         service: String,
+        /// Metric name
         metric_name: String,
+        /// Metric value
         value: f64,
+        /// Metric unit
         unit: String,
+        /// Metric tags
         tags: rustc_hash::FxHashMap<String, String>,
+        /// Event timestamp
         timestamp: u64,
     },
 
     /// System health check
     HealthCheck {
+        /// Service name
         service: String,
-        status: String, // HEALTHY, DEGRADED, UNHEALTHY
+        /// Health status (HEALTHY, DEGRADED, UNHEALTHY)
+        status: String,
+        /// Optional details
         details: Option<String>,
+        /// Event timestamp
         timestamp: u64,
     },
 }
@@ -240,6 +292,7 @@ impl BusMessage for ShrivenQuantMessage {
 }
 
 /// Event bus factory for creating configured instances
+#[derive(Debug)]
 pub struct EventBusFactory;
 
 impl EventBusFactory {
@@ -300,11 +353,13 @@ pub trait EventBusMiddleware<T: BusMessage>: Send + Sync {
 }
 
 /// Logging middleware for debugging
+#[derive(Debug)]
 pub struct LoggingMiddleware {
     service_name: String,
 }
 
 impl LoggingMiddleware {
+    /// Create new logging middleware
     pub fn new(service_name: impl Into<String>) -> Self {
         Self {
             service_name: service_name.into(),
@@ -362,11 +417,13 @@ impl<T: BusMessage> EventBusMiddleware<T> for LoggingMiddleware {
 }
 
 /// Metrics middleware for performance monitoring
+#[derive(Debug)]
 pub struct MetricsMiddleware {
     metrics: std::sync::Arc<BusMetrics>,
 }
 
 impl MetricsMiddleware {
+    /// Create new metrics middleware
     pub const fn new(metrics: std::sync::Arc<BusMetrics>) -> Self {
         Self { metrics }
     }
@@ -421,6 +478,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_message_metadata() {
+        // Use TestMessage to verify it's properly constructed
+        let test_msg = TestMessage {
+            id: 42,
+            data: "test payload".to_string(),
+        };
+        assert_eq!(test_msg.topic(), "test");
+        assert_eq!(test_msg.id, 42);
+        assert_eq!(test_msg.data, "test payload");
+        
         let metadata = MessageMetadata::default();
         assert!(!metadata.message_id.is_empty());
         assert_eq!(metadata.source, "unknown");

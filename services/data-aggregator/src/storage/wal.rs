@@ -329,6 +329,17 @@ impl Drop for Wal {
     }
 }
 
+impl std::fmt::Debug for Wal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Wal")
+            .field("dir", &self.dir)
+            .field("segment_size", &self.segment_size)
+            .field("current_segment", &self.current_segment.as_ref().map(|_| "<Segment>"))
+            .field("segment_counter", &self.segment_counter)
+            .finish()
+    }
+}
+
 /// Statistics about the WAL
 #[derive(Debug)]
 pub struct WalStats {
@@ -401,7 +412,18 @@ impl<T: WalEntry> WalIterator<T> {
             }
         }
     }
-} // Missing closing brace for impl Wal
+}
+
+impl<T: WalEntry> std::fmt::Debug for WalIterator<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WalIterator")
+            .field("segments", &self.segments)
+            .field("current_reader", &self.current_reader.as_ref().map(|_| "<SegmentReader>"))
+            .field("current_index", &self.current_index)
+            .field("from_ts", &self.from_ts)
+            .finish()
+    }
+}
 
 #[cfg(test)]
 mod tests {

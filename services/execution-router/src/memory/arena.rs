@@ -22,6 +22,16 @@ pub struct Arena {
     chunk_size: usize,
 }
 
+impl std::fmt::Debug for Arena {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Arena")
+            .field("chunks", &format!("Vec<ArenaChunk> (len: {})", self.chunks.len()))
+            .field("current", &self.current)
+            .field("chunk_size", &self.chunk_size)
+            .finish()
+    }
+}
+
 struct ArenaChunk {
     data: NonNull<u8>,
     size: usize,

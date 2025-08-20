@@ -23,32 +23,69 @@ use tracing::{info, warn, error};
 /// ML prediction signal
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MLSignal {
+    /// The trading symbol (e.g., "AAPL", "BTCUSD")
     pub symbol: String,
+    /// The type and details of the prediction
     pub prediction: PredictionType,
+    /// Confidence score between 0.0 and 1.0
     pub confidence: f64,
+    /// Input features used for this prediction
     pub features: Vec<f64>,
+    /// Version identifier of the model that made this prediction
     pub model_version: String,
+    /// When this prediction was generated
     pub timestamp: DateTime<Utc>,
 }
 
+/// Types of predictions that ML models can generate
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PredictionType {
-    PriceDirection { probability_up: f64 },
-    PriceTarget { target: f64, horizon_minutes: u32 },
-    Volatility { predicted_vol: f64 },
-    Regime { market_regime: MarketRegime },
-    Anomaly { is_anomalous: bool, score: f64 },
+    /// Predicts whether price will go up or down
+    PriceDirection { 
+        /// Probability that price will increase (0.0 to 1.0)
+        probability_up: f64 
+    },
+    /// Predicts a specific price target
+    PriceTarget { 
+        /// Target price level
+        target: f64, 
+        /// Time horizon for the prediction in minutes
+        horizon_minutes: u32 
+    },
+    /// Predicts market volatility
+    Volatility { 
+        /// Predicted volatility value
+        predicted_vol: f64 
+    },
+    /// Predicts market regime
+    Regime { 
+        /// The predicted market regime
+        market_regime: MarketRegime 
+    },
+    /// Detects market anomalies
+    Anomaly { 
+        /// Whether an anomaly was detected
+        is_anomalous: bool, 
+        /// Anomaly score (higher = more anomalous)
+        score: f64 
+    },
 }
 
+/// Different market regimes that can be detected
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MarketRegime {
+    /// Market is in a clear trending state
     Trending,
+    /// Market is trading within a range
     RangeBound,
+    /// Volatility is increasing
     VolatilityExpansion,
+    /// Volatility is decreasing
     VolatilityContraction,
 }
 
 /// Feature store for real-time feature computation
+#[derive(Debug)]
 pub struct FeatureStore {
     price_buffers: Arc<DashMap<String, VecDeque<f64>>>,
     volume_buffers: Arc<DashMap<String, VecDeque<f64>>>,
@@ -56,11 +93,15 @@ pub struct FeatureStore {
     config: FeatureConfig,
 }
 
+/// Configuration for feature computation
 #[derive(Debug, Clone)]
 pub struct FeatureConfig {
-    pub lookback_periods: Vec<usize>,  // [5, 10, 20, 50, 100]
-    pub buffer_size: usize,            // Max history to keep
-    pub update_frequency_ms: u64,      // Feature update frequency
+    /// Lookback periods for moving averages and returns (e.g., [5, 10, 20, 50, 100])
+    pub lookback_periods: Vec<usize>,
+    /// Maximum number of data points to keep in history buffers
+    pub buffer_size: usize,
+    /// How often to update features in milliseconds
+    pub update_frequency_ms: u64,
 }
 
 impl Default for FeatureConfig {
@@ -73,33 +114,43 @@ impl Default for FeatureConfig {
     }
 }
 
+/// Computed features for ML model input
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Features {
-    // Price features
+    /// Simple returns for different lookback periods
     pub returns: Vec<f64>,
+    /// Logarithmic returns for different lookback periods
     pub log_returns: Vec<f64>,
+    /// Moving averages for different periods
     pub moving_averages: Vec<f64>,
+    /// Volatility estimates for different periods
     pub volatility: Vec<f64>,
     
-    // Technical indicators
+    /// Relative Strength Index (RSI) indicator
     pub rsi: f64,
+    /// Moving Average Convergence Divergence (MACD) indicator
     pub macd: f64,
+    /// Position within Bollinger Bands (-1 to 1)
     pub bollinger_position: f64,
     
-    // Microstructure features
+    /// Bid-ask spread as a fraction of mid price
     pub bid_ask_spread: f64,
+    /// Volume imbalance indicator
     pub volume_imbalance: f64,
+    /// Recent trading intensity
     pub trade_intensity: f64,
     
-    // Market features
+    /// Market beta (correlation with market)
     pub market_beta: f64,
+    /// Correlation with market index
     pub correlation_index: f64,
     
-    // Computed timestamp
+    /// When these features were computed
     pub timestamp: DateTime<Utc>,
 }
 
 impl FeatureStore {
+    /// Create a new feature store with the given configuration
     pub fn new(config: FeatureConfig) -> Self {
         info!("Initializing FeatureStore with config: {:?}", config);
         Self {
@@ -397,19 +448,26 @@ impl FeatureStore {
 }
 
 /// Model cache using RwLock for thread-safe access
+#[derive(Debug)]
 pub struct ModelCache {
     models: Arc<RwLock<DashMap<String, CachedModel>>>,
 }
 
-#[derive(Clone)]
+/// A cached model with metadata
+#[derive(Debug, Clone)]
 pub struct CachedModel {
+    /// Unique identifier for this model
     pub model_id: String,
+    /// Version string for this model
     pub version: String,
+    /// Model weights/parameters
     pub weights: Vec<f64>,
+    /// When this model was last updated
     pub last_updated: DateTime<Utc>,
 }
 
 impl ModelCache {
+    /// Create a new empty model cache
     pub fn new() -> Self {
         Self {
             models: Arc::new(RwLock::new(DashMap::new())),

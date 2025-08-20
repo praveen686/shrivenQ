@@ -557,6 +557,18 @@ impl Default for DataAggregatorService {
     }
 }
 
+impl std::fmt::Debug for DataAggregatorService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DataAggregatorService")
+            .field("candles", &"<RwLock<HashMap>>")
+            .field("completed_candles", &"<RwLock<HashMap>>")
+            .field("volume_profiles", &"<RwLock<HashMap>>")
+            .field("trade_aggregations", &"<RwLock<HashMap>>")
+            .field("wal", &self.wal.as_ref().map(|_| "<Arc<RwLock<Wal>>>"))
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

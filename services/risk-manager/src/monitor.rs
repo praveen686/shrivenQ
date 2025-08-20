@@ -11,38 +11,53 @@ use tokio::sync::RwLock;
 /// Risk alert level
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AlertLevel {
+    /// Informational alert
     Info,
+    /// Warning level alert
     Warning,
+    /// Critical alert requiring attention
     Critical,
+    /// Emergency alert requiring immediate action
     Emergency,
 }
 
 /// Risk alert
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RiskAlert {
+    /// Alert severity level
     pub level: AlertLevel,
+    /// Alert message describing the risk
     pub message: String,
+    /// Unix timestamp of the alert
     pub timestamp: i64,
+    /// Source system generating the alert
     pub source: String,
 }
 
 /// Risk metrics with positions
 #[derive(Debug, Clone)]
 pub struct RiskMetricsWithPositions {
+    /// Total exposure across all positions
     pub total_exposure: i64,
+    /// Daily profit and loss
     pub daily_pnl: i64,
+    /// Current drawdown from peak
     pub current_drawdown: i64,
+    /// List of all open positions
     pub positions: Vec<PositionInfo>,
 }
 
 /// Position information for metrics
 #[derive(Debug, Clone)]
 pub struct PositionInfo {
+    /// Trading symbol
     pub symbol: services_common::Symbol,
+    /// Position value in base currency
     pub position_value: i64,
 }
 
 /// Risk monitoring service
+#[derive(Debug)]
 pub struct RiskMonitor {
     alerts: Arc<RwLock<Vec<RiskAlert>>>,
     metrics: Arc<RwLock<FxHashMap<String, f64>>>,

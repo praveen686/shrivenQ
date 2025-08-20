@@ -82,6 +82,17 @@ pub struct ObjectPool<T> {
     allocated: AtomicUsize,
 }
 
+impl<T> std::fmt::Debug for ObjectPool<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ObjectPool")
+            .field("storage", &format!("Box<[UnsafeCell<MaybeUninit<T>>]> (len: {})", self.storage.len()))
+            .field("free_list", &self.free_list)
+            .field("nodes", &format!("Box<[FreeNode]> (len: {})", self.nodes.len()))
+            .field("allocated", &self.allocated)
+            .finish()
+    }
+}
+
 /// Free list node with atomic next pointer
 struct FreeNode {
     next: AtomicUsize,
@@ -95,6 +106,16 @@ pub struct PoolRef<'a, T> {
     obj: &'a mut T,
     pool: &'a ObjectPool<T>,
     index: usize,
+}
+
+impl<'a, T: std::fmt::Debug> std::fmt::Debug for PoolRef<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PoolRef")
+            .field("obj", self.obj)
+            .field("pool", &"&ObjectPool<T>")
+            .field("index", &self.index)
+            .finish()
+    }
 }
 
 impl<T> Drop for PoolRef<'_, T> {
@@ -311,7 +332,7 @@ mod tests {
         assert!(!pool.is_exhausted());
 
         // Can acquire again - keep obj3 alive to test pool exhaustion
-        let obj3 = pool.acquire().unwrap();
+        let _obj3 = pool.acquire().unwrap();
         assert_eq!(pool.allocated(), 1); // Verify obj3 is allocated
 
         drop(obj2);

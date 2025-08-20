@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
 /// Rolling window calculator using `VecDeque` for efficient FIFO operations
+#[derive(Debug)]
 pub struct RollingWindow {
     window: VecDeque<f64>,
     capacity: usize,
@@ -87,6 +88,7 @@ impl RollingWindow {
 }
 
 /// Statistical utilities for analytics
+#[derive(Debug)]
 pub struct StatisticalAnalyzer;
 
 impl StatisticalAnalyzer {
@@ -223,12 +225,19 @@ impl StatisticalAnalyzer {
 /// Rolling statistics structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RollingStats {
+    /// Number of values in the statistical sample
     pub count: usize,
+    /// Arithmetic mean of the values
     pub mean: f64,
+    /// Standard deviation of the values
     pub std_dev: f64,
+    /// Minimum value in the sample
     pub min: f64,
+    /// Maximum value in the sample
     pub max: f64,
+    /// Median value of the sample
     pub median: f64,
+    /// Sum of all values in the sample
     pub sum: f64,
 }
 
@@ -247,6 +256,7 @@ impl Default for RollingStats {
 }
 
 /// Advanced portfolio metrics calculator
+#[derive(Debug)]
 pub struct PortfolioMetricsCalculator;
 
 impl PortfolioMetricsCalculator {
@@ -358,6 +368,7 @@ impl PortfolioMetricsCalculator {
 }
 
 /// Risk metrics calculator
+#[derive(Debug)]
 pub struct RiskMetricsCalculator;
 
 impl RiskMetricsCalculator {
@@ -432,6 +443,7 @@ impl RiskMetricsCalculator {
 }
 
 /// Time series analysis utilities
+#[derive(Debug)]
 pub struct TimeSeriesAnalyzer;
 
 impl TimeSeriesAnalyzer {

@@ -33,6 +33,19 @@ pub struct RingBuffer<T, const N: usize> {
     _padding: [u8; 48],
 }
 
+impl<T, const N: usize> std::fmt::Debug for RingBuffer<T, N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RingBuffer")
+            .field("buffer", &format!("[UnsafeCell<MaybeUninit<T>>; {}]", N))
+            .field("head", &self.head)
+            .field("tail", &self.tail)
+            .field("cached_head", &"UnsafeCell<usize>")
+            .field("cached_tail", &"UnsafeCell<usize>")
+            .field("capacity", &N)
+            .finish()
+    }
+}
+
 unsafe impl<T: Send, const N: usize> Send for RingBuffer<T, N> {}
 unsafe impl<T: Send, const N: usize> Sync for RingBuffer<T, N> {}
 

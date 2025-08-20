@@ -19,100 +19,160 @@ pub struct PerformanceAnalyzer {
     capacity: usize,
 }
 
+impl std::fmt::Debug for PerformanceAnalyzer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PerformanceAnalyzer")
+            .field("trade_history_len", &self.trade_history.len())
+            .field("daily_pnl_len", &self.daily_pnl.len())
+            .field("price_history_symbols", &self.price_history.len())
+            .field("capacity", &self.capacity)
+            .finish()
+    }
+}
+
 /// Individual trade record
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradeRecord {
+    /// Timestamp when the trade was executed (nanoseconds)
     pub timestamp: u64,
+    /// Symbol that was traded
     pub symbol: Symbol,
+    /// Quantity traded (fixed-point, negative for sells)
     pub quantity: i64, // Fixed-point
+    /// Price at which the trade was executed (fixed-point)
     pub price: i64,    // Fixed-point
+    /// Total volume of the trade (quantity * price, fixed-point)
     pub volume: i64,   // Fixed-point (quantity * price)
+    /// Side of the trade (buy or sell)
     pub side: TradeSide,
 }
 
 /// Trade side enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TradeSide {
+    /// Buy side trade (long position)
     Buy,
+    /// Sell side trade (short position)
     Sell,
 }
 
 /// Daily `PnL` record
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DailyPnL {
+    /// Date in YYYY-MM-DD format
     pub date: String, // YYYY-MM-DD format
+    /// Realized profit and loss for the day
     pub realized_pnl: i64,
+    /// Unrealized profit and loss for the day
     pub unrealized_pnl: i64,
+    /// Total profit and loss for the day
     pub total_pnl: i64,
+    /// Number of trades executed during the day
     pub trades_count: u32,
+    /// Total trading volume for the day
     pub volume: u64,
 }
 
 /// Price record for market analysis
 #[derive(Debug, Clone)]
 pub struct PriceRecord {
+    /// Timestamp when the price was recorded (nanoseconds)
     pub timestamp: u64,
+    /// Best bid price (fixed-point)
     pub bid: i64,
+    /// Best ask price (fixed-point)
     pub ask: i64,
+    /// Mid price calculated from bid and ask (fixed-point)
     pub mid: i64,
 }
 
 /// Comprehensive performance report
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceReport {
-    /// Report generation timestamp
+    /// Report generation timestamp (nanoseconds)
     pub timestamp: u64,
 
     /// Basic metrics
+    /// Total number of trades in the analysis period
     pub total_trades: u32,
+    /// Number of trading days in the analysis period
     pub trading_days: u32,
+    /// Average number of trades executed per day
     pub avg_trades_per_day: f64,
 
     /// `PnL` metrics
+    /// Total profit and loss over the analysis period
     pub total_pnl: i64,
+    /// Profit and loss for the current day
     pub daily_pnl: i64,
+    /// Realized profit and loss from closed positions
     pub realized_pnl: i64,
+    /// Unrealized profit and loss from open positions
     pub unrealized_pnl: i64,
 
     /// Performance ratios
+    /// Risk-adjusted return measure (Sharpe ratio)
     pub sharpe_ratio: f64,
+    /// Downside risk-adjusted return measure (Sortino ratio)
     pub sortino_ratio: f64,
+    /// Return to maximum drawdown ratio (Calmar ratio)
     pub calmar_ratio: f64,
+    /// Ratio of gross profit to gross loss
     pub profit_factor: f64,
 
     /// Risk metrics
+    /// Maximum peak-to-trough decline in portfolio value
     pub max_drawdown: i64,
+    /// Maximum drawdown expressed as percentage in basis points
     pub max_drawdown_pct: i32, // Basis points
+    /// Value at Risk at 95% confidence level
     pub var_95: i64,           // Value at Risk (95%)
+    /// Expected loss beyond the VaR threshold
     pub expected_shortfall: i64,
 
     /// Win/Loss statistics
+    /// Percentage of profitable trades
     pub win_rate: f64, // Percentage
+    /// Average profit from winning trades
     pub avg_win: i64,
+    /// Average loss from losing trades
     pub avg_loss: i64,
+    /// Largest single winning trade
     pub largest_win: i64,
+    /// Largest single losing trade
     pub largest_loss: i64,
 
     /// Volume statistics
+    /// Total trading volume across all trades
     pub total_volume: u64,
+    /// Average size per trade
     pub avg_trade_size: f64,
 
     /// Time-based analysis
+    /// Average time between trades in minutes
     pub avg_holding_period: f64, // Minutes
+    /// Number of trades executed per hour
     pub trading_frequency: f64, // Trades per hour
 
     /// Symbol breakdown
+    /// Performance metrics broken down by trading symbol
     pub symbol_performance: FxHashMap<Symbol, SymbolPerformance>,
 }
 
 /// Per-symbol performance metrics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SymbolPerformance {
+    /// Symbol identifier
     pub symbol: Symbol,
+    /// Total number of trades for this symbol
     pub trades: u32,
+    /// Total profit and loss for this symbol
     pub pnl: i64,
+    /// Percentage of winning trades for this symbol
     pub win_rate: f64,
+    /// Average bid-ask spread for this symbol
     pub avg_spread: f64,
+    /// Total trading volume for this symbol
     pub volume: u64,
 }
 
@@ -697,7 +757,7 @@ mod tests {
         // Create trades over many "days" by using different timestamps
         for i in 0..400 {
             // More than 365 days
-            let timestamp = Ts::new((1700000000 + i * 86400) * 1_000_000_000); // Add 1 day each iteration
+            let timestamp = Ts::from_nanos((1700000000 + i * 86400) * 1_000_000_000); // Add 1 day each iteration
             analyzer.record_trade(Qty::from_i64(1000000), Px::from_i64(1000000), timestamp);
         }
 

@@ -13,20 +13,24 @@ use hmac::{Hmac, Mac};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use services_common::clients::SecretsClient;
 use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 type HmacSha256 = Hmac<Sha256>;
 
 /// Binance API endpoints
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinanceEndpoint {
+    /// Spot trading endpoint
     Spot,
+    /// USD-M Futures trading endpoint
     UsdFutures,
+    /// COIN-M Futures trading endpoint
     CoinFutures,
 }
 
@@ -94,7 +98,41 @@ impl BinanceConfig {
         }
     }
 
-    /// Load configuration from environment variables
+    /// Load configuration from secrets manager
+    pub async fn from_secrets_manager(
+        secrets_client: &mut SecretsClient,
+        endpoint: BinanceEndpoint,
+    ) -> Result<Self> {
+        info!("Loading Binance configuration from secrets manager");
+        
+        // Select appropriate credential keys based on endpoint
+        let (key_name, secret_name) = match endpoint {
+            BinanceEndpoint::Spot => ("BINANCE_SPOT_API_KEY", "BINANCE_SPOT_API_SECRET"),
+            BinanceEndpoint::UsdFutures => {
+                ("BINANCE_FUTURES_API_KEY", "BINANCE_FUTURES_API_SECRET")
+            }
+            BinanceEndpoint::CoinFutures => (
+                "BINANCE_COIN_FUTURES_API_KEY",
+                "BINANCE_COIN_FUTURES_API_SECRET",
+            ),
+        };
+        
+        // Fetch credentials from secrets manager
+        let api_key = secrets_client.get_credential(key_name).await
+            .map_err(|e| anyhow!("Failed to get {} from secrets manager: {}", key_name, e))?;
+        let api_secret = secrets_client.get_credential(secret_name).await
+            .map_err(|e| anyhow!("Failed to get {} from secrets manager: {}", secret_name, e))?;
+        
+        // Check testnet setting (default to true for safety)
+        let use_testnet = secrets_client.get_credential("BINANCE_TESTNET").await
+            .unwrap_or_else(|_| "true".to_string())
+            .parse::<bool>()
+            .unwrap_or(true);
+        
+        Ok(Self::new(api_key, api_secret, endpoint).with_testnet(use_testnet))
+    }
+    
+    /// Load configuration from environment variables (fallback method)
     pub fn from_env_file(endpoint: BinanceEndpoint) -> Result<Self> {
         // Load .env file if it exists
         dotenv::dotenv().ok();
@@ -124,6 +162,33 @@ impl BinanceConfig {
 
         Ok(Self::new(api_key, api_secret, endpoint).with_testnet(use_testnet))
     }
+    
+    /// Load configuration with fallback
+    /// First tries secrets manager, then falls back to .env file
+    pub async fn load_config(
+        secrets_client: Option<&mut SecretsClient>,
+        endpoint: BinanceEndpoint,
+    ) -> Result<Self> {
+        match secrets_client {
+            Some(client) => {
+                // Try secrets manager first
+                match Self::from_secrets_manager(client, endpoint).await {
+                    Ok(config) => {
+                        info!("Successfully loaded Binance config from secrets manager");
+                        Ok(config)
+                    }
+                    Err(e) => {
+                        warn!("Failed to load from secrets manager: {}, falling back to .env", e);
+                        Self::from_env_file(endpoint)
+                    }
+                }
+            }
+            None => {
+                // No secrets client, use .env directly
+                Self::from_env_file(endpoint)
+            }
+        }
+    }
 
     /// Enable testnet mode
     #[must_use] pub const fn with_testnet(mut self, testnet: bool) -> Self {
@@ -141,19 +206,27 @@ impl BinanceConfig {
 /// Account information from Binance
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountInfo {
+    /// Maker commission rate
     #[serde(rename = "makerCommission", default)]
     pub maker_commission: i64,
+    /// Taker commission rate
     #[serde(rename = "takerCommission", default)]
     pub taker_commission: i64,
+    /// Whether account can trade
     #[serde(rename = "canTrade")]
     pub can_trade: bool,
+    /// Whether account can withdraw
     #[serde(rename = "canWithdraw")]
     pub can_withdraw: bool,
+    /// Whether account can deposit
     #[serde(rename = "canDeposit")]
     pub can_deposit: bool,
+    /// Last update timestamp
     #[serde(rename = "updateTime", default)]
     pub update_time: i64,
+    /// Account balances for all assets
     pub balances: Vec<Balance>,
+    /// Account permissions
     #[serde(default)]
     pub permissions: Vec<String>,
 }
@@ -161,46 +234,65 @@ pub struct AccountInfo {
 /// Balance information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Balance {
+    /// Asset symbol (e.g. BTC, ETH)
     pub asset: String,
+    /// Available balance
     pub free: String,
+    /// Locked balance (in orders)
     pub locked: String,
 }
 
 /// Futures account information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FuturesAccountInfo {
+    /// Total initial margin requirement
     #[serde(rename = "totalInitialMargin")]
     pub total_initial_margin: String,
+    /// Total maintenance margin requirement
     #[serde(rename = "totalMaintMargin")]
     pub total_maint_margin: String,
+    /// Total wallet balance
     #[serde(rename = "totalWalletBalance")]
     pub total_wallet_balance: String,
+    /// Total unrealized profit/loss
     #[serde(rename = "totalUnrealizedProfit")]
     pub total_unrealized_profit: String,
+    /// Total margin balance
     #[serde(rename = "totalMarginBalance")]
     pub total_margin_balance: String,
+    /// Total cross wallet balance
     #[serde(rename = "totalCrossWalletBalance")]
     pub total_cross_wallet_balance: String,
+    /// Total cross unrealized PnL
     #[serde(rename = "totalCrossUnPnl")]
     pub total_cross_unpnl: String,
+    /// Available balance for trading
     #[serde(rename = "availableBalance")]
     pub available_balance: String,
+    /// Asset balances
     pub assets: Vec<FuturesAsset>,
+    /// Current positions
     pub positions: Vec<FuturesPosition>,
 }
 
 /// Futures asset
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FuturesAsset {
+    /// Asset symbol
     pub asset: String,
+    /// Wallet balance for this asset
     #[serde(rename = "walletBalance")]
     pub wallet_balance: String,
+    /// Unrealized profit/loss for this asset
     #[serde(rename = "unrealizedProfit")]
     pub unrealized_profit: String,
+    /// Margin balance for this asset
     #[serde(rename = "marginBalance")]
     pub margin_balance: String,
+    /// Maintenance margin for this asset
     #[serde(rename = "maintMargin")]
     pub maint_margin: String,
+    /// Initial margin for this asset
     #[serde(rename = "initialMargin")]
     pub initial_margin: String,
 }
@@ -208,17 +300,24 @@ pub struct FuturesAsset {
 /// Futures position
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FuturesPosition {
+    /// Trading symbol
     pub symbol: String,
+    /// Position amount (positive for long, negative for short)
     #[serde(rename = "positionAmt")]
     pub position_amt: String,
+    /// Entry price of the position
     #[serde(rename = "entryPrice")]
     pub entry_price: String,
+    /// Current mark price
     #[serde(rename = "markPrice")]
     pub mark_price: String,
+    /// Unrealized profit/loss
     #[serde(rename = "unRealizedProfit")]
     pub unrealized_profit: String,
+    /// Liquidation price
     #[serde(rename = "liquidationPrice")]
     pub liquidation_price: String,
+    /// Position side (LONG/SHORT/BOTH)
     #[serde(rename = "positionSide")]
     pub position_side: String,
 }
@@ -226,6 +325,7 @@ pub struct FuturesPosition {
 /// Listen key for WebSocket user data stream
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListenKeyResponse {
+    /// Listen key for user data stream
     #[serde(rename = "listenKey")]
     pub listen_key: String,
 }
@@ -233,38 +333,56 @@ pub struct ListenKeyResponse {
 /// Order response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderResponse {
+    /// Trading symbol
     pub symbol: String,
+    /// Order ID assigned by exchange
     #[serde(rename = "orderId")]
     pub order_id: i64,
+    /// Client-assigned order ID
     #[serde(rename = "clientOrderId")]
     pub client_order_id: String,
+    /// Transaction timestamp
     #[serde(rename = "transactTime")]
     pub transact_time: i64,
+    /// Order price
     pub price: String,
+    /// Original order quantity
     #[serde(rename = "origQty")]
     pub orig_qty: String,
+    /// Executed quantity
     #[serde(rename = "executedQty")]
     pub executed_qty: String,
+    /// Order status
     pub status: String,
+    /// Time in force
     #[serde(rename = "timeInForce")]
     pub time_in_force: String,
+    /// Order type (MARKET, LIMIT, etc.)
     #[serde(rename = "type")]
     pub order_type: String,
+    /// Order side (BUY/SELL)
     pub side: String,
 }
 
 /// Session cache for Binance
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BinanceSession {
+    /// API key used for this session
     pub api_key: String,
+    /// Endpoint type (spot/futures)
     pub endpoint: String,
+    /// Whether using testnet
     pub testnet: bool,
+    /// Session creation timestamp
     pub created_at: DateTime<Utc>,
+    /// Current listen key for user data stream
     pub listen_key: Option<String>,
+    /// Listen key expiration timestamp
     pub listen_key_expires_at: Option<DateTime<Utc>>,
 }
 
 /// Enhanced Binance authentication handler
+#[derive(Debug)]
 pub struct BinanceAuth {
     config: BinanceConfig,
     http_client: Client,

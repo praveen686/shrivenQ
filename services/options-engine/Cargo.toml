@@ -44,14 +44,57 @@ dashmap = "6.1"
 
 # Performance
 parking_lot = "0.12"
+rustc-hash = "2.0"
 
 # Internal dependencies
 services-common = { path = "../common" }
 
 # gRPC dependencies
-tonic = "0.12"
-prost = "0.13"
+tonic = { workspace = true }
+prost = { workspace = true }
+tonic-prost = { workspace = true }
 tokio-stream = "0.1"
 
+[dev-dependencies]
+# Testing framework
+rstest = "0.18"
+tokio-test = "0.4"
+
+# Test assertions
+approx = "0.5"
+assert_matches = "1.5"
+
+# Property-based testing
+proptest = "1.0"
+quickcheck = "1.0"
+
+# Mocking and test doubles
+mockall = "0.11"
+wiremock = "0.5"
+
+# Test utilities
+tempfile = "3.0"
+test-log = "0.2"
+
+# Performance testing
+criterion = { version = "0.5", features = ["html_reports"] }
+
 [build-dependencies]
-tonic-build = "0.12"
+tonic-prost-build = "0.14"
+
+[[bin]]
+name = "options-engine"
+path = "src/main.rs"
+
+
+[features]
+default = []
+# Feature for enabling expensive tests
+expensive-tests = []
+# Feature for enabling benchmarks with large datasets
+large-benchmarks = []
+
+[lib]
+name = "options_engine"
+path = "src/lib.rs"
+

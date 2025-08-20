@@ -15,79 +15,195 @@ use url::Url;
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum KiteMessage {
+    /// Order update message containing market depth and trade information
     #[serde(rename = "order")]
     Order(OrderUpdate),
+    /// Quote update message with price and volume data
     #[serde(rename = "quote")]
     Quote(QuoteUpdate),
+    /// Generic message with string data payload
     #[serde(rename = "message")]
-    Message { data: String },
+    Message { 
+        /// Raw message content from the server
+        data: String 
+    },
 }
 
 #[derive(Debug, Deserialize)]
+/// Order update message containing market data and order book information
+/// 
+/// This structure wraps the detailed order data received from Zerodha's WebSocket feed.
+/// It contains comprehensive market information including depth, timestamps, and prices.
 pub struct OrderUpdate {
+    /// Detailed order and market data payload
     pub data: OrderData,
 }
 
 #[derive(Debug, Deserialize)]
+/// Detailed order and market data from Zerodha WebSocket feed
+///
+/// Contains comprehensive market information including instrument identification,
+/// timing data, pricing information, and order book depth for a specific instrument.
 pub struct OrderData {
+    /// Unique instrument identifier token
     pub instrument_token: u32,
+    /// Message timestamp in milliseconds since Unix epoch
     pub timestamp: i64,
+    /// Last traded price for this instrument
     pub last_price: f64,
+    /// Market depth information with bid/ask levels
     pub depth: Depth,
 }
 
 #[derive(Debug, Deserialize)]
+/// Market depth structure containing bid and ask levels
+///
+/// Represents the order book depth with separate arrays for buy and sell sides.
+/// Each side contains multiple price levels with corresponding quantities and order counts.
 pub struct Depth {
+    /// Buy side depth levels (bids) in descending price order
     pub buy: Vec<DepthLevel>,
+    /// Sell side depth levels (asks) in ascending price order
     pub sell: Vec<DepthLevel>,
 }
 
 #[derive(Debug, Deserialize)]
+/// Individual price level in the order book depth
+///
+/// Represents a single price level containing the price, total quantity,
+/// and number of orders at that level.
 pub struct DepthLevel {
+    /// Price level in the order book
     pub price: f64,
+    /// Total quantity available at this price level
     pub quantity: u32,
+    /// Number of individual orders at this price level
     pub orders: u32,
 }
 
 #[derive(Debug, Deserialize)]
+/// Quote update message containing market data for multiple instruments
+///
+/// This message type delivers market data updates for one or more instruments
+/// in a single WebSocket message. The data is organized as a hash map with
+/// instrument tokens as keys and corresponding quote data as values.
 pub struct QuoteUpdate {
+    /// Map of instrument tokens to their corresponding quote data
     pub data: FxHashMap<String, QuoteData>,
 }
 
 #[derive(Debug, Deserialize)]
+/// Individual instrument quote data with comprehensive market information
+///
+/// Contains all essential market data for a single instrument including
+/// price, volume, OHLC data, and order book aggregates.
 pub struct QuoteData {
+    /// Unique instrument identifier token
     pub instrument_token: u32,
+    /// Timestamp of the quote data as string
     pub timestamp: String,
+    /// Last traded price
     pub last_price: f64,
+    /// Total traded volume
     pub volume: u32,
+    /// Total quantity available on buy side
     pub buy_quantity: u32,
+    /// Total quantity available on sell side
     pub sell_quantity: u32,
+    /// Open, High, Low, Close data for the trading session
     pub ohlc: OHLC,
 }
 
 #[derive(Debug, Deserialize)]
+/// Open, High, Low, Close price data for a trading session
+///
+/// Standard OHLC data structure containing the four key price points
+/// that define the price action for a given time period.
 pub struct OHLC {
+    /// Opening price of the trading session
     pub open: f64,
+    /// Highest price during the trading session
     pub high: f64,
+    /// Lowest price during the trading session
     pub low: f64,
+    /// Closing price of the trading session
     pub close: f64,
 }
 
-/// Subscription message for Kite
+/// Subscription message for Kite WebSocket API
+///
+/// Used to subscribe to market data streams for specified instruments.
+/// Follows the Kite API protocol with action and value fields.
 #[derive(Debug, Serialize)]
 pub struct KiteSubscribe {
-    pub a: String,   // action: "subscribe"
-    pub v: Vec<u32>, // instrument tokens
+    /// Action type - always "subscribe" for subscription requests
+    pub a: String,
+    /// Vector of instrument tokens to subscribe to
+    pub v: Vec<u32>,
 }
 
-/// Mode change message
+/// Mode change message for Kite WebSocket API
+///
+/// Used to change the data mode (LTP, quote, full) for subscribed instruments.
+/// Different modes provide different levels of market data detail.
 #[derive(Debug, Serialize)]
 pub struct KiteModeChange {
-    pub a: String,             // action: "mode"
-    pub v: Vec<(String, u32)>, // [(mode, token)]
+    /// Action type - always "mode" for mode change requests
+    pub a: String,
+    /// Vector of (mode, token) pairs specifying mode for each instrument
+    pub v: Vec<(String, u32)>,
 }
 
 /// Zerodha WebSocket feed
+impl std::fmt::Debug for ZerodhaWebSocketFeed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ZerodhaWebSocketFeed")
+            .field("config", &self.config)
+            .field("auth", &"ZerodhaAuth")
+            .field("symbols", &self.symbols)
+            .field("symbol_map", &format!("{} symbols", self.symbol_map.len()))
+            .field("token_map", &format!("{} tokens", self.token_map.len()))
+            .finish()
+    }
+}
+
+/// Advanced Zerodha WebSocket feed with multi-mode data processing
+///
+/// This implementation provides enterprise-grade connectivity to Zerodha's KiteConnect
+/// WebSocket API with support for both JSON text messages and binary tick data.
+/// It handles the full spectrum of Zerodha's data formats including LTP, Quote,
+/// and Full mode binary packets.
+///
+/// # Protocol Support
+/// - **Text Messages**: JSON-based order updates, quotes, and control messages
+/// - **Binary Ticks**: Compact binary format for high-frequency market data
+/// - **Authentication**: API key and access token based WebSocket authentication
+/// - **Multi-mode Processing**: LTP (8 bytes), Quote (44 bytes), Full (184 bytes)
+///
+/// # Data Processing Capabilities
+/// - Real-time order book reconstruction from binary depth data
+/// - OHLC data extraction from quote and full mode packets  
+/// - Trade and volume information processing
+/// - Heartbeat and connection management
+///
+/// # Performance Optimizations
+/// - FxHashMap for O(1) token-to-symbol lookups
+/// - Zero-copy binary data processing where possible
+/// - Efficient packet parsing with bounds checking
+/// - Pre-allocated data structures for hot paths
+///
+/// # Examples
+/// ```
+/// use zerodha::websocket::ZerodhaWebSocketFeed;
+/// use services_common::{ZerodhaAuth, FeedConfig};
+///
+/// let config = FeedConfig::default();
+/// let auth = ZerodhaAuth::new();
+/// 
+/// let mut feed = ZerodhaWebSocketFeed::new(config, auth);
+/// // feed.connect().await?;
+/// // feed.subscribe(symbols).await?;
+/// ```
 pub struct ZerodhaWebSocketFeed {
     config: FeedConfig,
     auth: ZerodhaAuth,

@@ -3,8 +3,10 @@
 //! NEVER store credentials in plain text!
 //! This service provides encrypted credential storage and retrieval.
 
+pub mod grpc_service;
+
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Key, Nonce,
 };
 use anyhow::{Result, Context};
@@ -31,11 +33,20 @@ pub struct SecretsManager {
     config_path: PathBuf,
 }
 
+impl std::fmt::Debug for SecretsManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SecretsManager")
+            .field("config_path", &self.config_path)
+            .field("cipher", &"<hidden>")
+            .finish()
+    }
+}
+
 impl SecretsManager {
     /// Create new secrets manager with master password
     pub fn new(master_password: &str) -> Result<Self> {
         // Derive key from master password using Argon2
-        use argon2::{Argon2, PasswordHasher, password_hash::{SaltString, rand_core::OsRng}};
+        use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
         
         let salt = SaltString::from_b64("c2hyaXZlbnF1YW50X3NhbHRfdjE")
             .map_err(|e| anyhow::anyhow!("Failed to parse salt: {}", e))?;
@@ -136,25 +147,42 @@ impl SecretsManager {
 /// Environment-specific configuration
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EnvironmentConfig {
+    /// Current environment type
     pub environment: Environment,
+    /// Source of credentials for this environment
     pub credentials_source: CredentialsSource,
 }
 
+/// Deployment environment types
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Environment {
+    /// Development environment
     Development,
+    /// Staging environment
     Staging,
+    /// Production environment
     Production,
 }
 
+/// Source of credentials storage
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CredentialsSource {
     /// Local encrypted file
     LocalEncrypted(PathBuf),
     /// HashiCorp Vault
-    Vault { url: String, token: String },
+    Vault { 
+        /// Vault server URL
+        url: String, 
+        /// Authentication token
+        token: String 
+    },
     /// AWS Secrets Manager
-    AwsSecrets { region: String, secret_id: String },
+    AwsSecrets { 
+        /// AWS region
+        region: String, 
+        /// Secret identifier
+        secret_id: String 
+    },
     /// Environment variables (for CI/CD only)
     EnvironmentVariables,
 }
@@ -187,18 +215,26 @@ pub fn get_credentials() -> Result<HashMap<String, String>> {
             Ok(creds)
         }
         _ => {
-            // Development: Use encrypted local file
+            // Development: Use encrypted local file with fallback to test credentials
             let master_password = std::env::var("MASTER_PASSWORD")
                 .unwrap_or_else(|_| "development_password_change_me".to_string());
             let manager = SecretsManager::new(&master_password)?;
             
-            // For development, can use test credentials
-            Ok(HashMap::from([
-                ("ZERODHA_API_KEY".to_string(), "test_api_key".to_string()),
-                ("ZERODHA_API_SECRET".to_string(), "test_api_secret".to_string()),
-                ("BINANCE_API_KEY".to_string(), "test_binance_key".to_string()),
-                ("BINANCE_API_SECRET".to_string(), "test_binance_secret".to_string()),
-            ]))
+            // Try to load from encrypted storage, fallback to test credentials
+            let mut creds = HashMap::new();
+            for key in &["ZERODHA_API_KEY", "ZERODHA_API_SECRET", "BINANCE_API_KEY", "BINANCE_API_SECRET"] {
+                let value = manager.get_credential(key).unwrap_or_else(|_| {
+                    match *key {
+                        "ZERODHA_API_KEY" => "test_api_key".to_string(),
+                        "ZERODHA_API_SECRET" => "test_api_secret".to_string(),
+                        "BINANCE_API_KEY" => "test_binance_key".to_string(),
+                        "BINANCE_API_SECRET" => "test_binance_secret".to_string(),
+                        _ => "test_default".to_string(),
+                    }
+                });
+                creds.insert(key.to_string(), value);
+            }
+            Ok(creds)
         }
     }
 }

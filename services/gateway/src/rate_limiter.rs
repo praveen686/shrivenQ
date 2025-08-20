@@ -32,6 +32,17 @@ pub struct RateLimiter {
     config: RateLimitConfig,
 }
 
+impl std::fmt::Debug for RateLimiter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RateLimiter")
+            .field("global_limiter", &"GovernorRateLimiter")
+            .field("endpoint_limiters", &"Arc<RwLock<FxHashMap>>")
+            .field("ip_limiters", &"Arc<RwLock<FxHashMap>>")
+            .field("config", &self.config)
+            .finish()
+    }
+}
+
 impl RateLimiter {
     /// Create a new rate limiter
     #[must_use] pub fn new(config: RateLimitConfig) -> Self {
@@ -204,8 +215,12 @@ impl RateLimiter {
 /// Rate limiting statistics
 #[derive(Debug, serde::Serialize)]
 pub struct RateLimitStats {
+    /// Total number of tracked IP addresses
     pub total_ips: usize,
+    /// Total number of tracked endpoints
     pub total_endpoints: usize,
+    /// Global rate limit per minute
     pub global_limit_per_minute: u32,
+    /// Global burst size limit
     pub global_burst_size: u32,
 }

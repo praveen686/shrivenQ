@@ -8,27 +8,41 @@ use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{Level, Metadata};
+use tracing::{Level, Metadata, debug};
 
 /// Log entry structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
+    /// UTC timestamp when the log entry was created
     pub timestamp: DateTime<Utc>,
+    /// Log level (Trace, Debug, Info, Warn, Error)
     pub level: LogLevel,
+    /// Name of the service that generated this log entry
     pub service: String,
+    /// The log message content
     pub message: String,
+    /// Additional structured fields as JSON
     pub fields: serde_json::Value,
+    /// Distributed tracing trace ID
     pub trace_id: Option<String>,
+    /// Distributed tracing span ID
     pub span_id: Option<String>,
+    /// Request correlation ID for tracking requests across services
     pub correlation_id: Option<String>,
 }
 
+/// Log level enumeration for categorizing log entries
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LogLevel {
+    /// Trace level - very detailed information, typically of interest only during debugging
     Trace,
+    /// Debug level - detailed information for debugging purposes
     Debug,
+    /// Info level - informational messages that highlight the progress of the application
     Info,
+    /// Warn level - warning messages for potentially harmful situations
     Warn,
+    /// Error level - error events that might still allow the application to continue running
     Error,
 }
 
@@ -48,25 +62,56 @@ impl From<Level> for LogLevel {
 pub struct LogAggregator {
     buffer: Arc<DashMap<String, Vec<LogEntry>>>,
     sender: mpsc::Sender<LogEntry>,
+    buffer_limit: usize,
+}
+
+impl std::fmt::Debug for LogAggregator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LogAggregator")
+            .field("buffer_keys", &self.buffer.iter().map(|entry| entry.key().clone()).collect::<Vec<_>>())
+            .field("sender_capacity", &"<channel_sender>")
+            .field("buffer_limit", &self.buffer_limit)
+            .finish()
+    }
 }
 
 impl LogAggregator {
+    /// Creates a new log aggregator with the specified buffer size
+    /// 
+    /// Returns a tuple containing the aggregator and a receiver for processing log entries
     pub fn new(buffer_size: usize) -> (Self, mpsc::Receiver<LogEntry>) {
         let (sender, receiver) = mpsc::channel(buffer_size);
         
         (Self {
             buffer: Arc::new(DashMap::new()),
             sender,
+            buffer_limit: buffer_size,
         }, receiver)
     }
     
     /// Ingest a log entry
     pub async fn ingest(&self, entry: LogEntry) -> Result<()> {
-        // Add to service-specific buffer
-        self.buffer
-            .entry(entry.service.clone())
-            .or_insert_with(Vec::new)
-            .push(entry.clone());
+        // Add to service-specific buffer with size limit
+        {
+            let mut service_logs = self.buffer
+                .entry(entry.service.clone())
+                .or_insert_with(Vec::new);
+            
+            // If buffer is at capacity, remove oldest entries (FIFO)
+            if service_logs.len() >= self.buffer_limit {
+                let excess_count = service_logs.len() - self.buffer_limit + 1;
+                debug!(
+                    service = %entry.service,
+                    buffer_limit = self.buffer_limit,
+                    current_size = service_logs.len(),
+                    removing_entries = excess_count,
+                    "Service log buffer at capacity, removing oldest entries"
+                );
+                service_logs.drain(0..excess_count);
+            }
+            
+            service_logs.push(entry.clone());
+        }
         
         // Send to processing pipeline
         self.sender.send(entry).await?;
@@ -88,19 +133,26 @@ impl LogAggregator {
 }
 
 /// Log forwarder for sending logs to external systems
+#[derive(Debug)]
 pub struct LogForwarder {
     config: ForwarderConfig,
 }
 
+/// Configuration for log forwarding destinations
 #[derive(Debug, Clone)]
 pub struct ForwarderConfig {
+    /// Optional Elasticsearch URL for log forwarding
     pub elasticsearch_url: Option<String>,
+    /// Optional Loki URL for log forwarding
     pub loki_url: Option<String>,
+    /// Whether to output logs to stdout
     pub stdout: bool,
+    /// Optional file path for log output
     pub file_path: Option<String>,
 }
 
 impl LogForwarder {
+    /// Creates a new log forwarder with the specified configuration
     pub fn new(config: ForwarderConfig) -> Self {
         Self { config }
     }
@@ -142,7 +194,7 @@ impl LogForwarder {
 }
 
 /// Check if metadata should be included based on level and target
-pub fn should_include_metadata(metadata: &Metadata) -> bool {
+pub fn should_include_metadata(metadata: &Metadata<'_>) -> bool {
     // Filter based on target and level
     let target = metadata.target();
     let level = metadata.level();
@@ -236,9 +288,13 @@ pub fn generate_correlation_id() -> String {
 /// Log rotation configuration
 #[derive(Debug, Clone)]
 pub struct RotationConfig {
+    /// Maximum size of a log file in megabytes before rotation
     pub max_size_mb: u64,
+    /// Maximum age of log files in days before deletion
     pub max_age_days: u32,
+    /// Maximum number of backup log files to keep
     pub max_backups: u32,
+    /// Whether to compress rotated log files
     pub compress: bool,
 }
 

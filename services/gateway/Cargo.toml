@@ -17,13 +17,14 @@ async-trait = "0.1"
 
 # HTTP framework
 axum = { version = "0.7", features = ["ws", "macros"] }
-tower = { version = "0.4", features = ["full"] }
-tower-http = { version = "0.5", features = ["cors", "trace", "compression-full", "timeout"] }
+tower = { version = "0.5", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "compression-full", "timeout"] }
 hyper = { version = "1.0", features = ["full"] }
 
 # gRPC clients
-tonic = "0.12"
-prost = "0.13"
+tonic = { workspace = true }
+prost = { workspace = true }
+tonic-prost = { workspace = true }
 
 # JSON Web Tokens
 jsonwebtoken = "9.0"
@@ -64,7 +65,7 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 procfs = "0.16"
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-prost-build = "0.14"
 
 [features]
 default = ["monitoring"]
@@ -73,3 +74,14 @@ monitoring = ["dep:metrics", "dep:metrics-exporter-prometheus"]
 [dev-dependencies]
 tokio-test = "0.4"
 tower-test = "0.4"
+criterion = { version = "0.5", features = ["html_reports"] }
+rstest = "0.18"
+rstest_reuse = "0.5"
+mockito = "1.2"
+wiremock = "0.5"
+tempfile = "3.8"
+assert_matches = "1.5"
+pretty_assertions = "1.4"
+futures = "0.3"
+serial_test = "3.0"
+test-log = "0.2"

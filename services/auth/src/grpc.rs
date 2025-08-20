@@ -17,7 +17,16 @@ pub struct AuthServiceGrpc {
     inner: Arc<dyn AuthTrait>,
 }
 
+impl std::fmt::Debug for AuthServiceGrpc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthServiceGrpc")
+            .field("inner", &"Arc<dyn AuthService>")
+            .finish()
+    }
+}
+
 impl AuthServiceGrpc {
+    /// Create a new gRPC auth service wrapper
     pub fn new(service: Arc<dyn AuthTrait>) -> Self {
         Self { inner: service }
     }

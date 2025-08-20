@@ -112,6 +112,7 @@ impl BinanceConfig {
 }
 
 /// Binance authentication handler supporting multiple markets
+#[derive(Debug)]
 pub struct BinanceAuth {
     /// Configurations for each market
     configs: FxHashMap<BinanceMarket, BinanceConfig>,

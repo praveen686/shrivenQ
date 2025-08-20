@@ -17,11 +17,22 @@ use tokio::sync::RwLock;
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::{info, error};
 
+/// Backtesting service for running strategy backtests
 pub struct BacktestingService {
+    /// Active backtest engines indexed by backtest ID
     engines: Arc<RwLock<std::collections::HashMap<String, Arc<BacktestEngine>>>>,
 }
 
+impl std::fmt::Debug for BacktestingService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BacktestingService")
+            .field("engines", &"Arc<RwLock<HashMap<String, Arc<BacktestEngine>>>>")
+            .finish()
+    }
+}
+
 impl BacktestingService {
+    /// Create new backtesting service
     pub fn new() -> Self {
         Self {
             engines: Arc::new(RwLock::new(std::collections::HashMap::new())),

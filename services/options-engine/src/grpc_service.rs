@@ -2,10 +2,11 @@ use anyhow::Result;
 use tonic::{Request, Response, Status};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use options_engine::{OptionsEngine, ExecutionMode, OptionType, BlackScholes};
 
 #[derive(Debug)]
 pub struct OptionsEngineService {
-    pub engine: Arc<RwLock<crate::lib::OptionsEngine>>,
+    pub engine: Arc<RwLock<OptionsEngine>>,
 }
 
 impl Default for OptionsEngineService {
@@ -17,8 +18,8 @@ impl Default for OptionsEngineService {
 impl OptionsEngineService {
     pub fn new() -> Self {
         Self {
-            engine: Arc::new(RwLock::new(crate::lib::OptionsEngine::new(
-                crate::lib::ExecutionMode::Paper
+            engine: Arc::new(RwLock::new(OptionsEngine::new(
+                ExecutionMode::Paper
             ))),
         }
     }
@@ -32,14 +33,20 @@ impl crate::pb::options_engine_server::OptionsEngine for OptionsEngineService {
     ) -> Result<Response<crate::pb::PricingResponse>, Status> {
         let req = request.into_inner();
         
+        // Log pricing request through the engine
+        {
+            let engine = self.engine.read().await;
+            tracing::info!("Pricing request received - Engine mode: {:?}", engine.mode);
+        }
+        
         let option_type = match req.option_type {
-            0 => crate::lib::OptionType::Call,
-            1 => crate::lib::OptionType::Put,
+            0 => OptionType::Call,
+            1 => OptionType::Put,
             _ => return Err(Status::invalid_argument("Invalid option type")),
         };
         
         // Calculate price using Black-Scholes
-        let price = crate::lib::BlackScholes::price(
+        let price = BlackScholes::price(
             option_type,
             req.spot,
             req.strike,
@@ -50,7 +57,7 @@ impl crate::pb::options_engine_server::OptionsEngine for OptionsEngineService {
         );
         
         // Calculate Greeks
-        let greeks = crate::lib::BlackScholes::calculate_greeks(
+        let greeks = BlackScholes::calculate_greeks(
             option_type,
             req.spot,
             req.strike,
@@ -85,13 +92,13 @@ impl crate::pb::options_engine_server::OptionsEngine for OptionsEngineService {
         let req = request.into_inner();
         
         let option_type = match req.option_type {
-            0 => crate::lib::OptionType::Call,
-            1 => crate::lib::OptionType::Put,
+            0 => OptionType::Call,
+            1 => OptionType::Put,
             _ => return Err(Status::invalid_argument("Invalid option type")),
         };
         
         // Calculate implied volatility
-        let iv = crate::lib::BlackScholes::implied_volatility(
+        let iv = BlackScholes::implied_volatility(
             option_type,
             req.spot,
             req.strike,

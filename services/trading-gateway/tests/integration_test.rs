@@ -12,6 +12,11 @@ use trading_gateway::{
     SignalType, OrderStatus, Severity, RiskAction,
 };
 
+// Import test modules
+mod unit;
+mod integration;
+mod performance;
+
 #[tokio::test]
 async fn test_gateway_creation_and_startup() -> Result<()> {
     let config = GatewayConfig::default();

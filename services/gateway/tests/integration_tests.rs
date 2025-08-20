@@ -12,8 +12,12 @@ use serde_json::{Value, json};
 use std::time::Duration;
 use tokio::time::timeout;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
+use rstest::*;
+use pretty_assertions::assert_eq;
 
 use api_gateway::{GatewayConfig, start_server};
+
+mod unit;
 
 /// Test configuration for integration tests
 fn create_test_config() -> GatewayConfig {

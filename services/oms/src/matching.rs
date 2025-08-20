@@ -17,6 +17,7 @@ use uuid::Uuid;
 use crate::order::{Order, OrderSide, OrderType, Fill, LiquidityIndicator};
 
 /// Matching engine for order execution
+#[derive(Debug)]
 pub struct MatchingEngine {
     /// Order books by symbol
     order_books: Arc<RwLock<FxHashMap<Symbol, OrderBookMatcher>>>,
@@ -27,6 +28,7 @@ pub struct MatchingEngine {
 }
 
 /// Order book matcher for a single symbol
+#[derive(Debug)]
 pub struct OrderBookMatcher {
     /// Symbol
     symbol: Symbol,
@@ -474,6 +476,81 @@ impl OrderBookMatcher {
             total_volume: AtomicU64::new(0),
         }
     }
+    
+    /// Get the symbol for this matcher
+    pub fn get_symbol(&self) -> Symbol {
+        self.symbol
+    }
+    
+    /// Get order book depth with symbol information
+    pub fn get_depth(&self, levels: usize) -> OrderBookDepth {
+        let buy_orders = self.buy_orders.read();
+        let sell_orders = self.sell_orders.read();
+        
+        let bids: Vec<(i64, i64)> = buy_orders
+            .iter()
+            .take(levels)
+            .filter_map(|(key, order)| {
+                order.price.map(|price| {
+                    // Use key for validation - ensure price matches the BTreeMap key
+                    let price_i64 = price.as_i64();
+                    // For buy orders, key.price is negative of actual price
+                    let expected_key_price = if key.price < 0 { -price_i64 } else { price_i64 };
+                    debug_assert_eq!(key.price, expected_key_price, "Price mismatch in orderbook key");
+                    (price_i64, order.quantity.as_i64())
+                })
+            })
+            .collect();
+            
+        let asks: Vec<(i64, i64)> = sell_orders
+            .iter()
+            .take(levels)
+            .filter_map(|(key, order)| {
+                order.price.map(|price| {
+                    // Use key for validation - ensure price matches the BTreeMap key
+                    let price_i64 = price.as_i64();
+                    // For buy orders, key.price is negative of actual price
+                    let expected_key_price = if key.price < 0 { -price_i64 } else { price_i64 };
+                    debug_assert_eq!(key.price, expected_key_price, "Price mismatch in orderbook key");
+                    (price_i64, order.quantity.as_i64())
+                })
+            })
+            .collect();
+        
+        OrderBookDepth {
+            symbol: self.symbol, // Using the symbol field
+            bids,
+            asks,
+            last_price: self.last_price.load(AtomicOrdering::Relaxed) as i64,
+            total_volume: self.total_volume.load(AtomicOrdering::Relaxed) as i64,
+        }
+    }
+    
+    /// Get symbol-specific statistics
+    pub fn get_symbol_stats(&self) -> SymbolStats {
+        SymbolStats {
+            symbol: self.symbol,
+            last_price: self.last_price.load(AtomicOrdering::Relaxed) as i64,
+            total_volume: self.total_volume.load(AtomicOrdering::Relaxed),
+            bid_count: self.buy_orders.read().len(),
+            ask_count: self.sell_orders.read().len(),
+        }
+    }
+}
+
+/// Symbol-specific statistics
+#[derive(Debug, Clone)]
+pub struct SymbolStats {
+    /// Symbol identifier
+    pub symbol: Symbol,
+    /// Last traded price
+    pub last_price: i64,
+    /// Total volume traded
+    pub total_volume: u64,
+    /// Number of bid orders
+    pub bid_count: usize,
+    /// Number of ask orders
+    pub ask_count: usize,
 }
 
 /// Order book depth
@@ -525,7 +602,7 @@ pub struct OrderBookDepth {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::order::{OrderSide, OrderType, TimeInForce};
+    use crate::order::{OrderSide, OrderStatus, OrderType, TimeInForce};
     
     fn create_test_order(side: OrderSide, price: Option<i64>, qty: i64, seq: u64) -> Order {
         Order {

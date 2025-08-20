@@ -41,3 +41,6 @@ prost = { workspace = true }
 criterion = { workspace = true }
 tempfile = "3.10"
 proptest = "1.5"
+rstest = "0.22"
+tokio-test = "0.4"
+approx = "0.5"

@@ -11,6 +11,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 /// Client for data aggregator service
+#[derive(Debug)]
 pub struct DataAggregatorClient {
     /// The aggregator service
     service: Arc<RwLock<DataAggregatorService>>,

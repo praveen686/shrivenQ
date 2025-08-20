@@ -1,6 +1,6 @@
 //! Model serving infrastructure
 
-use anyhow::{Result, Context};
+use anyhow::Result;
 use dashmap::DashMap;
 use std::sync::Arc;
 use crate::models::{TradingModel, ModelMetadata};
@@ -11,7 +11,18 @@ pub struct ModelRegistry {
     active_model: Arc<parking_lot::RwLock<String>>,
 }
 
+impl std::fmt::Debug for ModelRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let active = self.active_model.read();
+        f.debug_struct("ModelRegistry")
+            .field("models", &format!("[{} models]", self.models.len()))
+            .field("active_model", &*active)
+            .finish()
+    }
+}
+
 impl ModelRegistry {
+    /// Create a new empty model registry
     pub fn new() -> Self {
         Self {
             models: Arc::new(DashMap::new()),

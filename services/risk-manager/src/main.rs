@@ -178,7 +178,7 @@ fn load_config() -> Result<RiskLimits> {
 
 /// Update health status periodically
 async fn update_health_status(
-    mut reporter: HealthReporter,
+    reporter: HealthReporter,
     risk_service: RiskManagerGrpcService
 ) {
     let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
@@ -227,10 +227,11 @@ async fn check_service_health_with_risk(risk_service: &RiskManagerGrpcService) -
     
     // Check for high drawdown
     // Safe conversion: comparing drawdown percentages
-    let drawdown_i64 = if let Ok(val) = i64::try_from(metrics.current_drawdown) { val } else {
+    // Convert drawdown to i64 for comparison (will always succeed for reasonable values)
+    let drawdown_i64 = i64::try_from(metrics.current_drawdown).unwrap_or_else(|_| {
         tracing::warn!("Drawdown {} exceeds i64 range, treating as unhealthy", metrics.current_drawdown);
-        return false; // Treat overflow as unhealthy
-    };
+        i64::MAX // Treat overflow as maximum unhealthy value
+    });
     if drawdown_i64 > HEALTH_CHECK_MAX_DRAWDOWN {
         return false;
     }
@@ -331,6 +332,9 @@ async fn shutdown_signal(shutdown_tx: broadcast::Sender<()>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use risk_manager::{RiskManagerService, circuit_breaker::CircuitBreaker};
     
     #[test]
     fn test_config_loading() {
@@ -340,7 +344,41 @@ mod tests {
     
     #[tokio::test]
     async fn test_health_check() {
-        let is_healthy = check_service_health().await;
+        // Create a basic risk service for testing
+        let risk_limits = RiskLimits {
+            max_position_size: 1000000,
+            max_position_value: 10000000,
+            max_total_exposure: 100000000,
+            max_order_size: 100000,
+            max_order_value: 1000000,
+            max_orders_per_minute: 100,
+            max_daily_loss: -10000,
+            max_drawdown_pct: 500, // 5% in fixed-point
+            circuit_breaker_threshold: 5,
+            circuit_breaker_cooldown: 300,
+        };
+        
+        let risk_manager = Arc::new(RiskManagerService::new(risk_limits));
+        let circuit_breaker = Arc::new(CircuitBreaker::new(5, Duration::from_secs(60).as_millis() as u64));
+        
+        // Create event channel
+        let (event_tx, _event_rx) = tokio::sync::broadcast::channel(100);
+        
+        use risk_manager::{monitor::RiskMonitor, grpc_service::{RateLimiter, HealthStatus, RiskEvent}};
+        
+        let (risk_event_tx, _) = tokio::sync::broadcast::channel::<RiskEvent>(100);
+        
+        let risk_service = RiskManagerGrpcService {
+            risk_manager,
+            monitor: Arc::new(RiskMonitor::new()),
+            circuit_breaker,
+            rate_limiter: Arc::new(RateLimiter::new(100)),
+            shutdown_tx: event_tx.clone(),
+            health_status: Arc::new(tokio::sync::RwLock::new(HealthStatus::default())),
+            event_tx: risk_event_tx,
+        };
+        
+        let is_healthy = check_service_health_with_risk(&risk_service).await;
         assert!(is_healthy);
     }
 }

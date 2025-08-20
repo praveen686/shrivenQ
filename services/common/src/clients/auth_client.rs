@@ -9,6 +9,7 @@ use tonic::transport::Channel;
 use tracing::{debug, error};
 
 /// Auth service client wrapper
+#[derive(Debug)]
 pub struct AuthClient {
     client: GrpcClient<Channel>,
     endpoint: String,

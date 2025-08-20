@@ -37,7 +37,9 @@ async fn main() -> Result<()> {
     info!("✅ Trading Gateway initialized successfully");
     
     // Create gRPC service
-    let service = TradingGatewayServiceImpl::new(gateway.clone());
+    // Create gRPC service implementation that implements TradingGatewayService trait
+    let service: TradingGatewayServiceImpl = TradingGatewayServiceImpl::new(gateway.clone());
+    let _: &dyn TradingGatewayService = &service; // Ensure trait is implemented
     
     // Configure server address
     let addr: SocketAddr = format!("0.0.0.0:{}", DEFAULT_PORT)
@@ -52,7 +54,7 @@ async fn main() -> Result<()> {
     // Start metrics endpoint
     start_metrics_endpoint();
     
-    // Build gRPC server
+    // Build gRPC server with trait implementation
     let server = Server::builder()
         .add_service(TradingGatewayServer::new(service))
         .serve(addr);

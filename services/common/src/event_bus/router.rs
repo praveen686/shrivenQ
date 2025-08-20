@@ -16,6 +16,7 @@ pub trait MessageRouter<T: BusMessage>: Send + Sync {
 }
 
 /// Topic-based router (default implementation)
+#[derive(Debug)]
 pub struct TopicRouter {
     /// Topic patterns and their targets
     routes: Arc<RwLock<FxHashMap<String, FxHashSet<String>>>>,
@@ -135,6 +136,7 @@ impl<T: BusMessage> MessageRouter<T> for TopicRouter {
 }
 
 /// Content-based router using message content for routing
+#[derive(Debug)]
 pub struct ContentBasedRouter<T: BusMessage> {
     /// Routing rules based on message content
     rules: Arc<RwLock<Vec<ContentRule<T>>>>,
@@ -202,7 +204,17 @@ pub struct ContentRule<T: BusMessage> {
     pub target_fn: Box<dyn Fn(&MessageEnvelope<T>) -> Vec<String> + Send + Sync>,
 }
 
+impl<T: BusMessage> std::fmt::Debug for ContentRule<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ContentRule")
+            .field("predicate", &"<function>")
+            .field("target_fn", &"<function>")
+            .finish()
+    }
+}
+
 /// Priority-based router that routes based on message priority
+#[derive(Debug)]
 pub struct PriorityRouter {
     /// Priority thresholds and their target topics
     priority_routes: Arc<RwLock<Vec<(u8, String)>>>,
@@ -274,6 +286,7 @@ impl<T: BusMessage> MessageRouter<T> for PriorityRouter {
 }
 
 /// Load balancing router that distributes messages across multiple targets
+#[derive(Debug)]
 pub struct LoadBalancingRouter {
     /// Available targets
     targets: Arc<RwLock<Vec<String>>>,
@@ -371,6 +384,14 @@ impl<T: BusMessage> CompositeRouter<T> {
 impl<T: BusMessage> Default for CompositeRouter<T> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<T: BusMessage> std::fmt::Debug for CompositeRouter<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CompositeRouter")
+            .field("router_count", &self.routers.len())
+            .finish()
     }
 }
 
@@ -514,7 +535,7 @@ mod tests {
         };
 
         let envelope = MessageEnvelope::new(message, MessageMetadata::default());
-        let targets = router.route(&envelope);
+        let targets = composite.route(&envelope);
 
         // Should get targets from both routers
         assert!(targets.contains(&"topic_route".to_string()));

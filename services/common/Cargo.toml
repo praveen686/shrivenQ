@@ -12,6 +12,7 @@ license.workspace = true
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+bincode = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -19,7 +20,8 @@ tracing-subscriber = { workspace = true }
 # gRPC
 tonic = { workspace = true }
 prost = { workspace = true }
-prost-types = "0.13"
+prost-types = "0.14"
+tonic-prost = "0.14"
 # Removed circular dependencies - services should depend on common, not vice versa
 
 # Async
@@ -41,7 +43,8 @@ hex = "0.4"
 reqwest = { workspace = true }
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-prost-build = "0.14"
 
 [dev-dependencies]
 tempfile = "3.10"
+rstest = "0.23"

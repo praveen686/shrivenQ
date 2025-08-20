@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use tracing::debug;
 
 /// Order lifecycle manager
+#[derive(Debug)]
 pub struct OrderLifecycleManager {
     /// Valid state transitions
     valid_transitions: HashMap<OrderStatus, Vec<OrderStatus>>,
@@ -72,14 +73,22 @@ impl OrderLifecycleManager {
         
         // Validate order type specific requirements
         match order.order_type {
-            OrderType::Limit | OrderType::StopLimit => {
+            OrderType::Limit => {
                 if order.price.is_none() {
                     return Err(anyhow::anyhow!("Limit order requires price"));
                 }
             }
-            OrderType::Stop | OrderType::StopLimit => {
+            OrderType::Stop => {
                 if order.stop_price.is_none() {
                     return Err(anyhow::anyhow!("Stop order requires stop price"));
+                }
+            }
+            OrderType::StopLimit => {
+                if order.price.is_none() {
+                    return Err(anyhow::anyhow!("StopLimit order requires price"));
+                }
+                if order.stop_price.is_none() {
+                    return Err(anyhow::anyhow!("StopLimit order requires stop price"));
                 }
             }
             _ => {}

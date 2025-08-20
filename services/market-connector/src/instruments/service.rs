@@ -119,6 +119,68 @@ impl Default for InstrumentServiceConfig {
 }
 
 /// Production-grade instrument service with WAL storage
+impl std::fmt::Debug for InstrumentService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InstrumentService")
+            .field("config", &self.config)
+            .field("store", &"Arc<RwLock<InstrumentWalStore>>")
+            .field("zerodha_auth", &self.zerodha_auth.is_some())
+            .field("client", &"reqwest::Client")
+            .finish()
+    }
+}
+
+/// Production-grade instrument service with automatic data management
+///
+/// This service provides comprehensive instrument data management for Indian financial
+/// markets through Zerodha's API. It handles automatic daily updates, efficient storage
+/// using WAL (Write-Ahead Logging), and high-performance lookups for trading operations.
+///
+/// # Core Features
+/// - **Automatic Updates**: Scheduled daily instrument data refresh
+/// - **WAL Storage**: Persistent storage with crash recovery capabilities
+/// - **Fast Lookups**: Optimized data structures for sub-microsecond queries
+/// - **Option Chain Management**: Dynamic ATM option chain calculation and caching
+/// - **Subscription Management**: Token-based market data subscription optimization
+///
+/// # Data Sources
+/// - Zerodha KiteConnect instrument master files
+/// - Real-time instrument metadata updates
+/// - Exchange segment and trading rules
+///
+/// # Performance Characteristics
+/// - **Hot Path Optimization**: Zero allocations in critical trading paths
+/// - **Memory Efficiency**: FxHashMap-based indices for minimal overhead
+/// - **Concurrent Access**: Read-optimized with minimal lock contention
+/// - **Background Processing**: Non-blocking automatic updates
+///
+/// # Thread Safety
+/// The service is designed for high-concurrency trading environments with:
+/// - Read-write locks for safe concurrent access
+/// - Background update tasks that don't block trading operations
+/// - Atomic updates for critical trading data
+///
+/// # Examples
+/// ```
+/// use instrument_service::{InstrumentService, InstrumentServiceConfig};
+/// use services_common::ZerodhaAuth;
+///
+/// #[tokio::main]
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let config = InstrumentServiceConfig::default();
+///     let auth = Some(ZerodhaAuth::new());
+///     
+///     let service = InstrumentService::new(config, auth).await?;
+///     service.start().await?;
+///     
+///     // Get current month futures for NIFTY
+///     if let Some(futures) = service.get_current_month_futures("NIFTY").await {
+///         println!("NIFTY futures: {}", futures.trading_symbol);
+///     }
+///     
+///     Ok(())
+/// }
+/// ```
 pub struct InstrumentService {
     config: InstrumentServiceConfig,
     store: Arc<RwLock<InstrumentWalStore>>,

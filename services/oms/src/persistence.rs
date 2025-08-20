@@ -12,6 +12,7 @@ use crate::order::{Order, OrderStatus, OrderSide, OrderType, TimeInForce, Fill, 
 use tracing::{debug, info};
 
 /// Persistence manager for orders
+#[derive(Debug)]
 pub struct PersistenceManager {
     /// Database pool
     db_pool: PgPool,

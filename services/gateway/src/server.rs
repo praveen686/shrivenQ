@@ -27,10 +27,25 @@ use crate::{
 /// Unified application state containing all handlers
 #[derive(Clone)]
 pub struct AppState {
+    /// Authentication request handlers
     pub auth_handlers: AuthHandlers,
+    /// Execution request handlers
     pub execution_handlers: ExecutionHandlers,
+    /// Health check handlers
     pub health_handlers: HealthHandlers,
+    /// Shared gRPC clients
     pub grpc_clients: Arc<GrpcClients>,
+}
+
+impl std::fmt::Debug for AppState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppState")
+            .field("auth_handlers", &self.auth_handlers)
+            .field("execution_handlers", &self.execution_handlers)
+            .field("health_handlers", &self.health_handlers)
+            .field("grpc_clients", &"Arc<GrpcClients>")
+            .finish()
+    }
 }
 
 /// API Gateway server
@@ -38,6 +53,16 @@ pub struct ApiGatewayServer {
     config: GatewayConfig,
     grpc_clients: Arc<GrpcClients>,
     start_time: Instant,
+}
+
+impl std::fmt::Debug for ApiGatewayServer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiGatewayServer")
+            .field("config", &self.config)
+            .field("grpc_clients", &"Arc<GrpcClients>")
+            .field("start_time", &self.start_time)
+            .finish()
+    }
 }
 
 impl ApiGatewayServer {

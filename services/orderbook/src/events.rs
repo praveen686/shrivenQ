@@ -273,6 +273,7 @@ pub struct EventBatchStats {
 }
 
 /// Event builder for constructing events efficiently
+#[derive(Debug)]
 pub struct EventBuilder {
     sequence_counter: u64,
 }

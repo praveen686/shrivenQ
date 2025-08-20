@@ -43,6 +43,7 @@ impl Default for ReplayConfig {
 }
 
 /// Replay engine for deterministic orderbook reconstruction
+#[derive(Debug)]
 pub struct ReplayEngine {
     /// Configuration
     config: ReplayConfig,
@@ -383,6 +384,7 @@ impl ReplayEngine {
 }
 
 /// Snapshot manager for efficient state management
+#[derive(Debug)]
 pub struct SnapshotManager {
     /// Interval between snapshots
     snapshot_interval: u64,
@@ -431,6 +433,7 @@ impl SnapshotManager {
 }
 
 /// Latency tracker for performance monitoring
+#[derive(Debug)]
 pub struct LatencyTracker {
     /// Latency histogram
     latencies: RwLock<VecDeque<u64>>,
